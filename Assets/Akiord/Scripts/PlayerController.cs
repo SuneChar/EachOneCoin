@@ -6,6 +6,9 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float speed;
     [SerializeField] private Transform visualRoot;
     [SerializeField, Min(0.01f)] private float turnDuration = 0.15f;
+    [SerializeField] private GameAudio gameAudio;
+    [SerializeField, Min(0.05f)] private float footstepInterval = 0.35f;
+    private float footstepTimer;
     private CharacterController characterController;
     private Vector3 visualScale;
     private int facing = 1;
@@ -38,7 +41,20 @@ public class PlayerController : MonoBehaviour
         if (direction.x != 0f)
             desiredFacing = direction.x < 0f ? -1 : 1;
         UpdateTurning(Time.deltaTime);
+        Vector3 previousPosition = characterController.transform.position;
         characterController.Move(Vector3.ClampMagnitude(direction, 1f) * speed * Time.deltaTime);
+        Vector3 displacement = characterController.transform.position - previousPosition;
+        displacement.y = 0f;
+        if (displacement.sqrMagnitude > 0.000001f)
+        {
+            footstepTimer -= Time.deltaTime;
+            if (footstepTimer <= 0f)
+            {
+                if (gameAudio != null) gameAudio.PlayFootstep();
+                footstepTimer = Mathf.Max(0.05f, footstepInterval);
+            }
+        }
+        else footstepTimer = 0f;
     }
 
     private void UpdateTurning(float deltaTime)
@@ -67,6 +83,7 @@ public class PlayerController : MonoBehaviour
 
     private void OnDisable()
     {
+        footstepTimer = 0f;
         if (visualRoot == null || visualScale.x == 0f) return;
         facing = desiredFacing;
         turning = false;

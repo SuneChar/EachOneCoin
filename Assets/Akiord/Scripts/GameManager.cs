@@ -7,6 +7,7 @@ public class GameManager : MonoBehaviour
     [SerializeField] private int coinsToWin = 10;
     [SerializeField] private PlayerController playerController;
     [SerializeField, Min(1)] private int maxHealth = 100;
+    [SerializeField] private GameAudio gameAudio;
 
     private float remainingTime;
     private int coinsCollected;
@@ -34,6 +35,7 @@ public class GameManager : MonoBehaviour
     {
         if (state != GameState.Waiting) return;
         state = GameState.Playing;
+        if (gameAudio != null) gameAudio.PlayConfirm();
         if (playerController != null) playerController.enabled = true;
     }
 
@@ -48,6 +50,7 @@ public class GameManager : MonoBehaviour
     {
         if (!IsPlaying || remainingTime <= 0f) return false;
         coinsCollected++;
+        if (gameAudio != null) gameAudio.PlayCoin();
         if (coinsCollected >= coinsToWin) EndGame(GameState.Won);
         return true;
     }
@@ -61,12 +64,18 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        if (gameAudio != null) gameAudio.PlayRestart();
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     private void EndGame(GameState result)
     {
         state = result;
+        if (gameAudio != null)
+        {
+            if (result == GameState.Won) gameAudio.PlayWin();
+            else gameAudio.PlayLose();
+        }
         if (playerController != null) playerController.enabled = false;
     }
 }

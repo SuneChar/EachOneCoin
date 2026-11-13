@@ -43,10 +43,13 @@ public class GroundTrapProgressView : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (trap == null || progress == null || points == null) return;
-        Color color = trap.IsActive ? activeColor : inactiveColor;
-        progress.startColor = color;
-        progress.endColor = color;
+        if (trap == null || background == null || progress == null || points == null) return;
+        Color currentColor = trap.IsActive ? activeColor : inactiveColor;
+        Color nextColor = trap.IsActive ? inactiveColor : activeColor;
+        background.startColor = currentColor;
+        background.endColor = currentColor;
+        progress.startColor = nextColor;
+        progress.endColor = nextColor;
         float length = (1f - trap.RemainingFraction) * totalLength;
         progress.enabled = length > 0f;
         if (!progress.enabled) return;
