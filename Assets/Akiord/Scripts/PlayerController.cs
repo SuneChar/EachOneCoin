@@ -14,6 +14,8 @@ public class PlayerController : MonoBehaviour
     private bool turning;
     private bool turnFlipped;
 
+    public Vector3 LastMoveDirection { get; private set; } = Vector3.forward;
+
     private void Start()
     {
         if (player == null)
@@ -31,6 +33,8 @@ public class PlayerController : MonoBehaviour
     {
         if (characterController == null) return;
         Vector3 direction = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical"));
+        if (direction.sqrMagnitude > 0f)
+            LastMoveDirection = direction.normalized;
         if (direction.x != 0f)
             desiredFacing = direction.x < 0f ? -1 : 1;
         UpdateTurning(Time.deltaTime);
