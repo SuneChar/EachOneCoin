@@ -1,23 +1,40 @@
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 public class GameManager : MonoBehaviour
 {
     [SerializeField] private float gameDuration = 60f;
     [SerializeField] private int coinsToWin = 10;
     [SerializeField] private PlayerController playerController;
+    [SerializeField, Min(1)] private int maxHealth = 100;
 
     private float remainingTime;
     private int coinsCollected;
-    private GameState state;
+    private int currentHealth;
+    private GameState state = GameState.Waiting;
 
-    private enum GameState { Playing, Won, Lost }
+    public enum GameState { Waiting, Playing, Won, Lost }
 
     public bool IsPlaying => state == GameState.Playing;
+    public GameState State => state;
+    public float RemainingTime => remainingTime;
+    public int CoinsCollected => coinsCollected;
+    public int CoinsToWin => coinsToWin;
+    public int MaxHealth => maxHealth;
+    public int CurrentHealth => currentHealth;
 
-    private void Start()
+    private void Awake()
     {
         remainingTime = gameDuration;
+        currentHealth = Mathf.Max(1, maxHealth);
+        if (playerController != null) playerController.enabled = false;
+    }
+
+    public void StartGame()
+    {
+        if (state != GameState.Waiting) return;
         state = GameState.Playing;
+        if (playerController != null) playerController.enabled = true;
     }
 
     private void Update()
@@ -35,19 +52,21 @@ public class GameManager : MonoBehaviour
         return true;
     }
 
+    public void TakeDamage(int amount)
+    {
+        if (!IsPlaying || amount <= 0) return;
+        currentHealth = Mathf.Max(0, currentHealth - amount);
+        if (currentHealth == 0) EndGame(GameState.Lost);
+    }
+
+    public void RestartGame()
+    {
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
     private void EndGame(GameState result)
     {
         state = result;
         if (playerController != null) playerController.enabled = false;
-    }
-
-    private void OnGUI()
-    {
-        var label = new GUIStyle(GUI.skin.label) { fontSize = 24, normal = { textColor = Color.white } };
-        GUI.Label(new Rect(20, 15, 300, 35), $"Time: {Mathf.CeilToInt(remainingTime)}", label);
-        GUI.Label(new Rect(20, 50, 300, 35), $"Coins: {coinsCollected} / {coinsToWin}", label);
-        if (IsPlaying) return;
-        var result = new GUIStyle(label) { fontSize = 40, alignment = TextAnchor.MiddleCenter };
-        GUI.Label(new Rect(0, Screen.height * 0.35f, Screen.width, 80), state == GameState.Won ? "You Win!" : "Time Up!", result);
     }
 }
