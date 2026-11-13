@@ -35,14 +35,14 @@ public class PlayerController : MonoBehaviour
     private void Update()
     {
         if (characterController == null) return;
-        Vector3 direction = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical"));
+        Vector3 direction = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical")).normalized;
         if (direction.sqrMagnitude > 0f)
             LastMoveDirection = direction.normalized;
         if (direction.x != 0f)
             desiredFacing = direction.x < 0f ? -1 : 1;
         UpdateTurning(Time.deltaTime);
         Vector3 previousPosition = characterController.transform.position;
-        characterController.Move(Vector3.ClampMagnitude(direction, 1f) * speed * Time.deltaTime);
+        characterController.Move(direction * speed * Time.deltaTime);
         Vector3 displacement = characterController.transform.position - previousPosition;
         displacement.y = 0f;
         if (displacement.sqrMagnitude > 0.000001f)

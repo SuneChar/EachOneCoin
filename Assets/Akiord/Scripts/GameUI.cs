@@ -1,6 +1,7 @@
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
 
 public class GameUI : MonoBehaviour
 {
@@ -19,6 +20,11 @@ public class GameUI : MonoBehaviour
     [SerializeField] private TMP_Text resultText;
     [SerializeField] private TMP_Text resultCoinsText;
     [SerializeField] private GameAudio gameAudio;
+    [SerializeField] private Toggle promptsToggle;
+    [SerializeField] private TMP_Text promptsText;
+    private const string PromptsPreference = "GameUI.ShowPrompts";
+    private bool showPrompts;
+    private bool usingGamepad;
     [SerializeField, Min(1)] private int warningSeconds = 10;
     [SerializeField] private Color normalTimeColor = Color.white;
     [SerializeField] private Color warningTimeColor = new Color(1f, 0.32f, 0.24f);
@@ -37,6 +43,8 @@ public class GameUI : MonoBehaviour
     private void Awake()
     {
         if (timeText != null) timeBaseScale = timeText.rectTransform.localScale;
+        showPrompts = PlayerPrefs.GetInt(PromptsPreference, 1) != 0;
+        if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
     }
 
     private void RefreshPanels()
@@ -47,6 +55,17 @@ public class GameUI : MonoBehaviour
         pausePanel.SetActive(!settingsOpen && state == GameManager.GameState.Paused);
         settingsPanel.SetActive(settingsOpen);
         resultPanel.SetActive(!settingsOpen && (state == GameManager.GameState.Won || state == GameManager.GameState.Lost));
+        var activePanel = settingsOpen ? settingsPanel : state == GameManager.GameState.Waiting ? startPanel : state == GameManager.GameState.Paused ? pausePanel : state == GameManager.GameState.Won || state == GameManager.GameState.Lost ? resultPanel : null;
+        if (EventSystem.current != null)
+        {
+            EventSystem.current.SetSelectedGameObject(null);
+            if (activePanel != null)
+            {
+                var first = activePanel.GetComponentInChildren<Selectable>();
+                if (first != null) EventSystem.current.SetSelectedGameObject(first.gameObject);
+            }
+        }
+        RefreshPrompts();
     }
 
     public void OpenSettings()
@@ -70,6 +89,26 @@ public class GameUI : MonoBehaviour
         UpdateVolumeLabel(gameAudio.Volume);
     }
 
+    public void SetPromptsVisible(bool visible)
+    {
+        showPrompts = visible;
+        PlayerPrefs.SetInt(PromptsPreference, visible ? 1 : 0);
+        PlayerPrefs.Save();
+        RefreshPrompts();
+    }
+
+    private void RefreshPrompts()
+    {
+        if (promptsText == null || gameManager == null) return;
+        promptsText.gameObject.SetActive(showPrompts);
+        if (!showPrompts) return;
+        bool playing = gameManager.State == GameManager.GameState.Playing && !settingsOpen;
+        string back = settingsOpen || gameManager.State == GameManager.GameState.Paused ? (usingGamepad ? "     B  返回" : "     Esc  返回") : "";
+        promptsText.text = usingGamepad
+            ? (playing ? "左摇杆  移动     Menu  暂停" : "左摇杆  选择     A  确认" + back)
+            : (playing ? "WASD / 方向键  移动     Esc  暂停" : "方向键  选择     Enter  确认" + back);
+    }
+
     private void UpdateVolumeLabel(float value)
     {
         volumeValueText.text = $"{Mathf.RoundToInt(value * 100f)}%";
@@ -78,7 +117,16 @@ public class GameUI : MonoBehaviour
     private void Update()
     {
         if (gameManager == null) return;
-        if (Input.GetKeyDown(KeyCode.Escape))
+        bool keyboard = Input.anyKeyDown && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.Return) || Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.W) || Input.GetKeyDown(KeyCode.A) || Input.GetKeyDown(KeyCode.S) || Input.GetKeyDown(KeyCode.D) || Input.GetKeyDown(KeyCode.UpArrow) || Input.GetKeyDown(KeyCode.DownArrow) || Input.GetKeyDown(KeyCode.LeftArrow) || Input.GetKeyDown(KeyCode.RightArrow));
+        bool gamepad = Input.GetKeyDown(KeyCode.JoystickButton0) || Input.GetKeyDown(KeyCode.JoystickButton1) || Input.GetKeyDown(KeyCode.JoystickButton7);
+        if (!keyboard && !Input.GetKey(KeyCode.W) && !Input.GetKey(KeyCode.A) && !Input.GetKey(KeyCode.S) && !Input.GetKey(KeyCode.D) && !Input.GetKey(KeyCode.UpArrow) && !Input.GetKey(KeyCode.DownArrow) && !Input.GetKey(KeyCode.LeftArrow) && !Input.GetKey(KeyCode.RightArrow))
+            gamepad |= Mathf.Abs(Input.GetAxisRaw("Horizontal")) > 0.2f || Mathf.Abs(Input.GetAxisRaw("Vertical")) > 0.2f;
+        if ((keyboard && usingGamepad) || (gamepad && !usingGamepad))
+        {
+            usingGamepad = !keyboard;
+            RefreshPrompts();
+        }
+        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || gameManager.State == GameManager.GameState.Paused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
         {
             if (settingsOpen) CloseSettings();
             else if (gameManager.State == GameManager.GameState.Playing) gameManager.PauseGame();

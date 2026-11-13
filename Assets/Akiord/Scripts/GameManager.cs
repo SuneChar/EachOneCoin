@@ -85,6 +85,13 @@ public class GameManager : MonoBehaviour
         if (currentHealth == 0) EndGame(GameState.Lost);
     }
 
+    public void ReturnToMainMenu()
+    {
+        if (state != GameState.Paused) return;
+        Time.timeScale = timeScaleBeforePause;
+        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+    }
+
     public void RestartGame()
     {
         if (state == GameState.Paused) Time.timeScale = timeScaleBeforePause;
