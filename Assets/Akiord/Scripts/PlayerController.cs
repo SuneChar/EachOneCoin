@@ -1,19 +1,23 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class PlayerController : MonoBehaviour
 {
     [SerializeField] private GameObject player;
     [SerializeField] private float speed;
+    private CharacterController characterController;
+
     private void Start()
     {
-        if(player == null)
+        if (player == null)
             player = GameObject.FindGameObjectWithTag("Player");
+        if (player != null)
+            characterController = player.GetComponent<CharacterController>();
     }
+
     private void Update()
     {
-        player.transform.position += 
-            new Vector3(Input.GetAxis("Horizontal"), 0, Input.GetAxis("Vertical")) * Time.deltaTime * speed;
+        if (characterController == null) return;
+        Vector3 direction = new Vector3(Input.GetAxisRaw("Horizontal"), 0, Input.GetAxisRaw("Vertical"));
+        characterController.Move(Vector3.ClampMagnitude(direction, 1f) * speed * Time.deltaTime);
     }
 }
