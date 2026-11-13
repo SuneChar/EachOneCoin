@@ -18,7 +18,7 @@ public class LethalContact : MonoBehaviour
     public void TryKillPlayer(Collider other)
     {
         if (gameManager == null || !gameManager.IsPlaying) return;
-        if (spikeTrap != null && !spikeTrap.IsVisible) return;
+        if (spikeTrap != null && !spikeTrap.IsActive) return;
         if (!other.CompareTag("Player") || other.GetComponent<CharacterController>() == null) return;
         gameManager.TakeDamage(gameManager.CurrentHealth);
     }
