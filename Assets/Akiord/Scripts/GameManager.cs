@@ -13,8 +13,9 @@ public class GameManager : MonoBehaviour
     private int coinsCollected;
     private int currentHealth;
     private GameState state = GameState.Waiting;
+    private float timeScaleBeforePause = 1f;
 
-    public enum GameState { Waiting, Playing, Won, Lost }
+    public enum GameState { Waiting, Playing, Won, Lost, Paused }
 
     public bool IsPlaying => state == GameState.Playing;
     public GameState State => state;
@@ -37,6 +38,28 @@ public class GameManager : MonoBehaviour
         state = GameState.Playing;
         if (gameAudio != null) gameAudio.PlayConfirm();
         if (playerController != null) playerController.enabled = true;
+    }
+
+    public void PauseGame()
+    {
+        if (!IsPlaying) return;
+        timeScaleBeforePause = Time.timeScale;
+        Time.timeScale = 0f;
+        state = GameState.Paused;
+        if (playerController != null) playerController.enabled = false;
+    }
+
+    public void ResumeGame()
+    {
+        if (state != GameState.Paused) return;
+        Time.timeScale = timeScaleBeforePause;
+        state = GameState.Playing;
+        if (playerController != null) playerController.enabled = true;
+    }
+
+    private void OnDestroy()
+    {
+        if (state == GameState.Paused) Time.timeScale = timeScaleBeforePause;
     }
 
     private void Update()
@@ -64,6 +87,7 @@ public class GameManager : MonoBehaviour
 
     public void RestartGame()
     {
+        if (state == GameState.Paused) Time.timeScale = timeScaleBeforePause;
         if (gameAudio != null) gameAudio.PlayRestart();
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }

@@ -8,6 +8,10 @@ public class GameUI : MonoBehaviour
     [SerializeField] private GameObject startPanel;
     [SerializeField] private GameObject hudPanel;
     [SerializeField] private GameObject resultPanel;
+    [SerializeField] private GameObject pausePanel;
+    [SerializeField] private GameObject settingsPanel;
+    [SerializeField] private Slider volumeSlider;
+    [SerializeField] private TMP_Text volumeValueText;
     [SerializeField] private TMP_Text timeText;
     [SerializeField] private TMP_Text coinText;
     [SerializeField] private TMP_Text healthText;
@@ -21,6 +25,7 @@ public class GameUI : MonoBehaviour
     [SerializeField, Min(0.01f)] private float pulseDuration = 0.3f;
     [SerializeField, Min(1f)] private float pulseScale = 1.18f;
 
+    private bool settingsOpen;
     private float pulseRemaining;
     private Vector3 timeBaseScale;
 
@@ -34,15 +39,55 @@ public class GameUI : MonoBehaviour
         if (timeText != null) timeBaseScale = timeText.rectTransform.localScale;
     }
 
+    private void RefreshPanels()
+    {
+        var state = gameManager.State;
+        startPanel.SetActive(!settingsOpen && state == GameManager.GameState.Waiting);
+        hudPanel.SetActive(state == GameManager.GameState.Playing || state == GameManager.GameState.Paused);
+        pausePanel.SetActive(!settingsOpen && state == GameManager.GameState.Paused);
+        settingsPanel.SetActive(settingsOpen);
+        resultPanel.SetActive(!settingsOpen && (state == GameManager.GameState.Won || state == GameManager.GameState.Lost));
+    }
+
+    public void OpenSettings()
+    {
+        if (gameManager.State != GameManager.GameState.Waiting && gameManager.State != GameManager.GameState.Paused) return;
+        settingsOpen = true;
+        volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
+        UpdateVolumeLabel(gameAudio.Volume);
+        RefreshPanels();
+    }
+
+    public void CloseSettings()
+    {
+        settingsOpen = false;
+        RefreshPanels();
+    }
+
+    public void SetVolume(float value)
+    {
+        gameAudio.SetVolume(value);
+        UpdateVolumeLabel(gameAudio.Volume);
+    }
+
+    private void UpdateVolumeLabel(float value)
+    {
+        volumeValueText.text = $"{Mathf.RoundToInt(value * 100f)}%";
+    }
+
     private void Update()
     {
         if (gameManager == null) return;
+        if (Input.GetKeyDown(KeyCode.Escape))
+        {
+            if (settingsOpen) CloseSettings();
+            else if (gameManager.State == GameManager.GameState.Playing) gameManager.PauseGame();
+            else if (gameManager.State == GameManager.GameState.Paused) gameManager.ResumeGame();
+        }
         var state = gameManager.State;
         if (lastState != state)
         {
-            startPanel.SetActive(state == GameManager.GameState.Waiting);
-            hudPanel.SetActive(state == GameManager.GameState.Playing);
-            resultPanel.SetActive(state == GameManager.GameState.Won || state == GameManager.GameState.Lost);
+            RefreshPanels();
             resultText.text = state == GameManager.GameState.Won ? "游戏胜利" : "游戏结束";
             if (state != GameManager.GameState.Playing)
             {

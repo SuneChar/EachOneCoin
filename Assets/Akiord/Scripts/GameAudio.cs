@@ -13,14 +13,27 @@ public class GameAudio : MonoBehaviour
     [SerializeField] private AudioClip[] footstepClips;
     [SerializeField, Range(0f, 1f)] private float footstepVolume = 0.45f;
 
+    private const string VolumePreference = "GameAudio.Volume";
+    public float Volume => volume;
+
     private void Awake()
     {
         if (source == null) source = GetComponent<AudioSource>();
+        volume = Mathf.Clamp01(PlayerPrefs.GetFloat(VolumePreference, volume));
+        if (source != null) source.volume = volume;
+    }
+
+    public void SetVolume(float value)
+    {
+        volume = Mathf.Clamp01(value);
+        if (source != null) source.volume = volume;
+        PlayerPrefs.SetFloat(VolumePreference, volume);
+        PlayerPrefs.Save();
     }
 
     private void Play(AudioClip clip, float scale = 1f)
     {
-        if (source != null && clip != null) source.PlayOneShot(clip, volume * scale);
+        if (source != null && clip != null) source.PlayOneShot(clip, scale);
     }
 
     public void PlayConfirm() => Play(confirmClip);
