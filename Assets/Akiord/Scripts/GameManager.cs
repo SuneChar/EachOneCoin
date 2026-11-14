@@ -1,3 +1,4 @@
+using EachOneCoin;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 
@@ -10,7 +11,6 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameAudio gameAudio;
 
     private float remainingTime;
-    private int coinsCollected;
     private int currentHealth;
     private GameState state = GameState.Waiting;
     private float timeScaleBeforePause = 1f;
@@ -20,13 +20,14 @@ public class GameManager : MonoBehaviour
     public bool IsPlaying => state == GameState.Playing;
     public GameState State => state;
     public float RemainingTime => remainingTime;
-    public int CoinsCollected => coinsCollected;
+    public int CoinsCollected => GameArchitecture.Interface.GetModel<IGameModel>().Coins.Value;
     public int CoinsToWin => coinsToWin;
     public int MaxHealth => maxHealth;
     public int CurrentHealth => currentHealth;
 
     private void Awake()
     {
+        GameArchitecture.Interface.GetModel<IGameModel>().ResetCoins();
         remainingTime = gameDuration;
         currentHealth = Mathf.Max(1, maxHealth);
         if (playerController != null) playerController.enabled = false;
@@ -72,7 +73,7 @@ public class GameManager : MonoBehaviour
     public bool CollectCoin()
     {
         if (!IsPlaying || remainingTime <= 0f) return false;
-        coinsCollected++;
+        int coinsCollected = GameArchitecture.Interface.SendCommand(new CollectCoinCommand());
         if (gameAudio != null) gameAudio.PlayCoin();
         if (coinsCollected >= coinsToWin) EndGame(GameState.Won);
         return true;

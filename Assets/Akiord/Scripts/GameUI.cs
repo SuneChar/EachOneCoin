@@ -1,3 +1,5 @@
+using EachOneCoin;
+using QFramework;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -42,8 +44,8 @@ public class GameUI : MonoBehaviour
 
     private GameManager.GameState? lastState;
     private int lastTime = -1;
-    private int lastCoins = -1;
     private int lastHealth = -1;
+    private IUnRegister coinSubscription;
 
     private void Awake()
     {
@@ -57,6 +59,28 @@ public class GameUI : MonoBehaviour
             inputDevice.DeviceChanged += OnDeviceChanged;
         }
         if (EventSystem.current != null) EventSystem.current.sendNavigationEvents = usingGamepad;
+    }
+
+    private void OnEnable()
+    {
+        if (gameManager != null)
+        {
+            coinSubscription = GameArchitecture.Interface.GetModel<IGameModel>()
+                .Coins.RegisterWithInitValue(RefreshCoinText);
+        }
+    }
+
+    private void OnDisable()
+    {
+        coinSubscription?.UnRegister();
+        coinSubscription = null;
+    }
+
+    private void RefreshCoinText(int coins)
+    {
+        if (gameManager == null) return;
+        if (coinText != null) coinText.text = $"金币：{coins} / {gameManager.CoinsToWin}";
+        if (resultCoinsText != null) resultCoinsText.text = $"金币：{coins} / {gameManager.CoinsToWin}";
     }
 
     private void OnDestroy()
@@ -221,12 +245,6 @@ public class GameUI : MonoBehaviour
             pulseRemaining = Mathf.Max(0f, pulseRemaining - Time.deltaTime);
             float progress = 1f - pulseRemaining / Mathf.Max(0.01f, pulseDuration);
             timeText.rectTransform.localScale = timeBaseScale * (1f + (pulseScale - 1f) * Mathf.Sin(progress * Mathf.PI));
-        }
-        if (lastCoins != gameManager.CoinsCollected)
-        {
-            coinText.text = $"金币：{gameManager.CoinsCollected} / {gameManager.CoinsToWin}";
-            resultCoinsText.text = $"金币：{gameManager.CoinsCollected} / {gameManager.CoinsToWin}";
-            lastCoins = gameManager.CoinsCollected;
         }
         if (lastHealth != gameManager.CurrentHealth)
         {
