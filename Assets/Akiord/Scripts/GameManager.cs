@@ -47,6 +47,11 @@ public class GameManager : MonoBehaviour
         if (playerController != null) playerController.enabled = false;
     }
 
+    private void Start()
+    {
+        StartGame();
+    }
+
     public void StartGame()
     {
         if (State != GameState.Waiting) return;
@@ -108,7 +113,7 @@ public class GameManager : MonoBehaviour
     {
         if (State != GameState.Paused) return;
         Time.timeScale = timeScaleBeforePause;
-        SceneManager.LoadScene(SceneManager.GetActiveScene().name);
+        SceneManager.LoadScene("BootScene");
     }
 
     public void RestartGame()

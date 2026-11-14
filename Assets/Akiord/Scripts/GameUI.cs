@@ -8,13 +8,10 @@ using UnityEngine.EventSystems;
 public class GameUI : MonoBehaviour
 {
     [SerializeField] private GameManager gameManager;
-    [SerializeField] private GameObject startPanel;
     [SerializeField] private GameObject hudPanel;
     [SerializeField] private GameObject resultPanel;
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private GameObject settingsPanel;
-    [SerializeField] private GameObject quitConfirmPanel;
-    [SerializeField] private Button quitButton;
     [SerializeField] private Slider volumeSlider;
     [SerializeField] private TMP_Text volumeValueText;
     [SerializeField] private TMP_Text timeText;
@@ -38,7 +35,6 @@ public class GameUI : MonoBehaviour
     [SerializeField, Min(1f)] private float pulseScale = 1.18f;
 
     private bool settingsOpen;
-    private bool quitConfirmationOpen;
     private float pulseRemaining;
     private Vector3 timeBaseScale;
 
@@ -97,7 +93,7 @@ public class GameUI : MonoBehaviour
     private GameObject GetActiveMenu()
     {
         var state = gameManager.State;
-        return quitConfirmationOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : state == GameManager.GameState.Waiting ? startPanel : state == GameManager.GameState.Paused ? pausePanel : state == GameManager.GameState.Won || state == GameManager.GameState.Lost ? resultPanel : null;
+        return settingsOpen ? settingsPanel : state == GameManager.GameState.Paused ? pausePanel : state == GameManager.GameState.Won || state == GameManager.GameState.Lost ? resultPanel : null;
     }
 
     private void LateUpdate()
@@ -112,11 +108,9 @@ public class GameUI : MonoBehaviour
     private void RefreshPanels()
     {
         var state = gameManager.State;
-        startPanel.SetActive(!settingsOpen && !quitConfirmationOpen && state == GameManager.GameState.Waiting);
         hudPanel.SetActive(state == GameManager.GameState.Playing || state == GameManager.GameState.Paused);
         pausePanel.SetActive(!settingsOpen && state == GameManager.GameState.Paused);
         settingsPanel.SetActive(settingsOpen);
-        if (quitConfirmPanel != null) quitConfirmPanel.SetActive(quitConfirmationOpen);
         resultPanel.SetActive(!settingsOpen && (state == GameManager.GameState.Won || state == GameManager.GameState.Lost));
         var activePanel = GetActiveMenu();
         if (EventSystem.current != null)
@@ -132,30 +126,9 @@ public class GameUI : MonoBehaviour
         RefreshPrompts();
     }
 
-    public void OpenQuitConfirmation()
-    {
-        if (gameManager.State != GameManager.GameState.Waiting || settingsOpen || quitConfirmPanel == null) return;
-        quitConfirmationOpen = true;
-        RefreshPanels();
-    }
-
-    public void CancelQuit()
-    {
-        if (!quitConfirmationOpen) return;
-        quitConfirmationOpen = false;
-        RefreshPanels();
-        if (usingGamepad && quitButton != null && EventSystem.current != null)
-            EventSystem.current.SetSelectedGameObject(quitButton.gameObject);
-    }
-
-    public void ConfirmQuit()
-    {
-        if (quitConfirmationOpen) Application.Quit();
-    }
-
     public void OpenSettings()
     {
-        if (quitConfirmationOpen || (gameManager.State != GameManager.GameState.Waiting && gameManager.State != GameManager.GameState.Paused)) return;
+        if (gameManager.State != GameManager.GameState.Paused) return;
         settingsOpen = true;
         volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
         UpdateVolumeLabel(gameAudio.Volume);
@@ -186,7 +159,7 @@ public class GameUI : MonoBehaviour
     {
         if (promptsText == null || gameManager == null) return;
         bool playing = gameManager.State == GameManager.GameState.Playing && !settingsOpen;
-        bool canGoBack = quitConfirmationOpen || settingsOpen || gameManager.State == GameManager.GameState.Paused;
+        bool canGoBack = settingsOpen || gameManager.State == GameManager.GameState.Paused;
         if (promptImages != null)
         {
             promptImages.Refresh(showPrompts, usingGamepad, playing, canGoBack);
@@ -208,10 +181,9 @@ public class GameUI : MonoBehaviour
     private void Update()
     {
         if (gameManager == null) return;
-        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((quitConfirmationOpen || settingsOpen || gameManager.State == GameManager.GameState.Paused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
+        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || gameManager.State == GameManager.GameState.Paused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
         {
-            if (quitConfirmationOpen) CancelQuit();
-            else if (settingsOpen) CloseSettings();
+            if (settingsOpen) CloseSettings();
             else if (gameManager.State == GameManager.GameState.Playing) gameManager.PauseGame();
             else if (gameManager.State == GameManager.GameState.Paused) gameManager.ResumeGame();
         }
