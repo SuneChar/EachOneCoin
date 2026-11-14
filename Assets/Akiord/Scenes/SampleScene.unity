@@ -11973,10 +11973,10 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   m_SendPointerHoverToParent: 1
-  m_HorizontalAxis: Horizontal
-  m_VerticalAxis: Vertical
-  m_SubmitButton: Submit
-  m_CancelButton: Cancel
+  m_HorizontalAxis: GamepadHorizontal
+  m_VerticalAxis: GamepadVertical
+  m_SubmitButton: GamepadSubmit
+  m_CancelButton: GamepadCancel
   m_InputActionsPerSecond: 10
   m_RepeatDelay: 0.5
   m_ForceModuleActive: 0
@@ -20186,6 +20186,7 @@ GameObject:
   - component: {fileID: 919279687}
   - component: {fileID: 919279689}
   - component: {fileID: 919279688}
+  - component: {fileID: 919279690}
   m_Layer: 0
   m_Name: ControlPrompts
   m_TagString: Untagged
@@ -20232,7 +20233,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: "\u97F3\u6548\u97F3\u91CF"
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 231ae36a445a0af419b0386ab1a8f9aa, type: 2}
   m_sharedMaterial: {fileID: -633378668919180056, guid: 231ae36a445a0af419b0386ab1a8f9aa,
@@ -20310,6 +20311,31 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 919279686}
   m_CullTransparentMesh: 1
+--- !u!114 &919279690
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 919279686}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 049c3f1c6f63ba64fac1e55d14aa2e49, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  keyboardW: {fileID: 2800000, guid: 36a5ca11144bd7a419d861fdf7e6ed31, type: 3}
+  keyboardA: {fileID: 2800000, guid: 7a130910b96ef3f429e766d49f84d010, type: 3}
+  keyboardS: {fileID: 2800000, guid: 3ea00b38ee2f78a4186ea9ff91bb5502, type: 3}
+  keyboardD: {fileID: 2800000, guid: effd2b7a20011324ebcad0b17ef99323, type: 3}
+  keyboardArrows: {fileID: 2800000, guid: b037986332b5ac14788ec84f7d49e196, type: 3}
+  keyboardEnter: {fileID: 2800000, guid: 0b7f7e88d0674fc489ce4c46fc0a1d11, type: 3}
+  keyboardEscape: {fileID: 2800000, guid: 28e88afdaa49780408017cb5ec7ac1eb, type: 3}
+  mouseMove: {fileID: 2800000, guid: fe03faa4bea1d1649bd46ae8e6ad084c, type: 3}
+  mouseLeft: {fileID: 2800000, guid: faab357882347fe43bac834f8e723de1, type: 3}
+  xboxStick: {fileID: 2800000, guid: 03d99dec92fbdae43a68450edccfed63, type: 3}
+  xboxA: {fileID: 2800000, guid: bae6729ab81b27c459239a8df5040def, type: 3}
+  xboxB: {fileID: 2800000, guid: 0f9ba092537cc9a43928ebc8d49cdd55, type: 3}
+  xboxMenu: {fileID: 2800000, guid: 913e11032a3844e42bfc3eebb046cdb9, type: 3}
 --- !u!1001 &921278791
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -40469,6 +40495,7 @@ GameObject:
   - component: {fileID: 1787858810}
   - component: {fileID: 1787858809}
   - component: {fileID: 1787858808}
+  - component: {fileID: 1787858812}
   m_Layer: 0
   m_Name: GameCanvas
   m_TagString: Untagged
@@ -40530,6 +40557,7 @@ MonoBehaviour:
   gameAudio: {fileID: 876484949}
   promptsToggle: {fileID: 1611508832}
   promptsText: {fileID: 919279688}
+  promptImages: {fileID: 919279690}
   warningSeconds: 10
   normalTimeColor: {r: 1, g: 1, b: 1, a: 1}
   warningTimeColor: {r: 1, g: 0.32, b: 0.24, a: 1}
@@ -40598,6 +40626,18 @@ Canvas:
   m_SortingLayerID: 0
   m_SortingOrder: 0
   m_TargetDisplay: 0
+--- !u!114 &1787858812
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1787858806}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 88fe5c37e71c35b4e9186e5479fe55cb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
 --- !u!1001 &1791450583
 PrefabInstance:
   m_ObjectHideFlags: 0

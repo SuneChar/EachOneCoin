@@ -43,7 +43,7 @@ public class UIFocusHighlight : MonoBehaviour, ISelectHandler, IDeselectHandler
 
     public void OnSelect(BaseEventData eventData)
     {
-        if (border != null) border.SetActive(true);
+        if (border != null) border.SetActive(InputDeviceTracker.Instance == null || InputDeviceTracker.Instance.UsingGamepad);
     }
 
     public void OnDeselect(BaseEventData eventData)
