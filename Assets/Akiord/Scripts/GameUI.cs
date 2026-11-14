@@ -11,6 +11,8 @@ public class GameUI : MonoBehaviour
     [SerializeField] private GameObject resultPanel;
     [SerializeField] private GameObject pausePanel;
     [SerializeField] private GameObject settingsPanel;
+    [SerializeField] private GameObject quitConfirmPanel;
+    [SerializeField] private Button quitButton;
     [SerializeField] private Slider volumeSlider;
     [SerializeField] private TMP_Text volumeValueText;
     [SerializeField] private TMP_Text timeText;
@@ -34,6 +36,7 @@ public class GameUI : MonoBehaviour
     [SerializeField, Min(1f)] private float pulseScale = 1.18f;
 
     private bool settingsOpen;
+    private bool quitConfirmationOpen;
     private float pulseRemaining;
     private Vector3 timeBaseScale;
 
@@ -67,15 +70,31 @@ public class GameUI : MonoBehaviour
         RefreshPanels();
     }
 
+    private GameObject GetActiveMenu()
+    {
+        var state = gameManager.State;
+        return quitConfirmationOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : state == GameManager.GameState.Waiting ? startPanel : state == GameManager.GameState.Paused ? pausePanel : state == GameManager.GameState.Won || state == GameManager.GameState.Lost ? resultPanel : null;
+    }
+
+    private void LateUpdate()
+    {
+        if (!usingGamepad || gameManager == null || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != null) return;
+        var panel = GetActiveMenu();
+        if (panel == null || !panel.activeInHierarchy) return;
+        var first = panel.GetComponentInChildren<Selectable>();
+        if (first != null && first.IsInteractable()) EventSystem.current.SetSelectedGameObject(first.gameObject);
+    }
+
     private void RefreshPanels()
     {
         var state = gameManager.State;
-        startPanel.SetActive(!settingsOpen && state == GameManager.GameState.Waiting);
+        startPanel.SetActive(!settingsOpen && !quitConfirmationOpen && state == GameManager.GameState.Waiting);
         hudPanel.SetActive(state == GameManager.GameState.Playing || state == GameManager.GameState.Paused);
         pausePanel.SetActive(!settingsOpen && state == GameManager.GameState.Paused);
         settingsPanel.SetActive(settingsOpen);
+        if (quitConfirmPanel != null) quitConfirmPanel.SetActive(quitConfirmationOpen);
         resultPanel.SetActive(!settingsOpen && (state == GameManager.GameState.Won || state == GameManager.GameState.Lost));
-        var activePanel = settingsOpen ? settingsPanel : state == GameManager.GameState.Waiting ? startPanel : state == GameManager.GameState.Paused ? pausePanel : state == GameManager.GameState.Won || state == GameManager.GameState.Lost ? resultPanel : null;
+        var activePanel = GetActiveMenu();
         if (EventSystem.current != null)
         {
             EventSystem.current.sendNavigationEvents = usingGamepad;
@@ -89,9 +108,30 @@ public class GameUI : MonoBehaviour
         RefreshPrompts();
     }
 
+    public void OpenQuitConfirmation()
+    {
+        if (gameManager.State != GameManager.GameState.Waiting || settingsOpen || quitConfirmPanel == null) return;
+        quitConfirmationOpen = true;
+        RefreshPanels();
+    }
+
+    public void CancelQuit()
+    {
+        if (!quitConfirmationOpen) return;
+        quitConfirmationOpen = false;
+        RefreshPanels();
+        if (usingGamepad && quitButton != null && EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(quitButton.gameObject);
+    }
+
+    public void ConfirmQuit()
+    {
+        if (quitConfirmationOpen) Application.Quit();
+    }
+
     public void OpenSettings()
     {
-        if (gameManager.State != GameManager.GameState.Waiting && gameManager.State != GameManager.GameState.Paused) return;
+        if (quitConfirmationOpen || (gameManager.State != GameManager.GameState.Waiting && gameManager.State != GameManager.GameState.Paused)) return;
         settingsOpen = true;
         volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
         UpdateVolumeLabel(gameAudio.Volume);
@@ -122,7 +162,7 @@ public class GameUI : MonoBehaviour
     {
         if (promptsText == null || gameManager == null) return;
         bool playing = gameManager.State == GameManager.GameState.Playing && !settingsOpen;
-        bool canGoBack = settingsOpen || gameManager.State == GameManager.GameState.Paused;
+        bool canGoBack = quitConfirmationOpen || settingsOpen || gameManager.State == GameManager.GameState.Paused;
         if (promptImages != null)
         {
             promptImages.Refresh(showPrompts, usingGamepad, playing, canGoBack);
@@ -130,7 +170,7 @@ public class GameUI : MonoBehaviour
         }
         promptsText.gameObject.SetActive(showPrompts);
         if (!showPrompts) return;
-        string back = settingsOpen || gameManager.State == GameManager.GameState.Paused ? (usingGamepad ? "     B  返回" : "     Esc  返回") : "";
+        string back = canGoBack ? (usingGamepad ? "     B  返回" : "     Esc  返回") : "";
         promptsText.text = usingGamepad
             ? (playing ? "左摇杆  移动     Menu  暂停" : "左摇杆  选择     A  确认" + back)
             : (playing ? "WASD / 方向键  移动     Esc  暂停" : "鼠标  选择     左键  确认" + back);
@@ -144,9 +184,10 @@ public class GameUI : MonoBehaviour
     private void Update()
     {
         if (gameManager == null) return;
-        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || gameManager.State == GameManager.GameState.Paused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
+        if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((quitConfirmationOpen || settingsOpen || gameManager.State == GameManager.GameState.Paused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
         {
-            if (settingsOpen) CloseSettings();
+            if (quitConfirmationOpen) CancelQuit();
+            else if (settingsOpen) CloseSettings();
             else if (gameManager.State == GameManager.GameState.Playing) gameManager.PauseGame();
             else if (gameManager.State == GameManager.GameState.Paused) gameManager.ResumeGame();
         }
