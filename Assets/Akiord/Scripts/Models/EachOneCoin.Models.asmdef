@@ -1,0 +1,4 @@
+{
+    "name": "EachOneCoin.Models",
+    "references": ["QFramework"]
+}
