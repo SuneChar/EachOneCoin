@@ -11,32 +11,46 @@ public class GameManager : MonoBehaviour
     [SerializeField] private GameAudio gameAudio;
 
     private float remainingTime;
-    private int currentHealth;
-    private GameState state = GameState.Waiting;
     private float timeScaleBeforePause = 1f;
 
     public enum GameState { Waiting, Playing, Won, Lost, Paused }
 
-    public bool IsPlaying => state == GameState.Playing;
-    public GameState State => state;
+    public bool IsPlaying => State == GameState.Playing;
+    public GameState State
+    {
+        get
+        {
+            switch (GameArchitecture.Interface.GetModel<IGameModel>().State.Value)
+            {
+                case GameSessionState.Waiting: return GameState.Waiting;
+                case GameSessionState.Playing: return GameState.Playing;
+                case GameSessionState.Won: return GameState.Won;
+                case GameSessionState.Lost: return GameState.Lost;
+                case GameSessionState.Paused: return GameState.Paused;
+                default: throw new System.InvalidOperationException("Unknown game session state.");
+            }
+        }
+    }
     public float RemainingTime => remainingTime;
     public int CoinsCollected => GameArchitecture.Interface.GetModel<IGameModel>().Coins.Value;
     public int CoinsToWin => coinsToWin;
     public int MaxHealth => maxHealth;
-    public int CurrentHealth => currentHealth;
+    public int CurrentHealth => GameArchitecture.Interface.GetModel<IGameModel>().Health.Value;
 
     private void Awake()
     {
-        GameArchitecture.Interface.GetModel<IGameModel>().ResetCoins();
+        var model = GameArchitecture.Interface.GetModel<IGameModel>();
+        model.ResetState();
+        model.ResetCoins();
+        model.ResetHealth(maxHealth);
         remainingTime = gameDuration;
-        currentHealth = Mathf.Max(1, maxHealth);
         if (playerController != null) playerController.enabled = false;
     }
 
     public void StartGame()
     {
-        if (state != GameState.Waiting) return;
-        state = GameState.Playing;
+        if (State != GameState.Waiting) return;
+        if (!GameArchitecture.Interface.GetModel<IGameModel>().TryChangeState(GameSessionState.Playing)) return;
         if (gameAudio != null) gameAudio.PlayConfirm();
         if (playerController != null) playerController.enabled = true;
     }
@@ -46,21 +60,25 @@ public class GameManager : MonoBehaviour
         if (!IsPlaying) return;
         timeScaleBeforePause = Time.timeScale;
         Time.timeScale = 0f;
-        state = GameState.Paused;
+        if (!GameArchitecture.Interface.GetModel<IGameModel>().TryChangeState(GameSessionState.Paused))
+        {
+            Time.timeScale = timeScaleBeforePause;
+            return;
+        }
         if (playerController != null) playerController.enabled = false;
     }
 
     public void ResumeGame()
     {
-        if (state != GameState.Paused) return;
+        if (State != GameState.Paused) return;
         Time.timeScale = timeScaleBeforePause;
-        state = GameState.Playing;
+        if (!GameArchitecture.Interface.GetModel<IGameModel>().TryChangeState(GameSessionState.Playing)) return;
         if (playerController != null) playerController.enabled = true;
     }
 
     private void OnDestroy()
     {
-        if (state == GameState.Paused) Time.timeScale = timeScaleBeforePause;
+        if (State == GameState.Paused) Time.timeScale = timeScaleBeforePause;
     }
 
     private void Update()
@@ -82,27 +100,28 @@ public class GameManager : MonoBehaviour
     public void TakeDamage(int amount)
     {
         if (!IsPlaying || amount <= 0) return;
-        currentHealth = Mathf.Max(0, currentHealth - amount);
+        int currentHealth = GameArchitecture.Interface.GetModel<IGameModel>().TakeDamage(amount);
         if (currentHealth == 0) EndGame(GameState.Lost);
     }
 
     public void ReturnToMainMenu()
     {
-        if (state != GameState.Paused) return;
+        if (State != GameState.Paused) return;
         Time.timeScale = timeScaleBeforePause;
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     public void RestartGame()
     {
-        if (state == GameState.Paused) Time.timeScale = timeScaleBeforePause;
+        if (State == GameState.Paused) Time.timeScale = timeScaleBeforePause;
         if (gameAudio != null) gameAudio.PlayRestart();
         SceneManager.LoadScene(SceneManager.GetActiveScene().name);
     }
 
     private void EndGame(GameState result)
     {
-        state = result;
+        var next = result == GameState.Won ? GameSessionState.Won : GameSessionState.Lost;
+        if (!GameArchitecture.Interface.GetModel<IGameModel>().TryChangeState(next)) return;
         if (gameAudio != null)
         {
             if (result == GameState.Won) gameAudio.PlayWin();
