@@ -53,6 +53,7 @@ namespace EachOneCoin.Gameplay
         public GridPosition WorldToCell(Vector3 world) => new GridPosition(Mathf.Clamp(Mathf.FloorToInt(world.x + Size / 2f), 0, Size - 1), Mathf.Clamp(Mathf.FloorToInt(world.z + Size / 2f), 0, Size - 1));
         public Vector3 CellToWorld(GridPosition cell) => new Vector3(cell.X - Size / 2f + 0.5f, 0f, cell.Y - Size / 2f + 0.5f);
         public Color PlayerColor(int id) => colors[id];
+        public bool IsConnected(int id, GridPosition cell) => connected[id][cell.X, cell.Y];
 
         public void Refresh(GridModel grid)
         {

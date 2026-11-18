@@ -60,8 +60,8 @@ namespace EachOneCoin.Tests
 
         private string State => Get<object>("State").ToString();
 
-        [UnityTest]
-        public IEnumerator Damage_OnlyPlayingAndLethalEndsGame()
+        [Test]
+        public void Damage_OnlyPlayingAndLethalEndsGame()
         {
             int maximum = Get<int>("CurrentHealth");
             Call("TakeDamage", 10);
@@ -76,11 +76,10 @@ namespace EachOneCoin.Tests
             Call("TakeDamage", int.MaxValue);
             Assert.That(Get<int>("CurrentHealth"), Is.Zero);
             Assert.That(State, Is.EqualTo("Lost"));
-            yield return null;
         }
 
-        [UnityTest]
-        public IEnumerator CollectingCoins_WinsAndRejectsFurtherPickups()
+        [Test]
+        public void CollectingCoins_WinsAndRejectsFurtherPickups()
         {
             Assert.That((bool)Call("CollectCoin"), Is.False);
             Call("StartGame");
@@ -89,7 +88,6 @@ namespace EachOneCoin.Tests
             Assert.That(State, Is.EqualTo("Won"));
             Assert.That(Get<int>("CoinsCollected"), Is.EqualTo(2));
             Assert.That((bool)Call("CollectCoin"), Is.False);
-            yield return null;
         }
 
         [UnityTest]

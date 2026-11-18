@@ -23,6 +23,25 @@ namespace EachOneCoin.Gameplay
         public ArenaCharacter[] Characters { get; private set; }
         public GridPosition[] Spawns { get; private set; }
         public float MoveSpeed => moveSpeed;
+        public bool IsPaused { get; private set; }
+        private float timeScaleBeforePause = 1f;
+
+        public void Pause()
+        {
+            if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            timeScaleBeforePause = Time.timeScale;
+            IsPaused = true;
+            Time.timeScale = 0f;
+        }
+
+        public void Resume()
+        {
+            if (!IsPaused) return;
+            IsPaused = false;
+            Time.timeScale = timeScaleBeforePause;
+        }
+
+        private void OnDestroy() { Resume(); }
 
         private void Start()
         {
@@ -52,7 +71,7 @@ namespace EachOneCoin.Gameplay
 
         private void Update()
         {
-            if (Model == null || Model.Status != MatchStatus.Playing) return;
+            if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
             Model.AdvanceTime(Time.deltaTime);
             if (Model.Status != MatchStatus.Playing) { RefreshStates(); return; }
             coins.Tick(Time.deltaTime);
@@ -79,7 +98,7 @@ namespace EachOneCoin.Gameplay
         public void PlayFootstep() { if (gameAudio != null) gameAudio.PlayFootstep(); }
         public void HitObstacle(int id)
         {
-            if (Model.TryObstacleContact(id) && Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
+            if (!IsPaused && Model.TryObstacleContact(id) && Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
         }
 
         public bool IsHazard(Collider collider)
@@ -110,17 +129,5 @@ namespace EachOneCoin.Gameplay
             return origin;
         }
 
-        // Temporary diagnostic HUD; the project-style UI is planned for phase 3.5.3.
-        private void OnGUI()
-        {
-            if (Model == null) return;
-            GUI.Box(new Rect(10, 10, 310, 145), "LOCAL MATCH - TEMPORARY HUD");
-            GUI.Label(new Rect(20, 34, 280, 20), "Time: " + Mathf.CeilToInt(Model.RemainingTime));
-            for (int i = 0; i < Model.Participants.Count; i++)
-            {
-                var p = Model.Participants[i];
-                GUI.Label(new Rect(20, 55 + i * 20, 290, 20), "P" + (i + 1) + " coins " + p.Coins + "/" + Model.CoinsToWin + " health " + p.Health + "/" + p.MaxHealth + " " + p.Status);
-            }
-        }
     }
 }
