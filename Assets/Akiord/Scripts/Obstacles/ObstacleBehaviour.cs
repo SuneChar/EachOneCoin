@@ -7,7 +7,7 @@ public abstract class ObstacleBehaviour : MonoBehaviour
     private EachOneCoin.Gameplay.MatchCoordinator arenaMatch;
 
     protected bool CanRun => behaviourRunning && (arenaMatch != null
-        ? arenaMatch.Model != null && arenaMatch.Model.Status == EachOneCoin.MatchStatus.Playing
+        ? arenaMatch.Model != null && !arenaMatch.IsPaused && arenaMatch.Model.Status == EachOneCoin.MatchStatus.Playing
         : gameManager != null && gameManager.IsPlaying);
 
     public void BindArena(EachOneCoin.Gameplay.MatchCoordinator match)

@@ -62,7 +62,7 @@ public class BootMenu : MonoBehaviour
             else if (settingsOpen) CloseSettings();
         }
     }
-    public void StartGame() { SceneManager.LoadScene("SampleScene"); }
+    public void StartGame() { SceneManager.LoadScene("ArenaScene"); }
     public void OpenSettings()
     {
         if (quitOpen) return;

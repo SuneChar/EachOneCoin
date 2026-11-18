@@ -49,16 +49,17 @@ public class GameUI : MonoBehaviour
         showPrompts = PlayerPrefs.GetInt(PromptsPreference, 1) != 0;
         if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
         inputDevice = GetComponent<InputDeviceTracker>();
-        if (inputDevice != null)
-        {
-            usingGamepad = inputDevice.UsingGamepad;
-            inputDevice.DeviceChanged += OnDeviceChanged;
-        }
+        if (inputDevice != null) usingGamepad = inputDevice.UsingGamepad;
         if (EventSystem.current != null) EventSystem.current.sendNavigationEvents = usingGamepad;
     }
 
     private void OnEnable()
     {
+        if (inputDevice != null)
+        {
+            usingGamepad = inputDevice.UsingGamepad;
+            inputDevice.DeviceChanged += OnDeviceChanged;
+        }
         if (gameManager != null)
         {
             coinSubscription = GameArchitecture.Interface.GetModel<IGameModel>()
@@ -68,6 +69,7 @@ public class GameUI : MonoBehaviour
 
     private void OnDisable()
     {
+        if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged;
         coinSubscription?.UnRegister();
         coinSubscription = null;
     }
@@ -77,11 +79,6 @@ public class GameUI : MonoBehaviour
         if (gameManager == null) return;
         if (coinText != null) coinText.text = $"金币：{coins} / {gameManager.CoinsToWin}";
         if (resultCoinsText != null) resultCoinsText.text = $"金币：{coins} / {gameManager.CoinsToWin}";
-    }
-
-    private void OnDestroy()
-    {
-        if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged;
     }
 
     private void OnDeviceChanged(bool gamepad)
