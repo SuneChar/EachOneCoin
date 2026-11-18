@@ -1,0 +1,126 @@
+using UnityEngine;
+
+namespace EachOneCoin.Gameplay
+{
+    public sealed class MatchCoordinator : MonoBehaviour
+    {
+        [SerializeField] private ArenaGridView grid;
+        [SerializeField] private ArenaCharacter playerTemplate;
+        [SerializeField] private Transform[] spawnPoints;
+        [SerializeField] private CoinSpawner coins;
+        [SerializeField] private CombatController combat;
+        [SerializeField] private NpcController npcs;
+        [SerializeField] private LocalPlayerInput localInput;
+        [SerializeField] private GameAudio gameAudio;
+        [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
+        [SerializeField, Min(1)] private int initialHealth = 3;
+        private readonly Collider[] overlap = new Collider[64];
+        public MatchModel Model { get; private set; }
+        public ArenaGridView Grid => grid;
+        public CoinSpawner Coins => coins;
+        public CombatController Combat => combat;
+        public NpcController Npcs => npcs;
+        public ArenaCharacter[] Characters { get; private set; }
+        public GridPosition[] Spawns { get; private set; }
+        public float MoveSpeed => moveSpeed;
+
+        private void Start()
+        {
+            grid.Initialize();
+            Spawns = new GridPosition[4];
+            for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
+            Model = new MatchModel(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth));
+            Model.Start();
+            foreach (var root in gameObject.scene.GetRootGameObjects())
+                foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.BindArena(this);
+            Characters = new ArenaCharacter[4];
+            Characters[0] = playerTemplate;
+            for (int i = 1; i < Characters.Length; i++)
+            {
+                Characters[i] = Instantiate(playerTemplate, playerTemplate.transform.parent);
+                Characters[i].name = "NPC " + i;
+                foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(false);
+            }
+            for (int i = 0; i < Characters.Length; i++)
+            {
+                Characters[i].Initialize(this, i, grid.PlayerColor(i));
+                Characters[i].Teleport(grid.CellToWorld(Spawns[i]));
+            }
+            grid.Refresh(Model.Grid);
+            coins.Initialize(this); combat.Initialize(this); npcs.Initialize(this);
+        }
+
+        private void Update()
+        {
+            if (Model == null || Model.Status != MatchStatus.Playing) return;
+            Model.AdvanceTime(Time.deltaTime);
+            if (Model.Status != MatchStatus.Playing) { RefreshStates(); return; }
+            coins.Tick(Time.deltaTime);
+            combat.Tick(Time.deltaTime);
+            if (Model.Participants[0].Status == ParticipantStatus.Active)
+            {
+                Characters[0].Move(localInput.Movement * moveSpeed * Time.deltaTime);
+                if (localInput.AttackPressed) combat.Attack(0);
+            }
+            for (int i = 1; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) npcs.Tick(i, Time.deltaTime);
+            RefreshStates();
+        }
+
+        private void RefreshStates()
+        {
+            for (int i = 0; i < Characters.Length; i++)
+            {
+                var status = Model.Participants[i].Status;
+                if (status == ParticipantStatus.Won || status == ParticipantStatus.Lost) Characters[i].SetActiveState(false);
+            }
+        }
+
+        public void CoinCollected(int id) { if (id == 0 && gameAudio != null) gameAudio.PlayCoin(); }
+        public void PlayFootstep() { if (gameAudio != null) gameAudio.PlayFootstep(); }
+        public void HitObstacle(int id)
+        {
+            if (Model.TryObstacleContact(id) && Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
+        }
+
+        public bool IsHazard(Collider collider)
+        {
+            if (collider == null) return false;
+            var spike = collider.GetComponentInParent<TimedSpikeTrap>();
+            if (spike != null && !spike.IsActive) return false;
+            return collider.GetComponentInParent<LethalContact>() != null || collider.GetComponentInParent<LethalObstacle>() != null || spike != null;
+        }
+
+        public bool IsBlocked(GridPosition cell)
+        {
+            int count = Physics.OverlapSphereNonAlloc(grid.CellToWorld(cell) + Vector3.up * 0.5f, 0.42f, overlap, ~0, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++) if (IsHazard(overlap[i])) return true;
+            return false;
+        }
+
+        public bool IsSpawn(GridPosition cell) { foreach (var spawn in Spawns) if (spawn.Equals(cell)) return true; return false; }
+        public bool IsOtherSpawn(int id, GridPosition cell) { for (int i = 0; i < Spawns.Length; i++) if (i != id && Spawns[i].Equals(cell)) return true; return false; }
+        public GridPosition FindSafeDrop(GridPosition origin)
+        {
+            if (!IsSpawn(origin) && !IsBlocked(origin)) return origin;
+            for (int d = 1; d < ArenaGridView.Size * 2; d++) for (int x = 0; x < ArenaGridView.Size; x++) for (int y = 0; y < ArenaGridView.Size; y++)
+            {
+                var p = new GridPosition(x, y);
+                if (Mathf.Abs(x - origin.X) + Mathf.Abs(y - origin.Y) == d && !IsSpawn(p) && !IsBlocked(p)) return p;
+            }
+            return origin;
+        }
+
+        // Temporary diagnostic HUD; the project-style UI is planned for phase 3.5.3.
+        private void OnGUI()
+        {
+            if (Model == null) return;
+            GUI.Box(new Rect(10, 10, 310, 145), "LOCAL MATCH - TEMPORARY HUD");
+            GUI.Label(new Rect(20, 34, 280, 20), "Time: " + Mathf.CeilToInt(Model.RemainingTime));
+            for (int i = 0; i < Model.Participants.Count; i++)
+            {
+                var p = Model.Participants[i];
+                GUI.Label(new Rect(20, 55 + i * 20, 290, 20), "P" + (i + 1) + " coins " + p.Coins + "/" + Model.CoinsToWin + " health " + p.Health + "/" + p.MaxHealth + " " + p.Status);
+            }
+        }
+    }
+}

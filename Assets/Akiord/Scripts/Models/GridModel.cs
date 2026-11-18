@@ -65,16 +65,31 @@ namespace EachOneCoin
 
         public bool IsConnected(int participantId, GridPosition target)
         {
-            if (!spawns.TryGetValue(participantId, out var spawn) || !Contains(target) || owners[target.X, target.Y] != participantId)
-                return false;
+            if (!Contains(target) || owners[target.X, target.Y] != participantId) return false;
+            BuildConnected(participantId);
+            return connected[target.X, target.Y];
+        }
+
+        // Copies the entire connected region so renderers need only one search per participant.
+        public void CopyConnectedTo(int participantId, bool[,] destination)
+        {
+            if (destination == null) throw new ArgumentNullException(nameof(destination));
+            if (destination.GetLength(0) != Width || destination.GetLength(1) != Height)
+                throw new ArgumentException("Destination must match grid dimensions.", nameof(destination));
+            BuildConnected(participantId);
+            Array.Copy(connected, destination, connected.Length);
+        }
+
+        private void BuildConnected(int participantId)
+        {
             Array.Clear(connected, 0, connected.Length);
             queue.Clear();
+            if (!spawns.TryGetValue(participantId, out var spawn)) return;
             connected[spawn.X, spawn.Y] = true;
             queue.Enqueue(spawn);
             while (queue.Count > 0)
             {
                 var current = queue.Dequeue();
-                if (current.Equals(target)) return true;
                 for (int i = 0; i < Dx.Length; i++)
                 {
                     var next = new GridPosition(current.X + Dx[i], current.Y + Dy[i]);
@@ -83,7 +98,6 @@ namespace EachOneCoin
                     queue.Enqueue(next);
                 }
             }
-            return false;
         }
     }
 }

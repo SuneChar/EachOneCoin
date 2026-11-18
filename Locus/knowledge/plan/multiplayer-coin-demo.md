@@ -10,7 +10,7 @@ aiEditMode: inherit
 
 ## 文档定位
 
-本文是基于本次会议和当前项目代码检查整理的执行方案，供实施前审核；不是已完成的功能清单。阶段、路径和类型名称为拟议方案，具体实现前需重新核查工作区、程序集、场景和资源引用。数值均留待原型试玩调整。
+本文是基于本次会议和当前项目代码检查整理的执行方案，供实施前审核；不是已完成的功能清单。当前优先推进“阶段 3.5：正式场景与脚本模块化”，暂停后续联网接入；原阶段记录保留为历史计划，实际进度与差异见阶段 3.5。阶段、路径和类型名称为拟议方案，具体实施前需重新核查工作区、程序集、场景和资源引用。数值均留待试玩调整。
 
 ## 一、目标与已确认规则
 
@@ -44,7 +44,7 @@ aiEditMode: inherit
 3. **多人一致性**：同时拾取、互相覆盖和受击事件不能由每台客户端独立裁决。建议房主维护权威比赛状态并统一裁定。
 4. **NPC 完整性**：NPC 不仅要到达金币附近，还要保持或修复到自身出生点的连通，且需遵守与真人相同的胜负与伤害规则。
 5. **课程验收口径**：每名玩家仍须在限时内实际拾取 10 枚才能获胜；但多人分别获胜是否完全符合课程方对作业的解释，尚需向课程方确认。
-6. **场景适配**：当前未成功结构化读取未加载的 `Assets/Akiord/Scenes/SampleScene.unity`，不能断言它的布局已适合逻辑网格或四人出生点。实施时先检查场景和工作区，保留未提交或未保存工作。
+6. **场景适配**：已通过临时附加加载只读检查 `Assets/Akiord/Scenes/SampleScene.unity`；它使用 20×20 的 400 个 tile 模型，但是否适合新规则仍需在新场景中验证。不得修改 `SampleScene.unity`；实施时保留未提交和未保存工作。
 
 ## 三、项目现状：已核实内容
 
@@ -58,7 +58,12 @@ aiEditMode: inherit
 - `Assets/Akiord/Scripts/Architecture/GameArchitecture.cs` 注册现有 `IGameModel`；模型与架构分别位于 `EachOneCoin.Models` 和 `EachOneCoin.Architecture` 程序集，后者引用前者及 QFramework。
 - `Assets/Akiord/Tests/EditMode/` 与 `Assets/Akiord/Tests/PlayMode/` 已有模型和游戏流程测试。现有测试包含单人生命归零即失败等旧行为，需保留其原有适用范围，不应把它当作新规则测试。
 - `Packages/manifest.json` 未声明明显的多人网络框架；对 `Assets` 的名称检查也未发现明显的现成网络框架。具体依赖与兼容性仍需实施前验证。
-- 本次调查未进行实际玩法试玩、联网验证或测试运行。当前活动场景为 `Assets/Akiord/Scenes/BootScene.unity`；`SampleScene.unity` 未加载，场景结构读取失败。
+- 本次场景调查以附加方式只读检查 `SampleScene.unity`，检查后关闭，未保存该场景。其玩家使用 `CharacterController`、胶囊 Sprite 和方向指示器；玩家子物体相机为透视相机，位置相对玩家约 `(0, 3, -5)`、旋转 `(30, 0, 0)`、FOV 60。`PlayerController` 的速度为 10、转向时间为 0.15 秒。
+- `SampleScene` 的场地包含 400 个 `Assets/Akiord/Media/FBX format/tile.fbx` 地块、边界、10 枚静态金币、移动障碍与地刺；`GameCanvas` 包含 HUD、结算、暂停、设置、操作提示和输入设备追踪。现有场景的布局仅作参考，不假定适合直接承载新规则。
+- `BootMenu.StartGame()` 目前直接加载 `SampleScene`，且 `BootScene` 的开始按钮通过 UnityEvent 绑定此方法。`GameUI` 与单人 `GameManager`／`IGameModel` 耦合；不能直接让它显示多人比赛状态。`InputDeviceTracker`、`ControlPromptImages`、`GameAudio` 提供现成的输入提示和音频基础。
+- 当前原型逻辑集中在 `Assets/Akiord/Scripts/Demo/Match/LocalMatchDemo.cs`，驱动运行时临时格子、角色、金币、障碍、NPC、战斗及 IMGUI；`MultiplayerDemo.unity` 序列化引用该脚本。`MatchModel`、`GridModel`、`ParticipantState` 已独立存在。
+- 现有原型阶段的 EditMode 测试曾运行通过；PlayMode 测试协程曾直接执行验证，但当前 Test Framework 1.1 的正式 PlayMode 结果回调曾在域重载后丢失。此次文档更新未重新运行编译、测试或试玩。
+- 文档更新前，断连格变暗与金币预警相关代码及测试存在未提交改动；实施时重新核对状态，保留这些改动。
 
 ## 四、Demo 范围与技术路线
 
@@ -77,7 +82,7 @@ aiEditMode: inherit
 
 ## 五、实施阶段
 
-以下路径和类名是规划，不代表文件已存在；每阶段实施前需检查实际引用、序列化使用、测试程序集及现有用户改动。
+以下阶段 1–3 保留原始规划以便追踪，并非逐项完成记录：现有本机闭环和基础 NPC 已实现，但功能主要集中在 `LocalMatchDemo.cs`，没有按下列原拟目录拆分。阶段 3.5 为当前优先计划；阶段 4 联网已暂停。每阶段实施前需检查实际引用、序列化使用、测试程序集及现有用户改动。
 
 ### 阶段 1：多人规则模型和自动化测试
 
@@ -123,7 +128,52 @@ aiEditMode: inherit
 
 验收：真人与 NPC 可以完整运行一局；攻击致死、掉币、复活、障碍永久失败和个人获胜均能观察；测试中覆盖金币与涂色保留规则。
 
-### 阶段 4：真实局域网联机
+### 阶段 3.5：正式场景、控制与脚本模块化（当前优先，待实施）
+
+**目标**：先交付一个可从 `BootScene` 进入、视觉与操作体验接近 `SampleScene` 的本机正式场景，完整承接现有涂色竞技规则；暂不接入联网。新增场景建议命名为 `Assets/Akiord/Scenes/ArenaScene.unity`，名称在实施前核对是否已存在。保留原 `SampleScene.unity` 文件及其 `.meta` 不变，亦不覆盖现有 `MultiplayerDemo.unity`。
+
+#### A. 场景、相机与角色
+
+1. 新建 `Assets/Akiord/Scenes/ArenaScene.unity`，使用 Unity API 复制或重建所需对象：参考 `SampleScene` 的地块 FBX、灯光／Volume、场地边界、碰撞体、角色胶囊 Sprite、方向指示和地图美术；确保新场景有独立对象与引用，不通过回写旧场景实现。
+2. 地图以适合四个出生点和路径切断的网格为准，参考原 20×20 地块布局而非无条件复制旧地图。建立网格与世界坐标映射、合法可走区域、出生点保护及障碍布置；检查物理碰撞、角色中心与格子边界，不使渲染格和逻辑格错位。
+3. 创建四个可辨颜色的参赛角色；本机玩家与 NPC 采用与 `SampleScene` 类似的胶囊 Sprite、`CharacterController`、朝向及移动表现。相机仅跟随本机控制的角色，参考原透视 FOV 60、相对位置 `(0, 3, -5)` 和 30° 俯角；出生、复活、玩家切换及退场后相机目标和可视范围需明确处理并试玩确认。
+4. 场景资源通过编辑器结构化操作创建和配置，保留既有素材 GUID、引用及 `.meta`；实施前检查新场景名、Build Settings 和资源依赖。新场景加入 `ProjectSettings/EditorBuildSettings.asset`，保留已有场景条目。
+
+#### B. 模块化迁移：拟新增或修改的脚本
+
+下列名称为实施目标而非已存在文件；保持功能内聚，具体抽取时按调用关系与现有程序集调整，避免为了目录而过度拆分。新场景只有一份 `MatchModel` 作为比赛权威状态，不让单人 `IGameModel` 复制金币或生命。
+
+- 保留并复用 `Assets/Akiord/Scripts/Models/MatchModel.cs`、`ParticipantState.cs`、`GridModel.cs`：继续负责独立参赛者、胜负、伤害和连通；规则缺陷或必要接口通过对应模型和测试调整，不把画面状态存回模型。
+- 新增 `Assets/Akiord/Scripts/Gameplay/Match/MatchCoordinator.cs`：从 `LocalMatchDemo.Start`／`Update` 提取建局、推进倒计时、参赛者注册和回合生命周期，统一暂停、结束及重开边界；负责协调模块而不是复制各模块规则。
+- 新增 `Assets/Akiord/Scripts/Gameplay/Grid/ArenaGridView.cs`：从 `CreateBoard`、`RefreshBoard`、`WorldToCell`、`CellToWorld` 提取格子映射、渲染与刷新；保留出生点保护、覆盖更新、断连变暗和重连恢复。优先以变更事件或脏标记更新，避免在热路径反复遍历和分配。
+- 新增 `Assets/Akiord/Scripts/Gameplay/Characters/ArenaCharacter.cs` 与 `LocalPlayerInput.cs`：将 `MovePawn`、`EnterCell` 的角色移动／格子进入与真人输入拆开，采用原 `PlayerController` 的 `CharacterController.Move`、归一化轴输入、朝向翻转及实际位移脚步音效。NPC 与真人共享移动和攻击执行入口；不要用 `FindGameObjectWithTag("Player")` 识别多人角色。
+- 兼容现有 `Assets/Akiord/Scripts/PlayerController.cs`：优先让新角色复用可安全提取的移动表现或参考其实现；如必须修改其 `Start`、`Update`、`UpdateTurning`、`OnDisable` 或序列化字段，先查询代码和 Unity 序列化引用，保持旧字段、`SampleScene` 引用及原行为，不擅自删除或重命名。原单人场景继续可以独立启动。
+- 新增 `Assets/Akiord/Scripts/Gameplay/Coins/CoinSpawner.cs` 与 `CoinPickupView.cs`：从 `BeginCoinWarning`、`UpdateCoins`、`SpawnCoin`、`TryCollectAtCell` 提取固定／随机刷新、预警位置预留、实体拾取和一次性消耗；保留死亡掉币即时出现、预警不等于金币、接触且连通才能拾取的约束。
+- 新增 `Assets/Akiord/Scripts/Gameplay/Combat/CombatController.cs`、`RespawnController.cs`：从 `TryAttack`、`FindDropCell`、`UpdateRespawns` 提取冷却、命中、当前生命、掉币、离场和出生点复活；临时数值仍可配置。碰撞障碍单独接入 `MatchModel.TryObstacleContact`，每次有效接触扣上限、持续接触不重复计次。
+- 新增 `Assets/Akiord/Scripts/Gameplay/AI/NpcController.cs`：从 `UpdateNpc`／`TryFindNpcWaypoint` 提取决策及寻路；保留补足四席、寻找金币、断路返出生点、避障、统一攻击和个人胜负。避免每帧无条件重新分配大规模搜索数据；实际性能以场景规模测试。
+- 新增 `Assets/Akiord/Scripts/Gameplay/UI/ArenaGameUI.cs`：使用 Unity UI 与 TextMeshPro 替换正式场景中的 `OnGUI`，显示个人金币、当前／最大生命、时间、四名玩家状态、受击／复活／连通反馈及结果；参考原 `GameUI` 的布局和动画，不直接订阅单人 `IGameModel`。
+- 参考并复用 `Assets/Akiord/Scripts/InputDeviceTracker.cs`、`ControlPromptImages.cs` 和 `GameAudio.cs`：保留键鼠／手柄输入提示、音量及提示开关。新增攻击与暂停的键鼠／手柄提示时先核对旧 Input Manager 实际按键及现有素材，避免与菜单确认键冲突；暂停时屏蔽玩法输入。
+- `Assets/Akiord/Scripts/Demo/Match/LocalMatchDemo.cs` 与 `DemoPawn.cs` 目前受 `MultiplayerDemo.unity` 和 PlayMode 测试引用。迁移时先查询 serialized usages 与测试反射调用；保留旧 Demo 可运行的兼容入口或同步迁移其引用，避免直接删除、改名、改变 GUID 或留下失效 Inspector 引用。只在引用与测试全部验证后再决定是否移除原型，不在本阶段擅自删除。
+
+#### C. 控制、菜单与 BootScene 接入
+
+1. 正式场景使用与原项目一致的旧版 Input Manager：键盘 WASD／方向键、手柄轴移动；沿用原项目的角色朝向、动画和操作提示方式。攻击保留当前空格作为键盘默认值，手柄攻击键先依据现有配置选定并在提示中明确。正式入口默认为一名真人加三个 NPC；数字键切换测试席位可保留为开发调试入口，不应误导为本地四人或已联网。
+2. 参照原场景搭建 HUD、暂停菜单、设置面板、结果面板与 EventSystem：支持继续、重新开始、返回主菜单、音量和操作提示；保持键鼠／手柄焦点切换。因为当前是本机模式，暂停应同时冻结比赛计时、NPC、刷新、攻击和复活，并在返回、重开、销毁时恢复原 `Time.timeScale`；未来联机暂停语义另议。
+3. 修改 `Assets/Akiord/Scripts/BootMenu.cs` 的 `StartGame()`，使 `BootScene` 开始按钮进入新正式场景。方法名和签名保留，维持 `Assets/Akiord/Scenes/BootScene.unity` 中既有 UnityEvent 绑定；优先无需修改 `BootScene.unity`。若实施发现必须改该场景，先检查具体对象、Prefab 及引用后仅改目标，保留其它设置。
+4. 新场景的暂停／结算返回主菜单、重新开始应分别加载 `BootScene`／当前正式场景，并处理音频、时间缩放和状态清理；不要引用原 `GameManager` 的单人状态充当多人结果。
+
+#### D. 分步实施和验证
+
+- **3.5.1 场景基线（已完成初始副本，待后续迁移）**：已通过 Unity 创建 `Assets/Akiord/Scenes/ArenaScene.unity`，基于 `SampleScene` 的独立场景副本保留地图、相机、角色、原单人 HUD 与控制，并加入构建设置及四个候选出生点标记。当前仍是旧单人流程，标记尚未接入参赛者或规则；新地图布局、网格映射和四角色实现属于后续迁移。已核对原 `SampleScene.unity` 和 `.meta` 内容哈希未变，运行时检查新场景可加载、原相机和角色组件存在且暂停／继续可用。
+- **3.5.2 模块迁移（已实现本机初版，待 3.5.3 UI 与入口）**：新增 `Gameplay/Match/MatchCoordinator.cs`、`Grid/ArenaGridView.cs`、`Characters/ArenaCharacter.cs`／`LocalPlayerInput.cs`、`Coins/CoinSpawner.cs`、`Combat/CombatController.cs`、`AI/NpcController.cs`，并在 `ArenaScene.unity` 中停用而非删除旧单人管理器、控制器、静态金币及旧 HUD。`ObstacleBehaviour` 新增正式场景比赛状态绑定，旧单人场景仍走原 GameManager 分支。已检查 20×20 坐标、断连变暗、预警生成、拾取、攻击掉币、复活、障碍接触去重和 NPC 移动；EditMode 测试程序集 27 项通过。临时 IMGUI、数值和基本 NPC 并非最终 UI 或平衡；键鼠／手柄实际操作体验、正式 PlayMode 测试及 Boot 入口仍待后续验证。
+- **3.5.3 UI 与入口**：建立正式 HUD／暂停／设置／结果 UI，接入操作提示和音频；保留 `BootMenu.StartGame` 的 UnityEvent 绑定并切换目标场景。验证暂停时计时和所有系统冻结、继续恢复、重开重置、返回主菜单无残留。
+- **3.5.4 回归与演示**：执行可发现的 EditMode 规则测试与 PlayMode 测试；覆盖网格坐标、断连变暗／重连、预警先于生成且位置固定、金币不能重复拾取、攻击掉币与复活、障碍接触计次、NPC 行动及暂停／重开。针对 Test Framework 1.1 的 PlayMode 结果回调限制先查明可行运行方式；若仍不能取得正式结果，标注限制并提供手动检查，不把协程直接调用当作正式 Test Runner 通过。
+- 手动从 `BootScene` 进入新场景，分别使用键鼠与可用手柄检查视角、移动、攻击、UI 焦点与音效；检查 UI 在目标分辨率下不遮挡角色及关键金币。完整试玩一局并记录四人状态、个人获胜／失败和超时；任何体验与画面需由用户复核。
+- 用 Git 差异确认 `Assets/Akiord/Scenes/SampleScene.unity` 及其 `.meta` 未修改；若共享脚本有改动，独立打开旧场景做回归且不保存场景。报告编译、自动化、场景视觉、手柄及未验证事项，保留用户未提交改动。
+
+**阶段完成标准**：可从 Boot 菜单进入独立正式本机场景；场景视觉、镜头、角色和菜单与 SampleScene 风格一致；当前原型规则完整保留且原单人场景未被修改；联网仍未接入。正式场景的具体地形、游戏手感和按键细节以试玩反馈为准。
+
+### 阶段 4：真实局域网联机（暂停，待用户再次授权）
 
 **目标**：使用房主权威同步已验证的闭环，多名真人连接后由 NPC 补足四席。
 
