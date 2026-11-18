@@ -69,9 +69,56 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator CoinWarnings_AppearBeforeCoinsAndPreservePositions()
+        {
+            var coins = (IEnumerable)Field("coins");
+            var positions = new System.Collections.Generic.HashSet<GridPosition>();
+            int warnings = 0;
+            foreach (var coin in coins)
+            {
+                var type = coin.GetType();
+                Assert.That((GameObject)type.GetField("Visual").GetValue(coin), Is.Null);
+                Assert.That((GameObject)type.GetField("Warning").GetValue(coin), Is.Not.Null);
+                Assert.That(positions.Add((GridPosition)type.GetField("Position").GetValue(coin)), Is.True);
+                warnings++;
+            }
+            Assert.That(warnings, Is.EqualTo(7));
+            Call("UpdateCoins", 2f);
+            foreach (var coin in coins)
+            {
+                var type = coin.GetType();
+                Assert.That((GameObject)type.GetField("Visual").GetValue(coin), Is.Not.Null);
+                Assert.That((GameObject)type.GetField("Warning").GetValue(coin), Is.Null);
+                Assert.That(positions.Contains((GridPosition)type.GetField("Position").GetValue(coin)), Is.True);
+            }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator DisconnectedTiles_DarkenAndRestoreAfterReconnect()
+        {
+            var tiles = (Renderer[,])Field("tileRenderers");
+            var block = new MaterialPropertyBlock();
+            Call("EnterCell", 0, new GridPosition(1, 0));
+            Call("EnterCell", 0, new GridPosition(2, 0));
+            tiles[2, 0].GetPropertyBlock(block);
+            var connected = block.GetColor("_BaseColor");
+            Call("EnterCell", 1, new GridPosition(1, 0));
+            tiles[2, 0].GetPropertyBlock(block);
+            var disconnected = block.GetColor("_BaseColor");
+            Assert.That(disconnected.r, Is.LessThan(connected.r));
+            Call("EnterCell", 0, new GridPosition(1, 0));
+            tiles[2, 0].GetPropertyBlock(block);
+            Assert.That(block.GetColor("_BaseColor"), Is.EqualTo(connected));
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Npc_MovesFromSpawnAndPaintsNeighbouringCell()
         {
             var match = (MatchModel)Field("match");
+            Call("UpdateCoins", 2f);
+            ((float[])Field("npcRetryTimers"))[1] = 0f;
             SetPawnPosition(1, new Vector2(12.5f, 0f));
             var before = (Vector2)((Array)Field("pawns")).GetValue(1).GetType().GetProperty("Position").GetValue(((Array)Field("pawns")).GetValue(1));
             for (int i = 0; i < 8; i++) Call("UpdateNpc", 1, 0.1f);

@@ -29,6 +29,25 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void Grid_CopyConnectedTo_TracksCutAndReconnect()
+        {
+            var grid = new GridModel(4, 2, new[] { P(0, 0), P(3, 1) });
+            var result = new bool[4, 2];
+            grid.TryPaint(0, P(1, 0));
+            grid.TryPaint(0, P(2, 0));
+            grid.CopyConnectedTo(0, result);
+            Assert.That(result[2, 0], Is.True);
+            grid.TryPaint(1, P(1, 0));
+            grid.CopyConnectedTo(0, result);
+            Assert.That(result[2, 0], Is.False);
+            Assert.That(grid.OwnerAt(P(2, 0)), Is.EqualTo(0));
+            grid.TryPaint(0, P(1, 0));
+            grid.CopyConnectedTo(0, result);
+            Assert.That(result[2, 0], Is.True);
+            Assert.Throws<ArgumentException>(() => grid.CopyConnectedTo(0, new bool[1, 1]));
+        }
+
+        [Test]
         public void Grid_RejectsInvalidSpawnsAndOutOfBoundsAccess()
         {
             Assert.Throws<ArgumentException>(() => new GridModel(2, 2, new[] { P(0, 0), P(0, 0) }));

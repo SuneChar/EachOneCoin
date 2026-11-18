@@ -12,6 +12,8 @@ namespace EachOneCoin.Demo
         [SerializeField, Min(0.1f)] private float movementSpeed = 3f;
         [SerializeField, Min(1)] private int initialHealth = 3;
         [SerializeField, Min(0.1f)] private float coinRespawnSeconds = 2f;
+        [SerializeField, Min(0.1f)] private float coinWarningSeconds = 1f;
+        [SerializeField, Range(0.2f, 1f)] private float disconnectedBrightness = 0.65f;
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
         [SerializeField, Min(0.1f)] private float attackCooldown = 0.8f;
         [SerializeField, Min(0.1f)] private float attackRange = 1.1f;
@@ -40,6 +42,7 @@ namespace EachOneCoin.Demo
         private readonly GridPosition[] npcWaypoints = new GridPosition[4];
         private readonly bool[] hasNpcWaypoint = new bool[4];
         private readonly Renderer[,] tileRenderers = new Renderer[Width, Height];
+        private readonly bool[][,] connectedCells = { new bool[Width, Height], new bool[Width, Height], new bool[Width, Height], new bool[Width, Height] };
         private MaterialPropertyBlock propertyBlock;
         private MatchModel match;
         private Material tileMaterial;
@@ -53,6 +56,7 @@ namespace EachOneCoin.Demo
             public bool IsDropped;
             public GridPosition Position;
             public GameObject Visual;
+            public GameObject Warning;
             public float Remaining;
         }
 
@@ -66,7 +70,7 @@ namespace EachOneCoin.Demo
             CreateObstacles();
             foreach (var position in fixedPositions) coins.Add(new CoinSlot { Position = position });
             for (int i = 0; i < RandomCoinCount; i++) coins.Add(new CoinSlot { IsRandom = true });
-            foreach (var coin in coins) SpawnCoin(coin);
+            foreach (var coin in coins) BeginCoinWarning(coin);
             RefreshBoard();
             for (int i = 0; i < pawns.Length; i++) EnterCell(i, spawns[i]);
         }
@@ -276,7 +280,7 @@ namespace EachOneCoin.Demo
                 Destroy(coin.Visual);
                 coin.Visual = null;
                 if (coin.IsDropped) coin.Remaining = float.PositiveInfinity;
-                else coin.Remaining = Mathf.Max(0.1f, coinRespawnSeconds);
+                else coin.Remaining = Mathf.Max(0f, coinRespawnSeconds - Mathf.Max(0.1f, coinWarningSeconds));
                 feedback = "P" + (id + 1) + " collected a coin.";
                 feedbackTime = 2f;
             }
@@ -290,14 +294,38 @@ namespace EachOneCoin.Demo
                 if (coin.Visual != null) { coin.Visual.transform.Rotate(Vector3.up, 90f * deltaTime, Space.World); continue; }
                 if (coin.IsDropped) { coins.RemoveAt(i); continue; }
                 coin.Remaining -= deltaTime;
-                if (coin.Remaining <= 0f) SpawnCoin(coin);
+                if (coin.Warning != null)
+                {
+                    float pulse = 0.7f + 0.2f * Mathf.Sin(Time.time * 9f);
+                    coin.Warning.transform.localScale = new Vector3(pulse, 0.025f, pulse);
+                    if (coin.Remaining <= 0f) SpawnCoin(coin);
+                }
+                else if (coin.Remaining <= 0f) BeginCoinWarning(coin);
             }
+        }
+
+        private void BeginCoinWarning(CoinSlot coin)
+        {
+            if (coin.IsRandom && !TryFindRandomCell(out coin.Position)) { coin.Remaining = 1f; return; }
+            if (!coin.IsRandom && IsReservedByCoin(coin.Position)) { coin.Remaining = 1f; return; }
+            coin.Warning = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            coin.Warning.name = "Coin Spawn Warning";
+            coin.Warning.transform.SetParent(transform);
+            coin.Warning.transform.position = CellToWorld(coin.Position) + Vector3.up * 0.09f;
+            coin.Warning.transform.localScale = new Vector3(0.7f, 0.025f, 0.7f);
+            var renderer = coin.Warning.GetComponent<Renderer>();
+            renderer.sharedMaterial = tileMaterial;
+            propertyBlock.Clear();
+            propertyBlock.SetColor("_BaseColor", new Color(1f, 0.8f, 0.1f));
+            propertyBlock.SetColor("_Color", new Color(1f, 0.8f, 0.1f));
+            renderer.SetPropertyBlock(propertyBlock);
+            DisableColliders(coin.Warning);
+            coin.Remaining = Mathf.Max(0.1f, coinWarningSeconds);
         }
 
         private void SpawnCoin(CoinSlot coin)
         {
-            if (coin.IsRandom && !TryFindRandomCell(out coin.Position)) { coin.Remaining = 1f; return; }
-            if (!coin.IsDropped && !coin.IsRandom && IsOccupiedByCoin(coin.Position)) { coin.Remaining = 1f; return; }
+            if (coin.Warning != null) { Destroy(coin.Warning); coin.Warning = null; }
             coin.Visual = coinModel != null ? Instantiate(coinModel, transform) : GameObject.CreatePrimitive(PrimitiveType.Sphere);
             coin.Visual.name = coin.IsDropped ? "Dropped Coin" : coin.IsRandom ? "Random Coin" : "Fixed Coin";
             coin.Visual.transform.position = CellToWorld(coin.Position) + Vector3.up * 0.45f;
@@ -311,12 +339,18 @@ namespace EachOneCoin.Demo
             for (int x = 0; x < Width; x++) for (int y = 0; y < Height; y++)
             {
                 var cell = new GridPosition(x, y);
-                if (obstacles.Contains(cell) || IsSpawn(cell) || IsFixed(cell) || IsOccupiedByCoin(cell)) continue;
+                if (obstacles.Contains(cell) || IsSpawn(cell) || IsFixed(cell) || IsReservedByCoin(cell)) continue;
                 candidates.Add(cell);
             }
             if (candidates.Count == 0) { position = default; return false; }
             position = candidates[Random.Range(0, candidates.Count)];
             return true;
+        }
+
+        private bool IsReservedByCoin(GridPosition position)
+        {
+            foreach (var coin in coins) if ((coin.Visual != null || coin.Warning != null) && coin.Position.Equals(position)) return true;
+            return false;
         }
 
         private bool IsOccupiedByCoin(GridPosition position)
@@ -349,10 +383,16 @@ namespace EachOneCoin.Demo
 
         private void RefreshBoard()
         {
+            for (int i = 0; i < connectedCells.Length; i++) match.Grid.CopyConnectedTo(i, connectedCells[i]);
             for (int x = 0; x < Width; x++) for (int y = 0; y < Height; y++)
             {
                 var owner = match.Grid.OwnerAt(new GridPosition(x, y));
                 Color color = owner.HasValue ? colors[owner.Value] : new Color(0.62f, 0.65f, 0.63f);
+                if (owner.HasValue && !connectedCells[owner.Value][x, y])
+                {
+                    float brightness = Mathf.Clamp(disconnectedBrightness, 0.2f, 1f);
+                    color = new Color(color.r * brightness, color.g * brightness, color.b * brightness, color.a);
+                }
                 propertyBlock.Clear();
                 propertyBlock.SetColor("_BaseColor", color);
                 propertyBlock.SetColor("_Color", color);
