@@ -12,6 +12,8 @@ public class GameAudio : MonoBehaviour
     [SerializeField] private AudioClip countdownClip;
     [SerializeField] private AudioClip[] footstepClips;
     [SerializeField, Range(0f, 1f)] private float footstepVolume = 0.45f;
+    [SerializeField] private AudioClip obstacleHitClip;
+    [SerializeField, Range(0f, 1f)] private float obstacleHitVolume = 0.8f;
 
     private const string VolumePreference = "GameAudio.Volume";
     public float Volume => volume;
@@ -41,6 +43,7 @@ public class GameAudio : MonoBehaviour
     public void PlayWin() => Play(winClip);
     public void PlayLose() => Play(loseClip);
     public void PlayCountdown() => Play(countdownClip);
+    public void PlayObstacleHit() => Play(obstacleHitClip, obstacleHitVolume);
 
     public void PlayFootstep()
     {

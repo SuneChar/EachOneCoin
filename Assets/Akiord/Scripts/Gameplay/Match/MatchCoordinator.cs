@@ -14,6 +14,9 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private GameAudio gameAudio;
         [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
         [SerializeField, Min(1)] private int initialHealth = 3;
+        [SerializeField, Min(0f)] private float obstacleInvulnerabilitySeconds = 1f;
+        [SerializeField, Min(0f)] private float obstacleKnockbackDistance = 0.6f;
+        [SerializeField, Min(0.01f)] private float obstacleKnockbackSeconds = 0.18f;
         private readonly Collider[] overlap = new Collider[64];
         public MatchModel Model { get; private set; }
         public ArenaGridView Grid => grid;
@@ -23,6 +26,11 @@ namespace EachOneCoin.Gameplay
         public ArenaCharacter[] Characters { get; private set; }
         public GridPosition[] Spawns { get; private set; }
         public float MoveSpeed => moveSpeed;
+        public float ObstacleInvulnerabilitySeconds => Mathf.Max(0f, obstacleInvulnerabilitySeconds);
+        public float ObstacleKnockbackDistance => Mathf.Max(0f, obstacleKnockbackDistance);
+        public float ObstacleKnockbackSeconds => Mathf.Max(0.01f, obstacleKnockbackSeconds);
+        public int InitialHealth => Mathf.Max(1, initialHealth);
+        public event System.Action<int> ObstacleHit;
         public bool IsPaused { get; private set; }
         private float timeScaleBeforePause = 1f;
 
@@ -96,9 +104,13 @@ namespace EachOneCoin.Gameplay
 
         public void CoinCollected(int id) { if (id == 0 && gameAudio != null) gameAudio.PlayCoin(); }
         public void PlayFootstep() { if (gameAudio != null) gameAudio.PlayFootstep(); }
-        public void HitObstacle(int id)
+        public bool HitObstacle(int id)
         {
-            if (!IsPaused && Model.TryObstacleContact(id) && Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
+            if (IsPaused || !Model.TryObstacleContact(id)) return false;
+            if (id == 0 && gameAudio != null) gameAudio.PlayObstacleHit();
+            ObstacleHit?.Invoke(id);
+            if (Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
+            return true;
         }
 
         public bool IsHazard(Collider collider)

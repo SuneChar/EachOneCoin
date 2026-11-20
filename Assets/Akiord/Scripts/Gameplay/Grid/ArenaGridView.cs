@@ -6,6 +6,7 @@ namespace EachOneCoin.Gameplay
     {
         [SerializeField] private Transform tileRoot;
         [SerializeField, Range(0.2f, 1f)] private float disconnectedBrightness = 0.65f;
+        [SerializeField, Range(0.1f, 1f)] private float tileBrightness = 0.55f;
         public const int Size = 20;
         private readonly Renderer[,] tiles = new Renderer[Size, Size];
         private readonly int[,] displayedState = new int[Size, Size];
@@ -67,8 +68,9 @@ namespace EachOneCoin.Gameplay
                 if (state == displayedState[x, y]) continue;
                 displayedState[x, y] = state;
                 renderer.enabled = owner.HasValue;
-                Color color = owner.HasValue ? colors[owner.Value] : Color.white;
-                if (owner.HasValue && !connected[owner.Value][x, y]) color = new Color(color.r * disconnectedBrightness, color.g * disconnectedBrightness, color.b * disconnectedBrightness, color.a);
+                Color color = owner.HasValue ? colors[owner.Value] * tileBrightness : Color.white;
+                if (owner.HasValue && !connected[owner.Value][x, y]) color *= disconnectedBrightness;
+                color.a = 1f;
                 block.Clear();
                 block.SetColor("_BaseColor", color);
                 block.SetColor("_Color", color);

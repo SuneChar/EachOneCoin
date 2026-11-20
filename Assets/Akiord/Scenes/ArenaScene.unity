@@ -3239,6 +3239,9 @@ MonoBehaviour:
   gameAudio: {fileID: 876484949}
   moveSpeed: 7
   initialHealth: 3
+  obstacleInvulnerabilitySeconds: 1
+  obstacleKnockbackDistance: 0.6
+  obstacleKnockbackSeconds: 0.18
 --- !u!114 &146190039
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -3310,6 +3313,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tileRoot: {fileID: 2041702316}
   disconnectedBrightness: 0.65
+  tileBrightness: 0.85
 --- !u!1001 &146916444
 PrefabInstance:
   m_ObjectHideFlags: 0
@@ -19788,6 +19792,8 @@ MonoBehaviour:
   - {fileID: 8300000, guid: 4f7837ae7ab1591409bd57cd74524318, type: 3}
   - {fileID: 8300000, guid: 946819173b5415241be035304734999b, type: 3}
   footstepVolume: 0.45
+  obstacleHitClip: {fileID: 8300000, guid: e0df8817fab8b38408bd8c6997d9b37f, type: 3}
+  obstacleHitVolume: 0.8
 --- !u!82 &876484950
 AudioSource:
   m_ObjectHideFlags: 0
@@ -41443,6 +41449,9 @@ MonoBehaviour:
   volumeSlider: {fileID: 198048215}
   promptsToggle: {fileID: 1611508832}
   promptImages: {fileID: 919279690}
+  hitFlashDuration: 0.25
+  hitFrameOpacity: 0.65
+  hitFrameThickness: 24
 --- !u!1001 &1791450583
 PrefabInstance:
   m_ObjectHideFlags: 0
