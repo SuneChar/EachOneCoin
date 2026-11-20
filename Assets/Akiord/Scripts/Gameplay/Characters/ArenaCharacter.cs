@@ -29,6 +29,9 @@ namespace EachOneCoin.Gameplay
         private Color[] spriteColors;
         private bool flashing;
         public int Id { get; private set; }
+        public bool IsKnockedBack => knockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
+        public int LastTeleportFrame { get; private set; } = -1;
+        private int lastKnockbackFrame = -1;
 
         public void Initialize(MatchCoordinator coordinator, int id, Color color)
         {
@@ -83,6 +86,7 @@ namespace EachOneCoin.Gameplay
 
         public void Teleport(Vector3 position)
         {
+            LastTeleportFrame = Time.frameCount;
             controller.enabled = false;
             // CellToWorld returns ground height; leave room for the controller's skin.
             position.y += controller.height * 0.5f - controller.center.y + controller.skinWidth;
@@ -193,6 +197,7 @@ namespace EachOneCoin.Gameplay
         {
             if (match != null && !match.IsPaused && match.Model != null && match.Model.Status == MatchStatus.Playing && controller != null && controller.enabled && knockbackTime > 0f)
             {
+                lastKnockbackFrame = Time.frameCount;
                 float stepTime = Mathf.Min(Time.deltaTime, knockbackTime);
                 Vector3 knockback = pendingKnockback * (stepTime / knockbackTime);
                 pendingKnockback -= knockback;

@@ -14,6 +14,7 @@ namespace EachOneCoin.Gameplay
 
         public void Initialize(MatchCoordinator coordinator) { match = coordinator; }
         public void ResetPath(int id) { hasWaypoint[id] = false; retries[id] = 0f; }
+        internal bool HasWaypoint(int id) => hasWaypoint[id];
 
         public void Tick(int id, float deltaTime)
         {
@@ -23,7 +24,7 @@ namespace EachOneCoin.Gameplay
             if (!hasWaypoint[id])
             {
                 if (retries[id] > 0f) return;
-                if (!FindNext(id, out waypoints[id])) { retries[id] = 0.25f; return; }
+                if (!FindNext(id, out waypoints[id])) { match.Telemetry?.NpcEvent(id, "path_failed"); retries[id] = 0.25f; return; }
                 hasWaypoint[id] = true;
             }
             var character = match.Characters[id];
@@ -33,7 +34,7 @@ namespace EachOneCoin.Gameplay
             var before = character.transform.position;
             character.Move(delta);
             if ((character.transform.position - target).sqrMagnitude < 0.0001f) hasWaypoint[id] = false;
-            else if (delta.sqrMagnitude > 0.0001f && (character.transform.position - before).sqrMagnitude < 0.000001f) { hasWaypoint[id] = false; retries[id] = 0.25f; }
+            else if (delta.sqrMagnitude > 0.0001f && (character.transform.position - before).sqrMagnitude < 0.000001f) { match.Telemetry?.NpcEvent(id, "blocked_retry"); hasWaypoint[id] = false; retries[id] = 0.25f; }
         }
 
         private bool FindNext(int id, out GridPosition next)

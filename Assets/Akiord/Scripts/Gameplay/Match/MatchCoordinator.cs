@@ -33,6 +33,7 @@ namespace EachOneCoin.Gameplay
         public event System.Action<int> ObstacleHit;
         public bool IsPaused { get; private set; }
         private float timeScaleBeforePause = 1f;
+        internal MovementTelemetry Telemetry { get; private set; }
 
         public void Pause()
         {
@@ -75,6 +76,12 @@ namespace EachOneCoin.Gameplay
             }
             grid.Refresh(Model.Grid);
             coins.Initialize(this); combat.Initialize(this); npcs.Initialize(this);
+            if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
+                System.Array.Exists(System.Environment.GetCommandLineArgs(), arg => arg == "--movement-telemetry"))
+            {
+                Telemetry = gameObject.AddComponent<MovementTelemetry>();
+                Telemetry.Initialize(this, localInput);
+            }
         }
 
         private void Update()
