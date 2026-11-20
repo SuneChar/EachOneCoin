@@ -13,6 +13,10 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private LocalPlayerInput localInput;
         [SerializeField] private GameAudio gameAudio;
         [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
+        [SerializeField, Min(0.1f)] private float maxStamina = 100f;
+        [SerializeField, Min(0f)] private float sprintStaminaPerSecond = 25f;
+        [SerializeField, Min(0f)] private float staminaRecoveryPerSecond = 20f;
+        [SerializeField, Min(1f)] private float sprintSpeedMultiplier = 1.5f;
         [SerializeField, Min(1)] private int initialHealth = 3;
         [SerializeField, Min(0f)] private float obstacleInvulnerabilitySeconds = 1f;
         [SerializeField, Min(0f)] private float obstacleKnockbackDistance = 0.6f;
@@ -26,6 +30,7 @@ namespace EachOneCoin.Gameplay
         public ArenaCharacter[] Characters { get; private set; }
         public GridPosition[] Spawns { get; private set; }
         public float MoveSpeed => moveSpeed;
+        public StaminaModel Stamina { get; private set; }
         public float ObstacleInvulnerabilitySeconds => Mathf.Max(0f, obstacleInvulnerabilitySeconds);
         public float ObstacleKnockbackDistance => Mathf.Max(0f, obstacleKnockbackDistance);
         public float ObstacleKnockbackSeconds => Mathf.Max(0.01f, obstacleKnockbackSeconds);
@@ -59,6 +64,7 @@ namespace EachOneCoin.Gameplay
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
             Model = new MatchModel(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth));
             Model.Start();
+            Stamina = new StaminaModel(Mathf.Max(0.1f, maxStamina));
             foreach (var root in gameObject.scene.GetRootGameObjects())
                 foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.BindArena(this);
             Characters = new ArenaCharacter[4];
@@ -91,9 +97,14 @@ namespace EachOneCoin.Gameplay
             if (Model.Status != MatchStatus.Playing) { RefreshStates(); return; }
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
-            if (Model.Participants[0].Status == ParticipantStatus.Active)
+            bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
+            Vector3 movement = playerActive ? localInput.Movement : Vector3.zero;
+            Stamina.Tick(Time.deltaTime, playerActive && !Characters[0].IsKnockedBack,
+                movement.sqrMagnitude > 0f, localInput.SprintHeld, Mathf.Max(0f, sprintStaminaPerSecond), Mathf.Max(0f, staminaRecoveryPerSecond));
+            if (playerActive)
             {
-                Characters[0].Move(localInput.Movement * moveSpeed * Time.deltaTime);
+                float speed = moveSpeed * (Stamina.IsSprinting ? Mathf.Max(1f, sprintSpeedMultiplier) : 1f);
+                Characters[0].Move(movement * speed * Time.deltaTime);
                 if (localInput.AttackPressed) combat.Attack(0);
             }
             for (int i = 1; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) npcs.Tick(i, Time.deltaTime);
