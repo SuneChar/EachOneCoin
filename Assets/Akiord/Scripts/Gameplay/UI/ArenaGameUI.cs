@@ -17,6 +17,12 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
         [SerializeField] private ControlPromptImages promptImages;
+        [SerializeField, Min(0.05f)] private float hitFlashDuration = 0.25f;
+        [SerializeField, Range(0f, 1f)] private float hitFrameOpacity = 0.65f;
+        [SerializeField, Min(1f)] private float hitFrameThickness = 24f;
+        private readonly Image[] hitFrame = new Image[4];
+        private float hitFlashRemaining;
+        private float hitTextRemaining;
         private InputDeviceTracker inputDevice;
         private bool usingGamepad, showPrompts, settingsOpen, resultShown;
         private int lastTime = -1;
@@ -33,10 +39,50 @@ namespace EachOneCoin.Gameplay
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
+            CreateHitFrame();
             RefreshPanels();
         }
 
+        private void OnEnable() { if (match != null) match.ObstacleHit += OnObstacleHit; }
+        private void OnDisable() { if (match != null) match.ObstacleHit -= OnObstacleHit; }
         private void OnDestroy() { if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged; }
+
+        private void OnObstacleHit(int id)
+        {
+            if (id != 0) return;
+            hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
+            hitTextRemaining = 0.8f;
+            UpdateHitFrame();
+        }
+
+        private void CreateHitFrame()
+        {
+            var frame = new GameObject("Obstacle Hit Frame", typeof(RectTransform));
+            var rect = (RectTransform)frame.transform;
+            rect.SetParent(transform, false);
+            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
+            for (int i = 0; i < hitFrame.Length; i++)
+            {
+                var edge = new GameObject("Edge " + i, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+                var edgeRect = (RectTransform)edge.transform;
+                edgeRect.SetParent(rect, false);
+                if (i == 0) { edgeRect.anchorMin = new Vector2(0f, 1f); edgeRect.anchorMax = Vector2.one; edgeRect.pivot = new Vector2(0.5f, 1f); edgeRect.sizeDelta = new Vector2(0f, hitFrameThickness); }
+                else if (i == 1) { edgeRect.anchorMin = Vector2.zero; edgeRect.anchorMax = new Vector2(1f, 0f); edgeRect.pivot = new Vector2(0.5f, 0f); edgeRect.sizeDelta = new Vector2(0f, hitFrameThickness); }
+                else if (i == 2) { edgeRect.anchorMin = Vector2.zero; edgeRect.anchorMax = new Vector2(0f, 1f); edgeRect.pivot = new Vector2(0f, 0.5f); edgeRect.sizeDelta = new Vector2(hitFrameThickness, 0f); }
+                else { edgeRect.anchorMin = new Vector2(1f, 0f); edgeRect.anchorMax = Vector2.one; edgeRect.pivot = new Vector2(1f, 0.5f); edgeRect.sizeDelta = new Vector2(hitFrameThickness, 0f); }
+                edgeRect.anchoredPosition = Vector2.zero;
+                hitFrame[i] = edge.GetComponent<Image>();
+                hitFrame[i].raycastTarget = false;
+            }
+            UpdateHitFrame();
+        }
+
+        private void UpdateHitFrame()
+        {
+            float alpha = hitFrameOpacity * Mathf.Clamp01(hitFlashRemaining / Mathf.Max(0.05f, hitFlashDuration));
+            foreach (var edge in hitFrame) if (edge != null) edge.color = new Color(1f, 0f, 0f, alpha);
+        }
         private void OnDeviceChanged(bool gamepad) { usingGamepad = gamepad; RefreshPanels(); }
 
         private void Update()
@@ -49,6 +95,12 @@ namespace EachOneCoin.Gameplay
                 else Pause();
             }
             var model = match.Model;
+            bool hitTextExpired = false;
+            if (!match.IsPaused)
+            {
+                if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
+                if (hitTextRemaining > 0f) { hitTextRemaining = Mathf.Max(0f, hitTextRemaining - Time.deltaTime); hitTextExpired = hitTextRemaining == 0f; }
+            }
             if (model.Status == MatchStatus.Finished && !resultShown)
             {
                 resultShown = true;
@@ -76,8 +128,12 @@ namespace EachOneCoin.Gameplay
             {
                 var p = model.Participants[0];
                 coinText.text = $"金币：{p.Coins} / {model.CoinsToWin}";
-                healthText.text = $"生命：{p.Health} / {p.MaxHealth}";
-                healthFill.fillAmount = (float)p.Health / Mathf.Max(1, p.MaxHealth);
+                healthText.text = $"生命：{p.Health} / {p.MaxHealth}" + (hitTextRemaining > 0f ? "  上限 -1" : "");
+                float healthFraction = Mathf.Clamp01((float)p.Health / match.InitialHealth);
+                // Resize the sprite-less Image; fillAmount alone does not clip its quad.
+                healthFill.type = Image.Type.Simple;
+                var fillRect = healthFill.rectTransform;
+                fillRect.anchorMax = new Vector2(healthFraction, fillRect.anchorMax.y);
                 var text = new System.Text.StringBuilder();
                 for (int i = 0; i < model.Participants.Count; i++)
                 {
@@ -86,6 +142,11 @@ namespace EachOneCoin.Gameplay
                     text.Append($"<color=#{color}>●</color> {(i == 0 ? "玩家" : "电脑 " + i)}  {player.Coins}/{model.CoinsToWin}  {StatusText(player.Status)}\n");
                 }
                 participantText.text = text.ToString();
+            }
+            if (hitTextExpired && !changed)
+            {
+                var p = model.Participants[0];
+                healthText.text = $"生命：{p.Health} / {p.MaxHealth}";
             }
             var localPlayer = model.Participants[0];
             bool connected = localPlayer.Status == ParticipantStatus.Active && match.Grid.IsConnected(0, match.Grid.WorldToCell(match.Characters[0].transform.position));
