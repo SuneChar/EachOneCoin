@@ -26385,6 +26385,7 @@ GameObject:
   - component: {fileID: 1094004396}
   - component: {fileID: 1094004397}
   - component: {fileID: 1094004398}
+  - component: {fileID: 1094004399}
   m_Layer: 0
   m_Name: Player
   m_TagString: Player
@@ -26460,6 +26461,30 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: c01d3c81a278f054c812093dbbeb8ede, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+--- !u!114 &1094004399
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1094004394}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a34089b56d1f73640985eeba7efa9eea, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  lineMaterial: {fileID: 2100000, guid: 89f786a0ac270a34f8572ab6dbfbf515, type: 2}
+  warningDistance: 2.5
+  dangerDistance: 0.5
+  detectionInterval: 0.05
+  detectionHeight: 1.5
+  targetSwitchMargin: 0.15
+  fadeInSeconds: 0.1
+  fadeOutSeconds: 0.2
+  ringRadius: 0.7
+  groundOffset: 0.04
+  warningColor: {r: 1, g: 0.85, b: 0.12, a: 1}
+  dangerColor: {r: 1, g: 0.18, b: 0.08, a: 1}
 --- !u!1001 &1099514162
 PrefabInstance:
   m_ObjectHideFlags: 0
