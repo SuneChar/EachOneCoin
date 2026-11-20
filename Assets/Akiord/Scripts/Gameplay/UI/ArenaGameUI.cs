@@ -14,6 +14,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private GameObject hudPanel, pausePanel, settingsPanel, resultPanel;
         [SerializeField] private TMP_Text timeText, coinText, healthText, resultText, resultCoinsText, participantText, feedbackText, attackPromptText, volumeValueText;
         [SerializeField] private Image healthFill;
+        [SerializeField] private Image staminaFill;
+        [SerializeField] private TMP_Text staminaText;
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
         [SerializeField] private ControlPromptImages promptImages;
@@ -32,6 +34,7 @@ namespace EachOneCoin.Gameplay
         private readonly ParticipantStatus[] lastStatus = new ParticipantStatus[4];
         private bool firstRefresh = true;
         private bool? lastConnected;
+        private float lastStamina = -1f;
 
         private void Awake()
         {
@@ -95,6 +98,16 @@ namespace EachOneCoin.Gameplay
                 else Pause();
             }
             var model = match.Model;
+            if (match.Stamina != null && match.Stamina.Current != lastStamina)
+            {
+                lastStamina = match.Stamina.Current;
+                if (staminaFill != null)
+                {
+                    var rect = staminaFill.rectTransform;
+                    rect.anchorMax = new Vector2(Mathf.Clamp01(lastStamina / match.Stamina.Maximum), rect.anchorMax.y);
+                }
+                if (staminaText != null) staminaText.text = $"体力：{Mathf.CeilToInt(lastStamina)} / {Mathf.CeilToInt(match.Stamina.Maximum)}";
+            }
             bool hitTextExpired = false;
             if (!match.IsPaused)
             {

@@ -6,5 +6,6 @@ namespace EachOneCoin.Gameplay
     {
         public Vector3 Movement => new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical")).normalized;
         public bool AttackPressed => Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.JoystickButton2);
+        public bool SprintHeld => Input.GetKey(KeyCode.LeftShift);
     }
 }
