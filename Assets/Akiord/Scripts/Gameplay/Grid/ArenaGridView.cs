@@ -7,7 +7,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Transform tileRoot;
         [SerializeField, Range(0.2f, 1f)] private float disconnectedBrightness = 0.65f;
         [SerializeField, Range(0.1f, 1f)] private float tileBrightness = 0.55f;
-        public const int Size = 20;
+        [SerializeField, Range(0f, 1f)] private float paintOpacity = 0.55f;
+        public const int Size = 21;
         private readonly Renderer[,] tiles = new Renderer[Size, Size];
         private readonly int[,] displayedState = new int[Size, Size];
         private Mesh overlayMesh;
@@ -20,8 +21,15 @@ namespace EachOneCoin.Gameplay
         {
             block = new MaterialPropertyBlock();
             var shader = Shader.Find("Universal Render Pipeline/Unlit");
-            if (shader == null) shader = Shader.Find("Unlit/Color");
+            if (shader == null) shader = Shader.Find("Unlit/Transparent");
             overlayMaterial = new Material(shader);
+            if (overlayMaterial.HasProperty("_Surface")) overlayMaterial.SetFloat("_Surface", 1f);
+            overlayMaterial.SetOverrideTag("RenderType", "Transparent");
+            overlayMaterial.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.SrcAlpha);
+            overlayMaterial.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+            overlayMaterial.SetInt("_ZWrite", 0);
+            overlayMaterial.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+            overlayMaterial.renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent;
             overlayMesh = new Mesh { name = "Arena Color Overlay" };
             overlayMesh.vertices = new[] { new Vector3(-0.48f, 0, -0.48f), new Vector3(-0.48f, 0, 0.48f), new Vector3(0.48f, 0, 0.48f), new Vector3(0.48f, 0, -0.48f) };
             overlayMesh.triangles = new[] { 0, 1, 2, 0, 2, 3 };
@@ -70,7 +78,7 @@ namespace EachOneCoin.Gameplay
                 renderer.enabled = owner.HasValue;
                 Color color = owner.HasValue ? colors[owner.Value] * tileBrightness : Color.white;
                 if (owner.HasValue && !connected[owner.Value][x, y]) color *= disconnectedBrightness;
-                color.a = 1f;
+                color.a = Mathf.Clamp01(paintOpacity);
                 block.Clear();
                 block.SetColor("_BaseColor", color);
                 block.SetColor("_Color", color);

@@ -20,7 +20,11 @@ namespace EachOneCoin.Gameplay
             if (shader == null) shader = Shader.Find("Standard");
             warningMaterial = new Material(shader);
             warningMaterial.color = new Color(1f, 0.8f, 0.1f);
-            foreach (var position in new[] { new GridPosition(4, 4), new GridPosition(15, 4), new GridPosition(4, 15), new GridPosition(15, 15) }) slots.Add(new Slot { Position = position });
+            int center = ArenaGridView.Size / 2;
+            int offset = (ArenaGridView.Size + 3) / 4;
+            int near = center - offset;
+            int far = center + offset;
+            foreach (var position in new[] { new GridPosition(near, near), new GridPosition(far, near), new GridPosition(near, far), new GridPosition(far, far) }) slots.Add(new Slot { Position = position });
             for (int i = 0; i < 3; i++) slots.Add(new Slot { Random = true });
             foreach (var slot in slots) BeginWarning(slot);
         }
