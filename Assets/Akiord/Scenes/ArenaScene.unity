@@ -3395,7 +3395,7 @@ MonoBehaviour:
   npcs: {fileID: 146190040}
   localInput: {fileID: 146190039}
   gameAudio: {fileID: 876484949}
-  moveSpeed: 7
+  moveSpeed: 5
   initialHealth: 3
   obstacleInvulnerabilitySeconds: 1
   obstacleKnockbackDistance: 0.6
