@@ -28,6 +28,7 @@ namespace EachOneCoin.Gameplay
         private SpriteRenderer[] sprites;
         private Color[] spriteColors;
         private bool flashing;
+        private ObstacleProximityWarning warning;
         public int Id { get; private set; }
 
         public void Initialize(MatchCoordinator coordinator, int id, Color color)
@@ -35,6 +36,8 @@ namespace EachOneCoin.Gameplay
             match = coordinator; Id = id;
             controller = GetComponent<CharacterController>();
             controller.stepOffset = 0f;
+            warning = GetComponent<ObstacleProximityWarning>();
+            if (warning != null) warning.Initialize(coordinator, id == 0);
             var oldHazard = GetComponent<PlayerHazardCollision>();
             if (oldHazard != null) oldHazard.enabled = false;
             var indicator = GetComponentInChildren<PlayerDirectionIndicator>(true);
@@ -79,10 +82,12 @@ namespace EachOneCoin.Gameplay
             if (controller != null) controller.enabled = active;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
+            if (warning != null) warning.SetCharacterActive(active);
         }
 
         public void Teleport(Vector3 position)
         {
+            if (warning != null) warning.ClearWarning();
             controller.enabled = false;
             // CellToWorld returns ground height; leave room for the controller's skin.
             position.y += controller.height * 0.5f - controller.center.y + controller.skinWidth;
