@@ -53,15 +53,7 @@ namespace EachOneCoin
             return owners[position.X, position.Y];
         }
 
-        public bool TryPaint(int participantId, GridPosition position)
-        {
-            if (!spawns.ContainsKey(participantId) || !Contains(position)) return false;
-            foreach (var spawn in spawns)
-                if (spawn.Value.Equals(position) && spawn.Key != participantId) return false;
-            if (owners[position.X, position.Y] == participantId) return false;
-            owners[position.X, position.Y] = participantId;
-            return true;
-        }
+        internal void SetOwner(GridPosition position, int participantId) => owners[position.X, position.Y] = participantId;
 
         public bool IsConnected(int participantId, GridPosition target)
         {

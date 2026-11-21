@@ -1,5 +1,5 @@
 {
     "name": "EachOneCoin.PlayModeTests",
-    "references": ["QFramework", "EachOneCoin.Models"],
+    "references": ["QFramework", "EachOneCoin.Models", "EachOneCoin.Architecture"],
     "optionalUnityReferences": ["TestAssemblies"]
 }

@@ -148,7 +148,7 @@ namespace EachOneCoin.Gameplay
             var cell = match.Grid.WorldToCell(transform.position);
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
-            if (match.Model.TryPaint(Id, cell)) match.Grid.Refresh(match.Model.Grid);
+            if (match.Rules.TryPaint(Id, cell)) match.Grid.Refresh(match.Model.Grid);
         }
 
         private void UpdateFacing(float deltaTime)

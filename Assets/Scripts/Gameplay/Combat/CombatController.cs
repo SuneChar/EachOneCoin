@@ -22,7 +22,7 @@ namespace EachOneCoin.Gameplay
                 cooldowns[i] = Mathf.Max(0f, cooldowns[i] - deltaTime);
                 if (match.Model.Participants[i].Status != ParticipantStatus.Respawning) continue;
                 respawns[i] -= deltaTime;
-                if (respawns[i] > 0f || !match.Model.TryRespawn(i)) continue;
+                if (respawns[i] > 0f || !match.Rules.TryRespawn(i)) continue;
                 match.Characters[i].SetActiveState(true);
                 match.Characters[i].Teleport(match.Grid.CellToWorld(match.Spawns[i]));
             }
@@ -40,7 +40,7 @@ namespace EachOneCoin.Gameplay
                 float distance = delta.magnitude;
                 if (distance <= nearest) { nearest = distance; target = i; }
             }
-            if (target < 0 || !match.Model.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) return;
+            if (target < 0 || !match.Rules.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) return;
             if (match.Model.Participants[target].Status != ParticipantStatus.Respawning) return;
             match.Coins.Drop(match.Grid.WorldToCell(match.Characters[target].transform.position), dropped);
             respawns[target] = Mathf.Max(0.1f, respawnSeconds);

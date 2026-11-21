@@ -6,17 +6,24 @@ namespace EachOneCoin.Tests
     {
         private static MatchModel CreateMatch()
         {
-            return new MatchModel(3, 3, new[] { new GridPosition(0, 0) }, 2, 2);
+            return GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(3, 3, new[] { new GridPosition(0, 0) }, 2, 100f, 2);
         }
+
+        [SetUp]
+        public void SetUp() => GameArchitecture.Interface.Deinit();
+
+        [TearDown]
+        public void TearDown() => GameArchitecture.Interface.Deinit();
 
         [Test]
         public void NewMatch_AfterPreviousLossStartsWithFreshState()
         {
             var previous = CreateMatch();
-            previous.Start();
-            Assert.That(previous.TryCollectCoin(0, new GridPosition(0, 0)), Is.True);
-            Assert.That(previous.TryObstacleContact(0), Is.True);
-            Assert.That(previous.TryObstacleContact(0), Is.True);
+            var rules = GameArchitecture.Interface.GetSystem<MatchSystem>();
+            rules.StartMatch();
+            Assert.That(rules.TryCollectCoin(0, new GridPosition(0, 0)), Is.True);
+            Assert.That(rules.TryObstacleContact(0), Is.True);
+            Assert.That(rules.TryObstacleContact(0), Is.True);
             Assert.That(previous.Status, Is.EqualTo(MatchStatus.Finished));
 
             var next = CreateMatch();

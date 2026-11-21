@@ -17,8 +17,11 @@ namespace EachOneCoin.Tests
         private Scene arena;
         private Component match;
         private MatchModel model;
+        private MatchSystem rules;
         private Component grid;
         private Component coins;
+        private Transform coinRoot;
+        private Transform warningRoot;
         private Component combat;
         private Component npcs;
         private Array characters;
@@ -64,8 +67,13 @@ namespace EachOneCoin.Tests
             Assert.That(Get(match, "Model"), Is.Not.Null, "Arena match did not initialize within five seconds.");
             ((Behaviour)match).enabled = false;
             model = (MatchModel)Get(match, "Model");
+            rules = (MatchSystem)Get(match, "Rules");
             grid = (Component)Get(match, "Grid");
             coins = (Component)Get(match, "Coins");
+            coinRoot = (Transform)coins.GetType().GetField("coinRoot", Private).GetValue(coins);
+            warningRoot = (Transform)coins.GetType().GetField("warningRoot", Private).GetValue(coins);
+            Assert.That(coinRoot, Is.Not.Null, "CoinSpawner coinRoot is not configured.");
+            Assert.That(warningRoot, Is.Not.Null, "CoinSpawner warningRoot is not configured.");
             combat = (Component)Get(match, "Combat");
             npcs = (Component)Get(match, "Npcs");
             characters = (Array)Get(match, "Characters");
@@ -89,7 +97,7 @@ namespace EachOneCoin.Tests
         public IEnumerator Attack_DropsCoinAndRespawnsTargetAtOwnSpawn()
         {
             var spawn = model.Participants[1].Spawn;
-            Assert.That(model.TryCollectCoin(1, spawn), Is.True);
+            Assert.That(rules.TryCollectCoin(1, spawn), Is.True);
             var location = CellToWorld(new GridPosition(10, 10));
             Call(Character(0), "Teleport", location);
             Call(Character(1), "Teleport", location + Vector3.right * 0.5f);
@@ -101,7 +109,7 @@ namespace EachOneCoin.Tests
             }
             Assert.That(model.Participants[1].Status, Is.EqualTo(ParticipantStatus.Respawning));
             Assert.That(model.Participants[1].Coins, Is.Zero);
-            Assert.That(coins.transform.Cast<Transform>().Any(t => t.name == "Dropped Coin"), Is.True);
+            Assert.That(coinRoot.Cast<Transform>().Any(t => t.name == "Dropped Coin"), Is.True);
             Call(combat, "Tick", 3f);
             Assert.That(model.Participants[1].Status, Is.EqualTo(ParticipantStatus.Active));
             var actual = Character(1).transform.position;
@@ -113,12 +121,12 @@ namespace EachOneCoin.Tests
         [UnityTest]
         public IEnumerator CoinWarning_ProducesCoinAtTheWarnedPosition()
         {
-            var warning = coins.transform.Cast<Transform>().FirstOrDefault(t => t.name == "Coin Spawn Warning");
+            var warning = warningRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Coin Spawn Warning");
             Assert.That(warning, Is.Not.Null, "No available warning position in the Arena scene.");
             var position = warning.position;
             Call(coins, "Tick", 2f);
             yield return null;
-            Assert.That(coins.transform.Cast<Transform>().Any(t => (t.name == "Fixed Coin" || t.name == "Random Coin") &&
+            Assert.That(coinRoot.Cast<Transform>().Any(t => (t.name == "Fixed Coin" || t.name == "Random Coin") &&
                 Vector2.Distance(new Vector2(t.position.x, t.position.z), new Vector2(position.x, position.z)) < 0.01f), Is.True);
         }
 
@@ -129,8 +137,8 @@ namespace EachOneCoin.Tests
             int dx = spawn.X < 10 ? 1 : -1;
             var first = new GridPosition(spawn.X + dx, spawn.Y);
             var second = new GridPosition(spawn.X + 2 * dx, spawn.Y);
-            Assert.That(model.TryPaint(0, first), Is.True);
-            Assert.That(model.TryPaint(0, second), Is.True);
+            Assert.That(rules.TryPaint(0, first), Is.True);
+            Assert.That(rules.TryPaint(0, second), Is.True);
             Call(grid, "Refresh", model.Grid);
             var renderers = (Renderer[,])grid.GetType().GetField("tiles", Private).GetValue(grid);
             var tile = renderers[second.X, second.Y];
@@ -138,12 +146,12 @@ namespace EachOneCoin.Tests
             var block = new MaterialPropertyBlock();
             tile.GetPropertyBlock(block);
             var connected = block.GetColor("_BaseColor");
-            Assert.That(model.TryPaint(1, first), Is.True);
+            Assert.That(rules.TryPaint(1, first), Is.True);
             Call(grid, "Refresh", model.Grid);
             tile.GetPropertyBlock(block);
             var disconnected = block.GetColor("_BaseColor");
             Assert.That(disconnected.r, Is.LessThan(connected.r));
-            Assert.That(model.TryPaint(0, first), Is.True);
+            Assert.That(rules.TryPaint(0, first), Is.True);
             Call(grid, "Refresh", model.Grid);
             tile.GetPropertyBlock(block);
             Assert.That(block.GetColor("_BaseColor"), Is.EqualTo(connected));

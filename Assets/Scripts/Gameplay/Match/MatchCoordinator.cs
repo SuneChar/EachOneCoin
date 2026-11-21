@@ -42,6 +42,17 @@ namespace EachOneCoin.Gameplay
         public event System.Action<int> ObstacleHit;
         public bool IsPaused { get; private set; }
         private float timeScaleBeforePause = 1f;
+        private MatchSessionModel session;
+        private MatchSystem matchSystem;
+        public MatchSystem Rules
+        {
+            get
+            {
+                if (session == null || Model == null || !ReferenceEquals(session.Match, Model) || matchSystem == null)
+                    throw new System.InvalidOperationException("The coordinator is not bound to the current match session.");
+                return matchSystem;
+            }
+        }
         internal MovementTelemetry Telemetry { get; private set; }
 
         public void Pause()
@@ -59,16 +70,22 @@ namespace EachOneCoin.Gameplay
             Time.timeScale = timeScaleBeforePause;
         }
 
-        private void OnDestroy() { Resume(); }
+        private void OnDestroy()
+        {
+            Resume();
+            if (session != null) session.ClearMatch(Model);
+        }
 
         private void Start()
         {
             grid.Initialize();
             Spawns = new GridPosition[4];
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
-            Model = new MatchModel(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth));
-            Model.Start();
-            Stamina = new StaminaModel(Mathf.Max(0.1f, maxStamina));
+            session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
+            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina));
+            Rules.StartMatch();
+            Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
                 foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.BindArena(this);
             Characters = new ArenaCharacter[4];
@@ -97,13 +114,13 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
-            Model.AdvanceTime(Time.deltaTime);
+            Rules.AdvanceTime(Time.deltaTime);
             if (Model.Status != MatchStatus.Playing) { RefreshStates(); return; }
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
             Vector3 movement = playerActive ? localInput.Movement : Vector3.zero;
-            Stamina.Tick(Time.deltaTime, playerActive && !Characters[0].IsKnockedBack,
+            Rules.TickStamina(Time.deltaTime, playerActive && !Characters[0].IsKnockedBack,
                 movement.sqrMagnitude > 0f, localInput.SprintHeld, Mathf.Max(0f, sprintStaminaPerSecond), Mathf.Max(0f, staminaRecoveryPerSecond));
             if (playerActive)
             {
@@ -128,7 +145,7 @@ namespace EachOneCoin.Gameplay
         public void PlayFootstep() { if (gameAudio != null) gameAudio.PlayFootstep(); }
         public bool HitObstacle(int id)
         {
-            if (IsPaused || !Model.TryObstacleContact(id)) return false;
+            if (IsPaused || !Rules.TryObstacleContact(id)) return false;
             if (id == 0 && gameAudio != null) gameAudio.PlayObstacleHit();
             ObstacleHit?.Invoke(id);
             if (Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);

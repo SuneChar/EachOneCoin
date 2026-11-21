@@ -20,6 +20,7 @@ namespace EachOneCoin.Tests
                 var tile = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 tile.transform.SetParent(tiles.transform);
                 type.GetField("tileRoot", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(grid, tiles.transform);
+                type.GetField("overlayRoot", BindingFlags.NonPublic | BindingFlags.Instance).SetValue(grid, root.transform);
                 type.GetMethod("Initialize").Invoke(grid, null);
                 var model = new GridModel(21, 21, new[] { new GridPosition(10, 10) });
                 type.GetMethod("Refresh").Invoke(grid, new object[] { model });

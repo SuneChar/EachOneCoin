@@ -57,7 +57,7 @@ namespace EachOneCoin.Gameplay
                 if (slot.Coin == null) continue;
                 var center = match.Grid.CellToWorld(slot.Position);
                 var delta = position - center; delta.y = 0;
-                if (delta.sqrMagnitude > 0.16f || !match.Model.TryCollectCoin(character.Id, slot.Position)) continue;
+                if (delta.sqrMagnitude > 0.16f || !match.Rules.TryCollectCoin(character.Id, slot.Position)) continue;
                 Destroy(slot.Coin); slot.Coin = null;
                 slot.Timer = slot.Dropped ? float.PositiveInfinity : Mathf.Max(0f, respawnSeconds - Mathf.Max(0.1f, warningSeconds));
                 match.CoinCollected(character.Id);

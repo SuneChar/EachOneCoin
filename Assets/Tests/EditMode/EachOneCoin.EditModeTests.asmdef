@@ -1,6 +1,6 @@
 {
     "name": "EachOneCoin.EditModeTests",
-    "references": ["QFramework", "EachOneCoin.Models"],
+    "references": ["QFramework", "EachOneCoin.Models", "EachOneCoin.Architecture"],
     "includePlatforms": ["Editor"],
     "optionalUnityReferences": ["TestAssemblies"]
 }

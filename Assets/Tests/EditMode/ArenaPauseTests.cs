@@ -19,8 +19,8 @@ namespace EachOneCoin.Tests
             coordinatorType = Type.GetType("EachOneCoin.Gameplay.MatchCoordinator, Assembly-CSharp", true);
             root = new GameObject("ArenaPauseTests");
             coordinator = root.AddComponent(coordinatorType);
-            var match = new MatchModel(2, 2, new[] { new GridPosition(0, 0) }, 3);
-            match.Start();
+            var match = GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(2, 2, new[] { new GridPosition(0, 0) }, 3, 100f);
+            GameArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
             coordinatorType.GetField("<Model>k__BackingField", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(coordinator, match);
         }
 
@@ -28,6 +28,7 @@ namespace EachOneCoin.Tests
         public void TearDown()
         {
             if (root != null) UnityEngine.Object.DestroyImmediate(root);
+            GameArchitecture.Interface.Deinit();
             Time.timeScale = originalTimeScale;
         }
 
