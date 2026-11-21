@@ -116,6 +116,39 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void ArenaBoundObstacle_RespectsPauseAndRunningFlagWithoutLegacyManager()
+        {
+            var go = new GameObject("Arena spike");
+            go.transform.SetParent(root.transform);
+            var spikeType = Type.GetType("TimedSpikeTrap, Assembly-CSharp", true);
+            var spike = go.AddComponent(spikeType);
+            var obstacleType = spikeType.BaseType;
+            obstacleType.GetMethod("BindArena").Invoke(spike, new object[] { match });
+            var canRun = obstacleType.GetProperty("CanRun", Private);
+            Assert.That(canRun.GetValue(spike), Is.EqualTo(true));
+            match.GetType().GetMethod("Pause").Invoke(match, null);
+            try { Assert.That(canRun.GetValue(spike), Is.EqualTo(false)); }
+            finally { match.GetType().GetMethod("Resume").Invoke(match, null); }
+            obstacleType.GetMethod("SetRunning").Invoke(spike, new object[] { false });
+            Assert.That(canRun.GetValue(spike), Is.EqualTo(false));
+        }
+
+        [Test]
+        public void SpikeHazard_IsRecognizedOnlyWhenActiveWithoutLegacyManager()
+        {
+            var go = new GameObject("Arena spike");
+            go.transform.SetParent(root.transform);
+            var spikeType = Type.GetType("TimedSpikeTrap, Assembly-CSharp", true);
+            var spike = go.AddComponent(spikeType);
+            var collider = go.AddComponent<BoxCollider>();
+            var isHazard = match.GetType().GetMethod("IsHazard");
+            spikeType.GetField("isVisible", Private).SetValue(spike, false);
+            Assert.That(isHazard.Invoke(match, new object[] { collider }), Is.EqualTo(false));
+            spikeType.GetField("isVisible", Private).SetValue(spike, true);
+            Assert.That(isHazard.Invoke(match, new object[] { collider }), Is.EqualTo(true));
+        }
+
+        [Test]
         public void MultipleHazards_AreBlockedPerCharacterAndRequireNewContact()
         {
             Contact(0, 0);
