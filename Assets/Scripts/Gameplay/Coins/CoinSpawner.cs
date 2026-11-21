@@ -6,6 +6,8 @@ namespace EachOneCoin.Gameplay
     public sealed class CoinSpawner : MonoBehaviour
     {
         [SerializeField] private GameObject coinModel;
+        [SerializeField] private Transform coinRoot;
+        [SerializeField] private Transform warningRoot;
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
         [SerializeField, Min(0.1f)] private float warningSeconds = 1f;
         private readonly List<Slot> slots = new List<Slot>();
@@ -96,7 +98,7 @@ namespace EachOneCoin.Gameplay
             else if (Reserved(slot.Position) || match.IsBlocked(slot.Position)) { slot.Timer = 1f; return; }
             slot.Warning = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             slot.Warning.name = "Coin Spawn Warning";
-            slot.Warning.transform.SetParent(transform);
+            slot.Warning.transform.SetParent(warningRoot);
             slot.Warning.transform.position = match.Grid.CellToWorld(slot.Position) + Vector3.up * 0.04f;
             slot.Warning.transform.localScale = new Vector3(0.7f, 0.025f, 0.7f);
             slot.Warning.GetComponent<Renderer>().sharedMaterial = warningMaterial;
@@ -107,9 +109,9 @@ namespace EachOneCoin.Gameplay
         private void Spawn(Slot slot)
         {
             if (slot.Warning != null) { Destroy(slot.Warning); slot.Warning = null; }
-            slot.Coin = coinModel != null ? Instantiate(coinModel, transform) : GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            slot.Coin = coinModel != null ? Instantiate(coinModel, coinRoot) : GameObject.CreatePrimitive(PrimitiveType.Sphere);
             slot.Coin.name = slot.Dropped ? "Dropped Coin" : slot.Random ? "Random Coin" : "Fixed Coin";
-            slot.Coin.transform.SetParent(transform);
+            slot.Coin.transform.SetParent(coinRoot);
             slot.Coin.transform.position = match.Grid.CellToWorld(slot.Position) + Vector3.up * 0.45f;
             if (coinModel == null) slot.Coin.transform.localScale = Vector3.one * 0.35f;
             foreach (var collider in slot.Coin.GetComponentsInChildren<Collider>()) collider.enabled = false;
