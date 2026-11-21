@@ -13,6 +13,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private LocalPlayerInput localInput;
         [SerializeField] private GameAudio gameAudio;
         [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
+        [SerializeField, Min(0.1f)] private float movementAcceleration = 35f;
+        [SerializeField, Min(0.1f)] private float movementDeceleration = 35f;
         [SerializeField, Min(0.1f)] private float maxStamina = 100f;
         [SerializeField, Min(0f)] private float sprintStaminaPerSecond = 25f;
         [SerializeField, Min(0f)] private float staminaRecoveryPerSecond = 20f;
@@ -30,6 +32,8 @@ namespace EachOneCoin.Gameplay
         public ArenaCharacter[] Characters { get; private set; }
         public GridPosition[] Spawns { get; private set; }
         public float MoveSpeed => moveSpeed;
+        public float MovementAcceleration => Mathf.Max(0.1f, movementAcceleration);
+        public float MovementDeceleration => Mathf.Max(0.1f, movementDeceleration);
         public StaminaModel Stamina { get; private set; }
         public float ObstacleInvulnerabilitySeconds => Mathf.Max(0f, obstacleInvulnerabilitySeconds);
         public float ObstacleKnockbackDistance => Mathf.Max(0f, obstacleKnockbackDistance);
@@ -104,7 +108,7 @@ namespace EachOneCoin.Gameplay
             if (playerActive)
             {
                 float speed = moveSpeed * (Stamina.IsSprinting ? Mathf.Max(1f, sprintSpeedMultiplier) : 1f);
-                Characters[0].Move(movement * speed * Time.deltaTime);
+                Characters[0].MoveWithVelocity(movement * speed, Time.deltaTime);
                 if (localInput.AttackPressed) combat.Attack(0);
             }
             for (int i = 1; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) npcs.Tick(i, Time.deltaTime);

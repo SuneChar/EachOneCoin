@@ -14,7 +14,7 @@
 ## 代码规范
 
 - 优先沿用相关文件现有的 C# 风格、命名空间和项目架构；保持修改聚焦，避免无关重构和新增不必要的依赖。
-- 项目脚本目前位于 `Assets/Akiord/Scripts/`；新增代码应放入合适的位置并遵循相邻代码的约定。
+- 项目脚本目前位于 `Assets/Scripts/`；新增代码应放入合适的位置并遵循相邻代码的约定。
 - 修改现有行为前先梳理调用关系和生命周期；对 `Update`、`FixedUpdate` 等热路径避免不必要的每帧分配。
 - 更改序列化字段、组件类型、事件处理方法或资源路径前，检查代码和 Unity 序列化引用；需要时提供兼容或迁移方案。
 
@@ -56,7 +56,7 @@
 
 ### 目录与程序集
 
-- 现有 EditMode 测试位于 `Assets/Akiord/Tests/EditMode/`，使用 `EachOneCoin.EditModeTests` 测试程序集。
+- 现有 EditMode 测试位于 `Assets/Tests/EditMode/`，使用 `EachOneCoin.EditModeTests` 测试程序集。
 - 新增测试时，优先放入与测试模式和功能相符的目录及测试程序集。如需新增 PlayMode 测试，应创建适当的测试程序集，并检查引用、平台设置及 Unity Test Framework 的实际发现结果。
 - 保持测试程序集引用最小化；调整 `.asmdef` 前检查其对现有程序集的影响。
 
