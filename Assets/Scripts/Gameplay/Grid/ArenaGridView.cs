@@ -5,6 +5,7 @@ namespace EachOneCoin.Gameplay
     public sealed class ArenaGridView : MonoBehaviour
     {
         [SerializeField] private Transform tileRoot;
+        [SerializeField] private Transform overlayRoot;
         [SerializeField, Range(0.2f, 1f)] private float disconnectedBrightness = 0.65f;
         [SerializeField, Range(0.1f, 1f)] private float tileBrightness = 0.55f;
         [SerializeField, Range(0f, 1f)] private float paintOpacity = 0.55f;
@@ -40,7 +41,7 @@ namespace EachOneCoin.Gameplay
                 var original = tile.GetComponentInChildren<Renderer>();
                 if (original == null) continue;
                 var overlay = new GameObject("Color Overlay " + cell.X + "," + cell.Y, typeof(MeshFilter), typeof(MeshRenderer));
-                overlay.transform.SetParent(transform, false);
+                overlay.transform.SetParent(overlayRoot, false);
                 overlay.transform.position = new Vector3(tile.position.x, original.bounds.max.y + 0.015f, tile.position.z);
                 overlay.GetComponent<MeshFilter>().sharedMesh = overlayMesh;
                 var renderer = overlay.GetComponent<MeshRenderer>();
