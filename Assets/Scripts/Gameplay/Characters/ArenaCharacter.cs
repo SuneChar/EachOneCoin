@@ -25,10 +25,12 @@ namespace EachOneCoin.Gameplay
         private Vector3 pendingKnockback;
         private float knockbackTime;
         private Vector3 lastMovement;
+        private Vector3 movementVelocity;
         private SpriteRenderer[] sprites;
         private Color[] spriteColors;
         private bool flashing;
         public int Id { get; private set; }
+        public Vector3 MovementVelocity => movementVelocity;
         public bool IsKnockedBack => knockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
         public int LastTeleportFrame { get; private set; } = -1;
         private int lastKnockbackFrame = -1;
@@ -78,7 +80,7 @@ namespace EachOneCoin.Gameplay
         {
             if (visuallyActive == active) return;
             visuallyActive = active;
-            if (!active) { pendingKnockback = Vector3.zero; knockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
+            if (!active) { movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
             if (controller != null) controller.enabled = active;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
@@ -93,8 +95,20 @@ namespace EachOneCoin.Gameplay
             transform.position = position;
             controller.enabled = true;
             touching.Clear(); hasCell = false;
+            movementVelocity = Vector3.zero;
             pendingKnockback = Vector3.zero; knockbackTime = 0f; obstacleProtection = 0f; SetFlash(false);
             ReportCell();
+        }
+
+        public void MoveWithVelocity(Vector3 desiredVelocity, float deltaTime)
+        {
+            if (controller == null || !controller.enabled || match == null || match.Model.Participants[Id].Status != ParticipantStatus.Active || IsKnockedBack)
+            {
+                movementVelocity = Vector3.zero;
+                return;
+            }
+            movementVelocity = PlanarVelocity.Advance(movementVelocity, desiredVelocity, match.MovementAcceleration, match.MovementDeceleration, deltaTime);
+            Move(movementVelocity * Mathf.Max(0f, deltaTime));
         }
 
         public void Move(Vector3 delta)
@@ -151,7 +165,17 @@ namespace EachOneCoin.Gameplay
             visual.localScale = scale;
         }
 
-        private void OnControllerColliderHit(ControllerColliderHit hit) => TryHazard(hit.collider);
+        private void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            Vector3 normal = hit.normal; normal.y = 0f;
+            if (normal.sqrMagnitude > 0.000001f)
+            {
+                normal.Normalize();
+                float intoSurface = Vector3.Dot(movementVelocity, normal);
+                if (intoSurface < 0f) movementVelocity -= normal * intoSurface;
+            }
+            TryHazard(hit.collider);
+        }
         private void OnTriggerEnter(Collider other) => TryHazard(other);
         private void OnTriggerStay(Collider other) => TryHazard(other);
         private void OnTriggerExit(Collider other) => touching.Remove(other);
@@ -169,6 +193,7 @@ namespace EachOneCoin.Gameplay
             if (direction.sqrMagnitude < 0.000001f) { direction = -lastMovement; direction.y = 0f; }
             if (direction.sqrMagnitude < 0.000001f) { direction = transform.forward; direction.y = 0f; }
             if (direction.sqrMagnitude < 0.000001f) direction = Vector3.back;
+            movementVelocity = Vector3.zero;
             pendingKnockback = direction.normalized * match.ObstacleKnockbackDistance;
             knockbackTime = pendingKnockback.sqrMagnitude > 0f ? match.ObstacleKnockbackSeconds : 0f;
         }

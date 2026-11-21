@@ -3531,6 +3531,8 @@ MonoBehaviour:
   localInput: {fileID: 146190039}
   gameAudio: {fileID: 876484949}
   moveSpeed: 5
+  movementAcceleration: 35
+  movementDeceleration: 35
   maxStamina: 100
   sprintStaminaPerSecond: 25
   staminaRecoveryPerSecond: 20
