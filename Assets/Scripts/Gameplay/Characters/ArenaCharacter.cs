@@ -40,10 +40,7 @@ namespace EachOneCoin.Gameplay
             match = coordinator; Id = id;
             controller = GetComponent<CharacterController>();
             controller.stepOffset = 0f;
-            var oldHazard = GetComponent<PlayerHazardCollision>();
-            if (oldHazard != null) oldHazard.enabled = false;
-            var indicator = GetComponentInChildren<PlayerDirectionIndicator>(true);
-            if (indicator != null) { indicator.enabled = false; arrow = indicator.transform.Find("Arrow"); }
+            arrow = transform.Find("Direction Indicator/Arrow");
             visual = transform.Find("Root");
             if (visual != null) visualScale = visual.localScale;
             sprites = GetComponentsInChildren<SpriteRenderer>(true);

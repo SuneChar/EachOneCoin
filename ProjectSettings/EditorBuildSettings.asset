@@ -6,15 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/Akiord/Scenes/BootScene.unity
+    path: Assets/Scenes/BootScene.unity
     guid: d9784fa3447a77e4d82a91f8dcb8a404
-  - enabled: 0
-    path: Assets/Akiord/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1
-    path: Assets/Akiord/Scenes/MultiplayerDemo.unity
-    guid: 454cd78a5f64df0458b8bc1ce83bceea
-  - enabled: 1
-    path: Assets/Akiord/Scenes/ArenaScene.unity
+    path: Assets/Scenes/ArenaScene.unity
     guid: 20d50687142a60a48a5a5bf3abd24c11
   m_configObjects: {}
