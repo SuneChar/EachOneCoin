@@ -10,23 +10,23 @@ namespace EachOneCoin.Tests
         [SetUp]
         public void SetUp()
         {
-            GameArchitecture.Interface.Deinit();
-            rules = GameArchitecture.Interface.GetSystem<MatchSystem>();
+            TestMatchArchitecture.Interface.Deinit();
+            rules = TestMatchArchitecture.Interface.GetSystem<MatchSystem>();
         }
 
         [TearDown]
-        public void TearDown() => GameArchitecture.Interface.Deinit();
+        public void TearDown() => TestMatchArchitecture.Interface.Deinit();
 
         private static GridPosition P(int x, int y) => new GridPosition(x, y);
         private static MatchModel CreateMatch(int health = 3, int target = 10, float duration = 60f)
         {
-            return GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(5, 3, new[] { P(0, 0), P(4, 0), P(0, 2), P(4, 2) }, health, 100f, target, duration);
+            return TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(5, 3, new[] { P(0, 0), P(4, 0), P(0, 2), P(4, 2) }, health, 100f, target, duration);
         }
 
         [Test]
         public void Grid_CutAndRepair_UsesFourNeighboursAndProtectedSpawns()
         {
-            var grid = GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(5, 3, new[] { P(0, 0), P(4, 0) }, 3, 100f).Grid;
+            var grid = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(5, 3, new[] { P(0, 0), P(4, 0) }, 3, 100f).Grid;
             rules.StartMatch();
             Assert.That(rules.TryPaint(1, P(0, 0)), Is.False);
             Assert.That(grid.OwnerAt(P(0, 0)), Is.EqualTo(0));
@@ -45,7 +45,7 @@ namespace EachOneCoin.Tests
         [Test]
         public void Grid_CopyConnectedTo_TracksCutAndReconnect()
         {
-            var grid = GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(4, 2, new[] { P(0, 0), P(3, 1) }, 3, 100f).Grid;
+            var grid = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(4, 2, new[] { P(0, 0), P(3, 1) }, 3, 100f).Grid;
             rules.StartMatch();
             var result = new bool[4, 2];
             rules.TryPaint(0, P(1, 0));
@@ -67,7 +67,7 @@ namespace EachOneCoin.Tests
         {
             Assert.Throws<ArgumentException>(() => new GridModel(2, 2, new[] { P(0, 0), P(0, 0) }));
             Assert.Throws<ArgumentException>(() => new GridModel(2, 2, new[] { P(2, 0) }));
-            var grid = GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(2, 2, new[] { P(0, 0) }, 3, 100f).Grid;
+            var grid = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(2, 2, new[] { P(0, 0) }, 3, 100f).Grid;
             rules.StartMatch();
             Assert.That(rules.TryPaint(0, P(-1, 0)), Is.False);
             Assert.That(rules.TryPaint(4, P(1, 0)), Is.False);

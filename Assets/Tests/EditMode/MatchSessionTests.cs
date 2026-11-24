@@ -11,21 +11,21 @@ namespace EachOneCoin.Tests
         [SetUp]
         public void SetUp()
         {
-            GameArchitecture.Interface.Deinit();
-            session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            TestMatchArchitecture.Interface.Deinit();
+            session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
         }
 
         [TearDown]
         public void TearDown()
         {
-            GameArchitecture.Interface.Deinit();
+            TestMatchArchitecture.Interface.Deinit();
         }
 
         [Test]
         public void CreateAndClearMatch_ProvidesFreshState()
         {
             var first = session.CreateMatch(2, 2, Spawns, 3, 100f);
-            var rules = GameArchitecture.Interface.GetSystem<MatchSystem>();
+            var rules = TestMatchArchitecture.Interface.GetSystem<MatchSystem>();
             rules.StartMatch();
             rules.TryCollectCoin(0, Spawns[0]);
             rules.TryPaint(0, new GridPosition(1, 0));
@@ -69,10 +69,10 @@ namespace EachOneCoin.Tests
         public void Deinit_ClearsSessionAndCreatesNewArchitecture()
         {
             session.CreateMatch(2, 2, Spawns, 3, 100f);
-            GameArchitecture.Interface.Deinit();
+            TestMatchArchitecture.Interface.Deinit();
             Assert.That(session.Match, Is.Null);
             Assert.That(session.Stamina, Is.Null);
-            var next = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            var next = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
             Assert.That(next, Is.Not.SameAs(session));
             Assert.That(next.Match, Is.Null);
         }

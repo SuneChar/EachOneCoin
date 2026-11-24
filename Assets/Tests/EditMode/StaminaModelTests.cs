@@ -11,15 +11,15 @@ namespace EachOneCoin.Tests
         [SetUp]
         public void SetUp()
         {
-            GameArchitecture.Interface.Deinit();
-            var session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            TestMatchArchitecture.Interface.Deinit();
+            var session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
             session.CreateMatch(2, 2, new[] { new GridPosition(0, 0) }, 3, 100f);
             stamina = session.Stamina;
-            rules = GameArchitecture.Interface.GetSystem<MatchSystem>();
+            rules = TestMatchArchitecture.Interface.GetSystem<MatchSystem>();
         }
 
         [TearDown]
-        public void TearDown() => GameArchitecture.Interface.Deinit();
+        public void TearDown() => TestMatchArchitecture.Interface.Deinit();
 
         [Test]
         public void MovingWithSprint_DrainsStaminaAndEnablesSprint()
@@ -59,7 +59,7 @@ namespace EachOneCoin.Tests
             Assert.Throws<ArgumentOutOfRangeException>(() => rules.TickStamina(float.NaN, true, true, true, 25f, 20f));
             Assert.Throws<ArgumentOutOfRangeException>(() => rules.TickStamina(1f, true, true, true, -1f, 20f));
             Assert.Throws<ArgumentOutOfRangeException>(() => rules.TickStamina(1f, true, true, true, 25f, float.PositiveInfinity));
-            var session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            var session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
             session.ClearMatch(session.Match);
             Assert.Throws<InvalidOperationException>(() => rules.TickStamina(1f, true, true, true, 25f, 20f));
         }

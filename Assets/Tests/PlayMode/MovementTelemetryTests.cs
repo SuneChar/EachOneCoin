@@ -24,8 +24,8 @@ namespace EachOneCoin.Tests
             recorderType = Type.GetType("EachOneCoin.Gameplay.MovementTelemetry, Assembly-CSharp", true);
             var match = root.AddComponent(matchType);
             ((Behaviour)match).enabled = false;
-            var model = GameArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(3, 3, new[] { new GridPosition(0, 0), new GridPosition(2, 2) }, 3, 100f);
-            GameArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
+            var model = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(3, 3, new[] { new GridPosition(0, 0), new GridPosition(2, 2) }, 3, 100f);
+            TestMatchArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
             matchType.GetProperty("Model").SetValue(match, model);
             var characters = Array.CreateInstance(characterType, 2);
             for (int i = 0; i < characters.Length; i++)
@@ -48,7 +48,7 @@ namespace EachOneCoin.Tests
         {
             if (recorder != null) recorderType.GetMethod("Close", Private).Invoke(recorder, new object[] { "interrupted" });
             UnityEngine.Object.DestroyImmediate(root);
-            GameArchitecture.Interface.Deinit();
+            TestMatchArchitecture.Interface.Deinit();
             if (File.Exists(path)) File.Delete(path);
         }
 

@@ -24,12 +24,12 @@ namespace EachOneCoin.Tests
             var hazardType = Type.GetType("LethalObstacle, Assembly-CSharp", true);
             match = root.AddComponent(matchType);
             ((Behaviour)match).enabled = false;
-            var session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            var session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
             model = session.CreateMatch(3, 3, new[] { new GridPosition(0, 0), new GridPosition(2, 2) }, 3, 100f);
-            GameArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
+            TestMatchArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
             matchType.GetProperty("Model").SetValue(match, model);
             matchType.GetField("session", Private).SetValue(match, session);
-            matchType.GetField("matchSystem", Private).SetValue(match, GameArchitecture.Interface.GetSystem<MatchSystem>());
+            matchType.GetField("matchSystem", Private).SetValue(match, TestMatchArchitecture.Interface.GetSystem<MatchSystem>());
             characters = new Component[2];
             for (int i = 0; i < characters.Length; i++)
             {
@@ -56,7 +56,7 @@ namespace EachOneCoin.Tests
         public void TearDown()
         {
             UnityEngine.Object.DestroyImmediate(root);
-            GameArchitecture.Interface.Deinit();
+            TestMatchArchitecture.Interface.Deinit();
         }
 
         private void Contact(int id, int hazard) => characterType.GetMethod("TryHazard", Private).Invoke(characters[id], new object[] { hazards[hazard] });
@@ -65,9 +65,9 @@ namespace EachOneCoin.Tests
         [Test]
         public void Coordinator_RejectsRulesWhenSessionHasBeenReplaced()
         {
-            var session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
+            var session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
             var next = session.CreateMatch(3, 3, new[] { new GridPosition(0, 0), new GridPosition(2, 2) }, 3, 100f);
-            GameArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
+            TestMatchArchitecture.Interface.GetSystem<MatchSystem>().StartMatch();
             var error = Assert.Throws<TargetInvocationException>(() => match.GetType().GetProperty("Rules").GetValue(match));
             Assert.That(error.InnerException, Is.TypeOf<InvalidOperationException>());
             Assert.That(next.Participants[0].MaxHealth, Is.EqualTo(3));

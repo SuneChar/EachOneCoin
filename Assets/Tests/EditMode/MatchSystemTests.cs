@@ -12,13 +12,13 @@ namespace EachOneCoin.Tests
         [SetUp]
         public void SetUp()
         {
-            GameArchitecture.Interface.Deinit();
-            session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
-            rules = GameArchitecture.Interface.GetSystem<MatchSystem>();
+            TestMatchArchitecture.Interface.Deinit();
+            session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
+            rules = TestMatchArchitecture.Interface.GetSystem<MatchSystem>();
         }
 
         [TearDown]
-        public void TearDown() => GameArchitecture.Interface.Deinit();
+        public void TearDown() => TestMatchArchitecture.Interface.Deinit();
 
         [Test]
         public void StartMatch_TransitionsOnlyOnce()
@@ -65,7 +65,7 @@ namespace EachOneCoin.Tests
         public void Rules_AfterArchitectureDeinitRejectsCalls()
         {
             session.CreateMatch(3, 3, Spawns, 3, 100f);
-            GameArchitecture.Interface.Deinit();
+            TestMatchArchitecture.Interface.Deinit();
             Assert.Throws<InvalidOperationException>(() => rules.TryPaint(0, Spawns[0]));
         }
     }

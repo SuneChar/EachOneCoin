@@ -33,6 +33,7 @@ namespace EachOneCoin.Tests
         private GameObject originalSelection;
         private bool originalNavigation;
         private bool ownsScene;
+        private bool stateCaptured;
 
         private static object Get(object target, string property) => target.GetType().GetProperty(property).GetValue(target);
         private static object Call(object target, string method, params object[] args) => target.GetType().GetMethod(method).Invoke(target, args);
@@ -42,6 +43,9 @@ namespace EachOneCoin.Tests
         [UnitySetUp]
         public IEnumerator SetUp()
         {
+            stateCaptured = false;
+            ownsScene = false;
+            TestSessionGuard.EnsureAvailable(GameArchitecture.Interface.GetModel<MatchSessionModel>());
             originalTimeScale = Time.timeScale;
             originalRandomState = UnityEngine.Random.state;
             var trackerType = Type.GetType("InputDeviceTracker, Assembly-CSharp", true);
@@ -53,6 +57,7 @@ namespace EachOneCoin.Tests
                 originalSelection = originalEventSystem.currentSelectedGameObject;
                 originalNavigation = originalEventSystem.sendNavigationEvents;
             }
+            stateCaptured = true;
             Assert.That(SceneManager.GetSceneByPath(ScenePath).isLoaded, Is.False, "Arena test requires an isolated scene.");
             Time.timeScale = 1f;
             var load = SceneManager.LoadSceneAsync(ScenePath, LoadSceneMode.Additive);
@@ -82,6 +87,7 @@ namespace EachOneCoin.Tests
         [UnityTearDown]
         public IEnumerator TearDown()
         {
+            if (!stateCaptured) yield break;
             if (ownsScene && arena.IsValid() && arena.isLoaded) yield return SceneManager.UnloadSceneAsync(arena);
             if (trackerInstanceField != null) trackerInstanceField.SetValue(null, originalTracker);
             if (originalEventSystem != null)
