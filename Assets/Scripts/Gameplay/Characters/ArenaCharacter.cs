@@ -29,6 +29,7 @@ namespace EachOneCoin.Gameplay
         private SpriteRenderer[] sprites;
         private Color[] spriteColors;
         private bool flashing;
+        private GroundShadow groundShadow;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
         public bool IsKnockedBack => knockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
@@ -51,6 +52,7 @@ namespace EachOneCoin.Gameplay
                 if (sprites[i].name == "PlayerSprite") { sprites[i].color = color; characterSprite = sprites[i]; }
                 spriteColors[i] = sprites[i].color;
             }
+            groundShadow = GroundShadow.Create(gameObject, 0.85f);
             if (characterSprite != null && characterSprite.transform.Find("Outline Outer") == null)
             {
                 CreateOutline(characterSprite, "Outline Outer", new Color(0.07f, 0.08f, 0.1f), 1.22f, -2);
@@ -77,6 +79,7 @@ namespace EachOneCoin.Gameplay
         {
             if (visuallyActive == active) return;
             visuallyActive = active;
+            if (groundShadow != null) groundShadow.SetVisible(active);
             if (!active) { movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
             if (controller != null) controller.enabled = active;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;

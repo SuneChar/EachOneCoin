@@ -115,6 +115,7 @@ namespace EachOneCoin.Gameplay
             slot.Coin.transform.position = match.Grid.CellToWorld(slot.Position) + Vector3.up * 0.45f;
             if (coinModel == null) slot.Coin.transform.localScale = Vector3.one * 0.35f;
             foreach (var collider in slot.Coin.GetComponentsInChildren<Collider>()) collider.enabled = false;
+            GroundShadow.Create(slot.Coin, 0.55f);
         }
 
         private void OnDestroy() { if (warningMaterial != null) Destroy(warningMaterial); }

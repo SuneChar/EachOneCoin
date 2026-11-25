@@ -100,6 +100,40 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator GroundShadows_FollowAndRespectOwnerLifetime()
+        {
+            var character = Character(0);
+            var shadow = character.transform.parent.Find("Ground Shadow");
+            Assert.That(shadow, Is.Not.Null);
+            Call(character, "Teleport", CellToWorld(new GridPosition(10, 10)));
+            yield return null;
+            Assert.That(Vector2.Distance(new Vector2(shadow.position.x, shadow.position.z),
+                new Vector2(character.transform.position.x, character.transform.position.z)), Is.LessThan(0.01f));
+            Call(character, "SetActiveState", false);
+            Assert.That(shadow.gameObject.activeSelf, Is.False);
+            Call(character, "SetActiveState", true);
+            Assert.That(shadow.gameObject.activeSelf, Is.True);
+
+            Call(coins, "Tick", 2f);
+            yield return null;
+            var coin = coinRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Fixed Coin" || t.name == "Random Coin");
+            Assert.That(coin, Is.Not.Null);
+            var shadowType = Type.GetType("EachOneCoin.Gameplay.GroundShadow, Assembly-CSharp", true);
+            var component = coin.GetComponent(shadowType);
+            Assert.That(component, Is.Not.Null);
+            var coinShadow = (Transform)shadowType.GetField("shadow", Private).GetValue(component);
+            Assert.That(coinShadow, Is.Not.Null);
+            var rotation = coinShadow.rotation;
+            coin.Rotate(Vector3.up, 90f, Space.World);
+            yield return null;
+            Assert.That(Quaternion.Angle(rotation, coinShadow.rotation), Is.LessThan(0.01f));
+            UnityEngine.Object.Destroy(coin.gameObject);
+            yield return null;
+            yield return null;
+            Assert.That(coinShadow == null, Is.True);
+        }
+
+        [UnityTest]
         public IEnumerator Attack_DropsCoinAndRespawnsTargetAtOwnSpawn()
         {
             var spawn = model.Participants[1].Spawn;
