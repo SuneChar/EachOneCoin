@@ -126,7 +126,7 @@ namespace EachOneCoin.Gameplay
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
-            Vector3 movement = playerActive ? PlanarVelocity.Cardinal(localInput.Movement, Characters[0].MovementVelocity).normalized : Vector3.zero;
+            Vector3 movement = playerActive ? localInput.Movement : Vector3.zero;
             Rules.TickStamina(Time.deltaTime, playerActive && !Characters[0].IsKnockedBack,
                 movement.sqrMagnitude > 0f, localInput.SprintHeld, Mathf.Max(0f, sprintStaminaPerSecond), Mathf.Max(0f, staminaRecoveryPerSecond));
             if (playerActive)

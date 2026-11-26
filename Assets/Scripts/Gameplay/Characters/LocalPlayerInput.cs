@@ -4,7 +4,31 @@ namespace EachOneCoin.Gameplay
 {
     public sealed class LocalPlayerInput : MonoBehaviour
     {
-        public Vector3 Movement => new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical")).normalized;
+        private const float AxisThreshold = 0.25f;
+        private readonly CardinalInputResolver direction = new CardinalInputResolver();
+        private int sampledFrame = -1;
+        private Vector3 sampledMovement;
+
+        // Sampled once per frame and cached so callers reading it twice never advance the
+        // resolver state. Directions are unit vectors on a single axis.
+        public Vector3 Movement
+        {
+            get
+            {
+                if (sampledFrame == Time.frameCount) return sampledMovement;
+                sampledFrame = Time.frameCount;
+                sampledMovement = direction.Update(
+                    Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow),
+                    Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow),
+                    Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow),
+                    Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow),
+                    Input.GetAxisRaw("Horizontal"),
+                    Input.GetAxisRaw("Vertical"),
+                    AxisThreshold);
+                return sampledMovement;
+            }
+        }
+
         public bool KeyboardAttackDown => Input.GetKeyDown(KeyCode.Space);
         public bool GamepadAttackDown => Input.GetKeyDown(KeyCode.JoystickButton2);
         public bool AttackHeld(bool gamepad) => Input.GetKey(gamepad ? KeyCode.JoystickButton2 : KeyCode.Space);
