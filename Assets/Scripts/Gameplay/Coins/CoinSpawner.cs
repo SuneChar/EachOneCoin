@@ -11,6 +11,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private GameObject coinModel;
         [SerializeField] private Transform coinRoot;
         [SerializeField] private Transform warningRoot;
+        // A coin in the character's own cell always counts as within reach.
+        [SerializeField, Min(0.1f)] private float coinPickupRadius = 0.8f;
         private enum CoinKind { Mine, Dropped }
         private sealed class Slot { public GridPosition Position; public CoinKind Kind; public GameObject Coin; }
         private sealed class CoinEvent { public int Index; public int MineIndex; public int[] MineOrder; public GridPosition[] Cells; public GameObject[] Markers; }
@@ -168,12 +170,15 @@ namespace EachOneCoin.Gameplay
         public void TryCollect(ArenaCharacter character)
         {
             var position = character.transform.position;
+            float pickupRadius = Mathf.Max(0f, coinPickupRadius);
+            float pickupRadiusSquared = pickupRadius * pickupRadius;
+            var cell = match.Grid.WorldToCell(position);
             for (int i = slots.Count - 1; i >= 0; i--)
             {
                 var slot = slots[i];
                 if (slot.Coin == null) continue;
                 var delta = position - match.Grid.CellToWorld(slot.Position); delta.y = 0f;
-                if (delta.sqrMagnitude > 0.16f) continue;
+                if (!cell.Equals(slot.Position) && delta.sqrMagnitude > pickupRadiusSquared) continue;
                 if (!match.Rules.TryCollectCoin(character.Id, slot.Position)) continue;
                 Destroy(slot.Coin);
                 slots.RemoveAt(i);

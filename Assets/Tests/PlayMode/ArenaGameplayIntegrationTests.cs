@@ -324,6 +324,45 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator MineCoin_MagnetCollectsInSameCellAndWithinRadiusButNotBeyond()
+        {
+            var character = Character(0);
+            var cell = model.Participants[0].Spawn;
+            Assert.That(model.Grid.IsConnected(0, cell), Is.True);
+            var kind = Enum.Parse(coins.GetType().GetNestedType("CoinKind", BindingFlags.NonPublic), "Mine");
+            var spawn = coins.GetType().GetMethod("Spawn", Private);
+            var controller = character.GetComponent<CharacterController>();
+            int before = model.Participants[0].Coins;
+
+            void Place(Vector3 offset)
+            {
+                controller.enabled = false;
+                var position = CellToWorld(cell) + offset;
+                position.y = character.transform.position.y;
+                character.transform.position = position;
+                controller.enabled = true;
+                Physics.SyncTransforms();
+            }
+
+            spawn.Invoke(coins, new[] { (object)cell, kind });
+            Place(new Vector3(0.45f, 0f, 0.45f));
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(before + 1), "Same-cell corner must collect.");
+
+            spawn.Invoke(coins, new[] { (object)cell, kind });
+            Place(new Vector3(0.7f, 0f, 0f));
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(before + 2), "A coin within the 0.8-unit radius must collect.");
+
+            spawn.Invoke(coins, new[] { (object)cell, kind });
+            Place(new Vector3(0.9f, 0f, 0f));
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(before + 2), "A coin outside the radius must remain.");
+            Assert.That((bool)Call(coins, "HasCoin", cell), Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator FixedMine_BlocksMovementAndKnockbackWithoutDamage()
         {
             var character = Character(0);
