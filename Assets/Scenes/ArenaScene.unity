@@ -3473,8 +3473,10 @@ MonoBehaviour:
   localInput: {fileID: 1178732125}
   gameAudio: {fileID: 876484949}
   moveSpeed: 5
-  movementAcceleration: 35
+  movementAcceleration: 60
   movementDeceleration: 35
+  ownRegionSpeedMultiplier: 1.2
+  enemyRegionSpeedMultiplier: 0.8
   maxStamina: 100
   sprintStaminaPerSecond: 25
   staminaRecoveryPerSecond: 20
@@ -50514,9 +50516,11 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   attackCooldown: 0.8
   attackRange: 1.1
+  attackAngle: 100
   damage: 1
   droppedCoins: 1
   respawnSeconds: 2
+  attackKnockbackSeconds: 0.35
 --- !u!1001 &1950175731
 PrefabInstance:
   m_ObjectHideFlags: 0
