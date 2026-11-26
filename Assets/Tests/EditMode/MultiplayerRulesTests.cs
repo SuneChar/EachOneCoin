@@ -59,6 +59,21 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void FixedMine_BlocksPaintingAndConnectivityWithoutDeletingExistingOwner()
+        {
+            var match = CreateMatch();
+            rules.StartMatch();
+            rules.TryPaint(0, P(1, 0));
+            rules.TryPaint(0, P(2, 0));
+            Assert.That(match.Grid.IsConnected(0, P(2, 0)), Is.True);
+            rules.ConfigureMines(new[] { P(1, 0) });
+            Assert.That(match.Grid.OwnerAt(P(1, 0)), Is.EqualTo(0));
+            Assert.That(match.Grid.IsBlocked(P(1, 0)), Is.True);
+            Assert.That(match.Grid.IsConnected(0, P(2, 0)), Is.False);
+            Assert.That(rules.TryPaint(1, P(1, 0)), Is.False);
+        }
+
+        [Test]
         public void Grid_CopyConnectedTo_TracksCutAndReconnect()
         {
             var grid = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(4, 2, new[] { P(0, 0), P(3, 1) }, 3, 100f).Grid;
@@ -103,6 +118,17 @@ namespace EachOneCoin.Tests
             Assert.That(match.Participants[0].Coins, Is.EqualTo(1));
             Assert.That(match.Participants[1].Coins, Is.Zero);
             Assert.That(rules.TryCollectCoin(1, P(2, 0)), Is.False);
+        }
+
+        [Test]
+        public void RandomCoin_DoesNotRequireConnectedCell()
+        {
+            var match = CreateMatch();
+            rules.StartMatch();
+            Assert.That(match.Grid.IsConnected(0, P(2, 1)), Is.False);
+            Assert.That(rules.TryCollectRandomCoin(0), Is.True);
+            Assert.That(match.Participants[0].Coins, Is.EqualTo(1));
+            Assert.That(rules.TryCollectCoin(0, P(2, 1)), Is.False);
         }
 
         [Test]

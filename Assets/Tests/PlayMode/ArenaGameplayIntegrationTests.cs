@@ -39,6 +39,16 @@ namespace EachOneCoin.Tests
         private static object Call(object target, string method, params object[] args) => target.GetType().GetMethod(method).Invoke(target, args);
         private Component Character(int id) => (Component)characters.GetValue(id);
         private Vector3 CellToWorld(GridPosition cell) => (Vector3)Call(grid, "CellToWorld", cell);
+        private GridPosition ConnectCentralMine()
+        {
+            var spawn = model.Participants[0].Spawn;
+            int x = spawn.X, y = spawn.Y;
+            var cut = new GridPosition(x + 1, y);
+            while (x < 8) { x++; rules.TryPaint(0, new GridPosition(x, y)); }
+            while (y < 9) { y++; rules.TryPaint(0, new GridPosition(x, y)); }
+            while (x < 10) { x++; rules.TryPaint(0, new GridPosition(x, y)); }
+            return cut;
+        }
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -105,7 +115,7 @@ namespace EachOneCoin.Tests
             var character = Character(0);
             var shadow = character.transform.parent.Find("Ground Shadow");
             Assert.That(shadow, Is.Not.Null);
-            Call(character, "Teleport", CellToWorld(new GridPosition(10, 10)));
+            Call(character, "Teleport", CellToWorld(new GridPosition(10, 2)));
             yield return null;
             Assert.That(Vector2.Distance(new Vector2(shadow.position.x, shadow.position.z),
                 new Vector2(character.transform.position.x, character.transform.position.z)), Is.LessThan(0.01f));
@@ -114,9 +124,9 @@ namespace EachOneCoin.Tests
             Call(character, "SetActiveState", true);
             Assert.That(shadow.gameObject.activeSelf, Is.True);
 
-            Call(coins, "Tick", 2f);
+            Call(coins, "AdvanceMatch", 5f);
             yield return null;
-            var coin = coinRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Fixed Coin" || t.name == "Random Coin");
+            var coin = coinRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Random Coin");
             Assert.That(coin, Is.Not.Null);
             var shadowType = Type.GetType("EachOneCoin.Gameplay.GroundShadow, Assembly-CSharp", true);
             var component = coin.GetComponent(shadowType);
@@ -249,7 +259,7 @@ namespace EachOneCoin.Tests
         {
             var spawn = model.Participants[1].Spawn;
             Assert.That(rules.TryCollectCoin(1, spawn), Is.True);
-            var location = CellToWorld(new GridPosition(10, 10));
+            var location = CellToWorld(new GridPosition(10, 2));
             Call(Character(0), "Teleport", location);
             Call(Character(1), "Teleport", location + Vector3.right * 0.5f);
             Physics.SyncTransforms();
@@ -270,15 +280,138 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
-        public IEnumerator CoinWarning_ProducesCoinAtTheWarnedPosition()
+        public IEnumerator RandomCoin_SpawnsAtFiveAndIsReplacedAtFifteen()
         {
-            var warning = warningRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Coin Spawn Warning");
-            Assert.That(warning, Is.Not.Null, "No available warning position in the Arena scene.");
-            var position = warning.position;
-            Call(coins, "Tick", 2f);
+            Call(coins, "AdvanceMatch", 4f);
+            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.Zero);
+            Call(coins, "AdvanceMatch", 1f);
+            var first = coinRoot.Cast<Transform>().Single(t => t.name == "Random Coin");
+            Call(coins, "AdvanceMatch", 10f);
             yield return null;
-            Assert.That(coinRoot.Cast<Transform>().Any(t => (t.name == "Fixed Coin" || t.name == "Random Coin") &&
-                Vector2.Distance(new Vector2(t.position.x, t.position.z), new Vector2(position.x, position.z)) < 0.01f), Is.True);
+            yield return null;
+            Assert.That(first == null, Is.True);
+            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator RandomCoin_CanBeCollectedWithoutConnectedPaint()
+        {
+            Call(coins, "AdvanceMatch", 5f);
+            var coin = coinRoot.Cast<Transform>().Single(t => t.name == "Random Coin");
+            var cell = (GridPosition)Call(grid, "WorldToCell", coin.position);
+            Assert.That(model.Grid.IsConnected(0, cell), Is.False);
+            var character = Character(0);
+            var controller = character.GetComponent<CharacterController>();
+            controller.enabled = false;
+            var position = coin.position;
+            position.y = character.transform.position.y;
+            character.transform.position = position;
+            controller.enabled = true;
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(1));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Mine_ConnectedForFiveSecondsScattersThreeDistinctCoins()
+        {
+            Assert.That(model.Mines.Count, Is.EqualTo(5));
+            Call(coins, "BeginFrame");
+            ConnectCentralMine();
+            Call(coins, "AdvanceMatch", 1f);
+            Assert.That(model.Mines[0].Progress(0), Is.Zero, "A connection made during the frame must not receive time from before it existed.");
+            Call(coins, "BeginFrame");
+            Call(coins, "AdvanceMatch", 4f);
+            Assert.That(model.Mines[0].Scattered, Is.False);
+            Call(coins, "BeginFrame");
+            Call(coins, "AdvanceMatch", 1f);
+            Assert.That(model.Mines[0].Scattered, Is.True);
+            var positions = coinRoot.Cast<Transform>().Where(t => t.name == "Mine Coin").Select(t => (GridPosition)Call(grid, "WorldToCell", t.position)).ToArray();
+            Assert.That(positions.Length, Is.EqualTo(3));
+            Assert.That(positions.Distinct().Count(), Is.EqualTo(3));
+            Assert.That(positions.All(p => (bool)Call(match, "IsSpawn", p) == false), Is.True);
+            Call(coins, "BeginFrame");
+            Call(coins, "AdvanceMatch", 4f);
+            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Mine Coin"), Is.EqualTo(3), "Mine coins must remain after the next rotation.");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator FixedMine_BlocksMovementAndKnockbackWithoutDamage()
+        {
+            var character = Character(0);
+            var mine = model.Mines[0].Position;
+            Assert.That((bool)Call(match, "IsBlocked", mine), Is.True);
+            Call(character, "Teleport", CellToWorld(new GridPosition(mine.X, mine.Y - 2)));
+            Physics.SyncTransforms();
+            var start = character.transform.position;
+            Call(character, "Move", Vector3.forward * 4f);
+            var afterMove = character.transform.position;
+            Assert.That(afterMove.z, Is.GreaterThan(start.z));
+            Assert.That(afterMove.z, Is.LessThan(CellToWorld(mine).z - 0.5f));
+            Assert.That(model.Participants[0].Health, Is.EqualTo(3));
+            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(3));
+            Call(character, "Teleport", CellToWorld(new GridPosition(mine.X, mine.Y - 2)));
+            Physics.SyncTransforms();
+            Call(character, "StartAttackKnockback", Vector3.forward * 6f, 0.35f);
+            Call(character, "TickAttackKnockback", 1f);
+            Assert.That(character.transform.position.z, Is.LessThan(CellToWorld(mine).z - 0.5f));
+            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(3));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator FixedMines_ProduceIndependentlyInSameCycle()
+        {
+            var spawn = model.Participants[0].Spawn;
+            int x = spawn.X, y = spawn.Y;
+            while (x < 9) { x++; rules.TryPaint(0, new GridPosition(x, y)); }
+            while (y < 10) { y++; rules.TryPaint(0, new GridPosition(x, y)); }
+            Call(coins, "BeginFrame");
+            Call(coins, "AdvanceMatch", 5f);
+            Assert.That(model.Mines[0].Scattered, Is.True);
+            Assert.That(model.Mines[1].Scattered, Is.True);
+            Assert.That(model.Mines[2].Scattered, Is.False);
+            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Mine Coin"), Is.EqualTo(6));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Mines_StayFixedAcrossCyclesAndDoNotResetAtSixty()
+        {
+            Assert.That(model.Mines.Count, Is.EqualTo(5));
+            var positions = model.Mines.Select(m => m.Position).ToArray();
+            double initialElapsed = model.Mines[0].Elapsed;
+            for (int i = 0; i < 5; i++)
+            {
+                Call(coins, "BeginFrame");
+                Call(coins, "AdvanceMatch", 10f);
+                Assert.That(model.Mines.Select(m => m.Position), Is.EqualTo(positions));
+                Assert.That(model.Mines.All(m => Math.Abs(m.Elapsed - initialElapsed) < 0.0001), Is.True);
+            }
+            Call(coins, "BeginFrame");
+            Call(coins, "AdvanceMatch", 10f);
+            Assert.That(model.Mines.Select(m => m.Position), Is.EqualTo(positions));
+            Assert.That(model.Mines.All(m => Math.Abs(m.Elapsed - 10d) < 0.0001), Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Mine_CutAndReconnectInSameFrameResetsProgress()
+        {
+            var cut = ConnectCentralMine();
+            Call(coins, "BeginFrame");
+            Call(coins, "AdvanceMatch", 3f);
+            Assert.That(model.Mines[0].Progress(0), Is.EqualTo(3d).Within(0.0001));
+            Call(coins, "BeginFrame");
+            Assert.That(rules.TryPaint(1, cut), Is.True);
+            Call(coins, "NotifyGridChanged");
+            Assert.That(rules.TryPaint(0, cut), Is.True);
+            Call(coins, "NotifyGridChanged");
+            Call(coins, "AdvanceMatch", 0.1f);
+            Assert.That(model.Mines[0].Progress(0), Is.Zero);
+            Assert.That(model.Mines[0].Scattered, Is.False);
+            yield return null;
         }
 
         [UnityTest]
@@ -367,6 +500,24 @@ namespace EachOneCoin.Tests
             Assert.That((float)Get(npc, "RegionSpeedMultiplier"), Is.EqualTo(1.2f).Within(0.001f));
             Assert.That(rules.TryPaint(0, cell), Is.True);
             Assert.That((float)Get(npc, "RegionSpeedMultiplier"), Is.EqualTo(0.8f).Within(0.001f));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_RoutesAroundFixedMineToCoin()
+        {
+            foreach (var mine in model.Mines) mine.Advance(5d, new[] { true, false, false, false });
+            var start = new GridPosition(8, 10);
+            var target = new GridPosition(12, 10);
+            Call(Character(1), "Teleport", CellToWorld(start));
+            Call(coins, "Drop", target, 1);
+            Physics.SyncTransforms();
+            var path = new System.Collections.Generic.List<GridPosition>();
+            bool found = (bool)npcs.GetType().GetMethod("FindPath", Private).Invoke(npcs, new object[] { 1, false, path });
+            Assert.That(found, Is.True);
+            Assert.That(path.Count, Is.GreaterThan(4));
+            Assert.That(path.Last(), Is.EqualTo(target));
+            Assert.That(path.All(p => !model.Grid.IsBlocked(p)), Is.True);
             yield return null;
         }
 

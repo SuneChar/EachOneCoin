@@ -33,7 +33,9 @@ namespace EachOneCoin.Gameplay
         private readonly int[] lastMaxHealth = { -1, -1, -1, -1 };
         private readonly ParticipantStatus[] lastStatus = new ParticipantStatus[4];
         private bool firstRefresh = true;
-        private bool? lastConnected;
+        private readonly bool[] lastMineConnected = new bool[5];
+        private readonly bool[] lastMineScattered = new bool[5];
+        private readonly int[] lastMineProgress = { -1, -1, -1, -1, -1 };
         private float lastStamina = -1f;
 
         private void Awake()
@@ -41,6 +43,7 @@ namespace EachOneCoin.Gameplay
             inputDevice = GetComponent<InputDeviceTracker>();
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
+            if (feedbackText != null) { feedbackText.enableAutoSizing = true; feedbackText.fontSizeMin = 12f; feedbackText.fontSizeMax = 22f; }
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
             CreateHitFrame();
             RefreshPanels();
@@ -162,11 +165,32 @@ namespace EachOneCoin.Gameplay
                 healthText.text = $"生命：{p.Health} / {p.MaxHealth}";
             }
             var localPlayer = model.Participants[0];
-            bool connected = localPlayer.Status == ParticipantStatus.Active && match.Grid.IsConnected(0, match.Grid.WorldToCell(match.Characters[0].transform.position));
-            if (changed || lastConnected != connected)
+            bool mineChanged = changed;
+            for (int i = 0; i < model.Mines.Count; i++)
             {
-                feedbackText.text = localPlayer.Status == ParticipantStatus.Active ? (connected ? "路径已连接" : "路径未连接：无法拾取金币") : StatusText(localPlayer.Status);
-                lastConnected = connected;
+                bool isConnected = match.Coins.IsConnectedToMine(i, 0);
+                bool scattered = model.Mines[i].Scattered;
+                int progress = Mathf.FloorToInt((float)model.Mines[i].Progress(0));
+                if (lastMineConnected[i] != isConnected || lastMineScattered[i] != scattered || lastMineProgress[i] != progress) mineChanged = true;
+                lastMineConnected[i] = isConnected; lastMineScattered[i] = scattered; lastMineProgress[i] = progress;
+            }
+            if (mineChanged)
+            {
+                if (localPlayer.Status != ParticipantStatus.Active) feedbackText.text = StatusText(localPlayer.Status);
+                else
+                {
+                    var text = new System.Text.StringBuilder("矿 ");
+                    for (int i = 0; i < model.Mines.Count; i++)
+                    {
+                        if (i > 0) text.Append("  ");
+                        text.Append(match.Coins.MineName(i)[0]).Append(':');
+                        if (lastMineScattered[i]) text.Append("已产出");
+                        else if (lastMineConnected[i]) text.Append(lastMineProgress[i]).Append("/5");
+                        else text.Append("--");
+                    }
+                    text.Append("\n随机金币可直接拾取");
+                    feedbackText.text = text.ToString();
+                }
             }
             firstRefresh = false;
         }

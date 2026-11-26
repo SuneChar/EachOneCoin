@@ -110,7 +110,7 @@ namespace EachOneCoin.Gameplay
                 Characters[i].Teleport(grid.CellToWorld(Spawns[i]));
             }
             grid.Refresh(Model.Grid);
-            coins.Initialize(this); combat.Initialize(this); npcs.Initialize(this);
+            coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
             if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
                 System.Array.Exists(System.Environment.GetCommandLineArgs(), arg => arg == "--movement-telemetry"))
             {
@@ -122,6 +122,7 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            coins.BeginFrame();
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
@@ -137,6 +138,7 @@ namespace EachOneCoin.Gameplay
             }
             for (int i = 1; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) npcs.Tick(i, Time.deltaTime);
             for (int i = 0; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) Characters[i].TickAttackKnockback(Time.deltaTime);
+            coins.AdvanceMatch(Time.deltaTime);
             Rules.AdvanceTime(Time.deltaTime);
             RefreshStates();
         }
@@ -197,8 +199,21 @@ namespace EachOneCoin.Gameplay
 
         public bool IsBlocked(GridPosition cell)
         {
+            if (Model != null && Model.Grid.Contains(cell) && Model.Grid.IsBlocked(cell)) return true;
             int count = Physics.OverlapSphereNonAlloc(grid.CellToWorld(cell) + Vector3.up * 0.5f, 0.42f, overlap, ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < count; i++) if (IsHazard(overlap[i])) return true;
+            return false;
+        }
+
+        public bool IsObstructed(GridPosition cell)
+        {
+            int count = Physics.OverlapSphereNonAlloc(grid.CellToWorld(cell) + Vector3.up * 0.5f, 0.42f, overlap, ~0, QueryTriggerInteraction.Collide);
+            for (int i = 0; i < count; i++)
+            {
+                var collider = overlap[i];
+                if (collider == null || !collider.enabled) continue;
+                if (IsHazard(collider) || !collider.isTrigger) return true;
+            }
             return false;
         }
 

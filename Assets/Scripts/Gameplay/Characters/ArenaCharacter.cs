@@ -219,7 +219,11 @@ namespace EachOneCoin.Gameplay
             var cell = match.Grid.WorldToCell(transform.position);
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
-            if (match.Rules.TryPaint(Id, cell)) match.Grid.Refresh(match.Model.Grid);
+            if (match.Rules.TryPaint(Id, cell))
+            {
+                match.Grid.Refresh(match.Model.Grid);
+                if (match.Coins != null) match.Coins.NotifyGridChanged();
+            }
         }
 
         private void UpdateFacing(float deltaTime)

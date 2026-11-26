@@ -16,6 +16,7 @@ namespace EachOneCoin
     public sealed class GridModel
     {
         private readonly int?[,] owners;
+        private readonly bool[,] blocked;
         private readonly Dictionary<int, GridPosition> spawns = new Dictionary<int, GridPosition>();
         private readonly bool[,] connected;
         private readonly Queue<GridPosition> queue = new Queue<GridPosition>();
@@ -24,6 +25,7 @@ namespace EachOneCoin
 
         public int Width { get; }
         public int Height { get; }
+        public uint Revision { get; private set; }
 
         public GridModel(int width, int height, IReadOnlyList<GridPosition> spawnPositions)
         {
@@ -34,6 +36,7 @@ namespace EachOneCoin
             Width = width;
             Height = height;
             owners = new int?[width, height];
+            blocked = new bool[width, height];
             connected = new bool[width, height];
             for (int i = 0; i < spawnPositions.Count; i++)
             {
@@ -53,11 +56,29 @@ namespace EachOneCoin
             return owners[position.X, position.Y];
         }
 
-        internal void SetOwner(GridPosition position, int participantId) => owners[position.X, position.Y] = participantId;
+        public bool IsBlocked(GridPosition position)
+        {
+            if (!Contains(position)) throw new ArgumentOutOfRangeException(nameof(position));
+            return blocked[position.X, position.Y];
+        }
+
+        internal void SetBlocked(GridPosition position, bool value)
+        {
+            if (!Contains(position)) throw new ArgumentOutOfRangeException(nameof(position));
+            if (blocked[position.X, position.Y] == value) return;
+            blocked[position.X, position.Y] = value;
+            unchecked { Revision++; }
+        }
+
+        internal void SetOwner(GridPosition position, int participantId)
+        {
+            owners[position.X, position.Y] = participantId;
+            unchecked { Revision++; }
+        }
 
         public bool IsConnected(int participantId, GridPosition target)
         {
-            if (!Contains(target) || owners[target.X, target.Y] != participantId) return false;
+            if (!Contains(target) || blocked[target.X, target.Y] || owners[target.X, target.Y] != participantId) return false;
             BuildConnected(participantId);
             return connected[target.X, target.Y];
         }
@@ -76,7 +97,7 @@ namespace EachOneCoin
         {
             Array.Clear(connected, 0, connected.Length);
             queue.Clear();
-            if (!spawns.TryGetValue(participantId, out var spawn)) return;
+            if (!spawns.TryGetValue(participantId, out var spawn) || blocked[spawn.X, spawn.Y]) return;
             connected[spawn.X, spawn.Y] = true;
             queue.Enqueue(spawn);
             while (queue.Count > 0)
@@ -85,7 +106,7 @@ namespace EachOneCoin
                 for (int i = 0; i < Dx.Length; i++)
                 {
                     var next = new GridPosition(current.X + Dx[i], current.Y + Dy[i]);
-                    if (!Contains(next) || connected[next.X, next.Y] || owners[next.X, next.Y] != participantId) continue;
+                    if (!Contains(next) || blocked[next.X, next.Y] || connected[next.X, next.Y] || owners[next.X, next.Y] != participantId) continue;
                     connected[next.X, next.Y] = true;
                     queue.Enqueue(next);
                 }

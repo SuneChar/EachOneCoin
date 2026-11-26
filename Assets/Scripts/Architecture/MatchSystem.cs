@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using QFramework;
 
 namespace EachOneCoin
@@ -40,11 +41,33 @@ namespace EachOneCoin
             match.Status = MatchStatus.Finished;
         }
 
+        public void ConfigureMines(IReadOnlyList<GridPosition> positions)
+        {
+            var match = CurrentMatch;
+            if (positions == null || positions.Count == 0) throw new ArgumentException("Mine positions are required.", nameof(positions));
+            if (match.Mines.Count != 0) throw new InvalidOperationException("Mines have already been configured.");
+            var seen = new HashSet<GridPosition>();
+            foreach (var position in positions)
+            {
+                if (!match.Grid.Contains(position) || !seen.Add(position)) throw new ArgumentException("Mine positions must be unique and inside the grid.", nameof(positions));
+                foreach (var participant in match.Participants)
+                    if (participant.Spawn.Equals(position)) throw new ArgumentException("A mine cannot occupy a spawn.", nameof(positions));
+            }
+            var mines = new MineCycleModel[positions.Count];
+            for (int i = 0; i < mines.Length; i++)
+            {
+                match.Grid.SetBlocked(positions[i], true);
+                mines[i] = new MineCycleModel(match.Participants.Count);
+                mines[i].BeginCycle(positions[i]);
+            }
+            match.Mines = Array.AsReadOnly(mines);
+        }
+
         public bool TryPaint(int participantId, GridPosition position)
         {
             var match = CurrentMatch;
             var grid = match.Grid;
-            if (!IsActive(match, participantId) || !grid.Contains(position)) return false;
+            if (!IsActive(match, participantId) || !grid.Contains(position) || grid.IsBlocked(position)) return false;
             for (int i = 0; i < match.Participants.Count; i++)
                 if (i != participantId && match.Participants[i].Spawn.Equals(position)) return false;
             if (grid.OwnerAt(position) == participantId) return false;
@@ -74,6 +97,17 @@ namespace EachOneCoin
         {
             var match = CurrentMatch;
             if (!IsActive(match, participantId) || !match.Grid.IsConnected(participantId, position)) return false;
+            return AwardCoin(match, participantId);
+        }
+
+        public bool TryCollectRandomCoin(int participantId)
+        {
+            var match = CurrentMatch;
+            return IsActive(match, participantId) && AwardCoin(match, participantId);
+        }
+
+        private static bool AwardCoin(MatchModel match, int participantId)
+        {
             var participant = match.Participants[participantId];
             participant.Coins++;
             if (participant.Coins >= match.CoinsToWin)

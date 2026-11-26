@@ -72,7 +72,7 @@ namespace EachOneCoin.Gameplay
             {
                 var renderer = tiles[x, y];
                 if (renderer == null) continue;
-                var owner = grid.OwnerAt(new GridPosition(x, y));
+                int? owner = grid.IsBlocked(new GridPosition(x, y)) ? null : grid.OwnerAt(new GridPosition(x, y));
                 int state = owner.HasValue ? owner.Value * 2 + (connected[owner.Value][x, y] ? 1 : 0) : -1;
                 if (state == displayedState[x, y]) continue;
                 displayedState[x, y] = state;

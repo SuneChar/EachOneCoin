@@ -30,7 +30,7 @@ namespace EachOneCoin.Gameplay
             var cell = match.Grid.WorldToCell(character.transform.position);
             bool returning = !match.Model.Grid.IsConnected(id, cell);
             var path = paths[id];
-            if (HasWaypoint(id) && (returning != returningPaths[id] || (!returning && !match.Coins.HasCoin(path[path.Count - 1])))) ResetPath(id);
+            if (HasWaypoint(id) && (returning != returningPaths[id] || (!returning && !match.Coins.HasCoin(path[path.Count - 1]) && !match.Coins.IsMineApproach(path[path.Count - 1])))) ResetPath(id);
             if (!HasWaypoint(id))
             {
                 if (retries[id] > 0f) { character.MoveWithVelocity(Vector3.zero, deltaTime); return; }
@@ -116,7 +116,7 @@ namespace EachOneCoin.Gameplay
             while (queue.Count > 0)
             {
                 var cell = queue.Dequeue();
-                if (returning ? cell.Equals(match.Spawns[id]) : match.Coins.HasCoin(cell))
+                if (returning ? cell.Equals(match.Spawns[id]) : match.Coins.HasCoin(cell) || match.Coins.IsMineApproach(cell))
                 {
                     while (!cell.Equals(start)) { path.Add(cell); cell = parent[cell.X, cell.Y]; }
                     path.Reverse();
