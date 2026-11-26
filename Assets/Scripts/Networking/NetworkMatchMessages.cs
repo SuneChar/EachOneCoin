@@ -4,6 +4,8 @@ using UnityEngine;
 namespace EachOneCoin.Networking
 {
     public struct MovementReady : NetworkMessage { }
+    public struct ReturnRoomRequest : NetworkMessage { }
+    public struct ReturnRoomState : NetworkMessage { public byte returnedMask; }
     public struct MovementBegin : NetworkMessage { public byte occupied; public bool fillNpcs; }
     public struct MovementInput : NetworkMessage { public Vector2 direction; public bool sprint; }
     public struct MovementSnapshot : NetworkMessage

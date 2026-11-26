@@ -9,6 +9,7 @@ public sealed class LanRoomUI : MonoBehaviour
 {
     private BootMenu menu;
     private LanNetworkManager network;
+    private int lastNavigationMask = -1;
     [SerializeField] private GameObject panel;
     [SerializeField] private TMP_Text status;
     [SerializeField] private TMP_Text seats;
@@ -40,7 +41,7 @@ public sealed class LanRoomUI : MonoBehaviour
         }
 
         panel.SetActive(false);
-        if (network.HasRecoverySession && !NetworkClient.active && !NetworkServer.active) Open();
+        if ((network.HasRecoverySession && !NetworkClient.active && !NetworkServer.active) || (network.HasSnapshot && NetworkClient.isConnected)) Open();
     }
 
     public void Host() => network.HostRoom();
@@ -53,10 +54,17 @@ public sealed class LanRoomUI : MonoBehaviour
     {
         menu.SetLanRoomOpen(true);
         panel.SetActive(true);
-        if (UnityEngine.EventSystems.EventSystem.current != null && UnityEngine.EventSystems.EventSystem.current.sendNavigationEvents)
-            UnityEngine.EventSystems.EventSystem.current.SetSelectedGameObject(hostButton.gameObject);
+        lastNavigationMask = -1;
+        GamepadNavigation.Configure(panel);
+        GamepadNavigation.EnsureFocus(panel, InputDeviceTracker.Instance != null && InputDeviceTracker.Instance.UsingGamepad);
     }
     public void Close() { network.LeaveRoom(); panel.SetActive(false); menu.SetLanRoomOpen(false); }
+
+    private void LateUpdate()
+    {
+        if (panel != null && panel.activeInHierarchy)
+            GamepadNavigation.EnsureFocus(panel, InputDeviceTracker.Instance != null && InputDeviceTracker.Instance.UsingGamepad);
+    }
 
     private void Update()
     {
@@ -67,6 +75,9 @@ public sealed class LanRoomUI : MonoBehaviour
         reconnectButton.interactable = !active && network.HasRecoverySession;
         fillButton.interactable = NetworkServer.active && network.HasSnapshot && !network.MatchStarted;
         startButton.interactable = NetworkServer.active && network.HasSnapshot && !network.MatchStarted;
+        int navigationMask = (hostButton.interactable ? 1 : 0) | (joinButton.interactable ? 2 : 0) | (fillButton.interactable ? 4 : 0) |
+            (startButton.interactable ? 8 : 0) | (reconnectButton.interactable ? 16 : 0);
+        if (lastNavigationMask != navigationMask) { lastNavigationMask = navigationMask; GamepadNavigation.Configure(panel); }
         fillLabel.text = network.HasSnapshot && network.Snapshot.fillNpcs ? "空位补 NPC：开" : "空位补 NPC：关";
         if (!network.HasSnapshot) { seats.text = "尚未进入房间"; return; }
         var snapshot = network.Snapshot;

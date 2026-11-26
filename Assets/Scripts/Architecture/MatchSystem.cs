@@ -116,6 +116,10 @@ namespace EachOneCoin
             participant.Coins++;
             if (participant.Coins >= match.CoinsToWin)
             {
+                int order = 1;
+                foreach (var other in match.Participants)
+                    if (other.FinishOrder >= order) order = other.FinishOrder + 1;
+                participant.FinishOrder = order;
                 participant.Status = ParticipantStatus.Won;
                 FinishIfNoParticipantsRemain(match);
             }

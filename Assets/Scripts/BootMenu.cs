@@ -43,22 +43,22 @@ public class BootMenu : MonoBehaviour
         quitConfirmPanel.SetActive(quitOpen);
         if (EventSystem.current != null)
         {
-            EventSystem.current.sendNavigationEvents = usingGamepad;
+            EventSystem.current.sendNavigationEvents = usingGamepad && Application.isFocused;
             EventSystem.current.SetSelectedGameObject(null);
             var active = lanRoomOpen ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
-            var first = active != null ? active.GetComponentInChildren<Selectable>() : null;
-            if (usingGamepad && first != null) EventSystem.current.SetSelectedGameObject(first.gameObject);
+            GamepadNavigation.Configure(active);
+            GamepadNavigation.EnsureFocus(active, usingGamepad);
         }
         if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, false, settingsOpen || quitOpen);
     }
     private void LateUpdate()
     {
-        if (lanRoomOpen || !usingGamepad || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != null) return;
-        var first = (quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel).GetComponentInChildren<Selectable>();
-        if (first != null && first.IsInteractable()) EventSystem.current.SetSelectedGameObject(first.gameObject);
+        if (lanRoomOpen) return;
+        GamepadNavigation.EnsureFocus(quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel, usingGamepad);
     }
     private void Update()
     {
+        if (!Application.isFocused) return;
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || Input.GetKeyDown(KeyCode.JoystickButton1))
         {
             if (lanRoomOpen) lanRoom.Close();

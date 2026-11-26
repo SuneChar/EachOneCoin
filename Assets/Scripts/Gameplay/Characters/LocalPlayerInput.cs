@@ -5,9 +5,32 @@ namespace EachOneCoin.Gameplay
     public sealed class LocalPlayerInput : MonoBehaviour
     {
         private const float AxisThreshold = 0.25f;
-        private readonly CardinalInputResolver direction = new CardinalInputResolver();
+        private CardinalInputResolver direction = new CardinalInputResolver();
         private int sampledFrame = -1;
         private Vector3 sampledMovement;
+        private bool focusReset;
+        private bool suppressGamepadAttack, suppressGamepadSprint;
+
+        private void OnApplicationFocus(bool focused)
+        {
+            if (focused) return;
+            direction = new CardinalInputResolver();
+            focusReset = true;
+            sampledFrame = -1;
+            SuppressGamepadActionsUntilReleased();
+        }
+
+        public void SuppressGamepadActionsUntilReleased()
+        {
+            suppressGamepadAttack = true;
+            suppressGamepadSprint = true;
+        }
+
+        private static bool GamepadActionAllowed(ref bool suppressed, KeyCode key)
+        {
+            if (suppressed && !Input.GetKey(key)) suppressed = false;
+            return !suppressed;
+        }
 
         // Sampled once per frame and cached so callers reading it twice never advance the
         // resolver state. Directions are unit vectors on a single axis.
@@ -15,6 +38,14 @@ namespace EachOneCoin.Gameplay
         {
             get
             {
+                if (!Application.isFocused)
+                {
+                    if (!focusReset) direction = new CardinalInputResolver();
+                    focusReset = true;
+                    sampledFrame = -1;
+                    return Vector3.zero;
+                }
+                focusReset = false;
                 if (sampledFrame == Time.frameCount) return sampledMovement;
                 sampledFrame = Time.frameCount;
                 sampledMovement = direction.Update(
@@ -29,10 +60,12 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        public bool KeyboardAttackDown => Input.GetKeyDown(KeyCode.Space);
-        public bool GamepadAttackDown => Input.GetKeyDown(KeyCode.JoystickButton2);
-        public bool AttackHeld(bool gamepad) => Input.GetKey(gamepad ? KeyCode.JoystickButton2 : KeyCode.Space);
-        public Vector2 GamepadAim => new Vector2(Input.GetAxisRaw("GamepadRightHorizontal"), -Input.GetAxisRaw("GamepadRightVertical"));
+        public bool KeyboardAttackDown => Application.isFocused && Input.GetKeyDown(KeyCode.Space);
+        public bool GamepadAttackDown => Application.isFocused && GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKeyDown(KeyCode.JoystickButton0);
+        public bool AttackHeld(bool gamepad) => Application.isFocused && (gamepad
+            ? GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKey(KeyCode.JoystickButton0)
+            : Input.GetKey(KeyCode.Space));
+        public Vector2 GamepadAim => Application.isFocused ? new Vector2(Input.GetAxisRaw("GamepadLeftHorizontal"), Input.GetAxisRaw("GamepadLeftVertical")) : Vector2.zero;
 
         public bool TryAimDirection(bool gamepad, Vector3 origin, Camera camera, out Vector3 direction)
         {
@@ -58,6 +91,7 @@ namespace EachOneCoin.Gameplay
             direction.Normalize();
             return true;
         }
-        public bool SprintHeld => Input.GetKey(KeyCode.LeftShift);
+        public bool SprintHeld => Application.isFocused && (Input.GetKey(KeyCode.LeftShift) ||
+            (GamepadActionAllowed(ref suppressGamepadSprint, KeyCode.JoystickButton1) && Input.GetKey(KeyCode.JoystickButton1)));
     }
 }

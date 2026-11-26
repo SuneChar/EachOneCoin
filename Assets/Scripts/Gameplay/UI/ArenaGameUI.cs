@@ -47,8 +47,22 @@ namespace EachOneCoin.Gameplay
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
             if (feedbackText != null) { feedbackText.enableAutoSizing = true; feedbackText.fontSizeMin = 12f; feedbackText.fontSizeMax = 22f; }
+            if (attackPromptText != null)
+            {
+                var rect = attackPromptText.rectTransform;
+                rect.sizeDelta = new Vector2(Mathf.Max(rect.sizeDelta.x, 300f), Mathf.Max(rect.sizeDelta.y, 60f));
+                rect.anchoredPosition += new Vector2(0f, 33f);
+            }
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
             CreateHitFrame();
+            var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
+            var selectable = pauseButton != null ? pauseButton.GetComponent<Selectable>() : null;
+            if (selectable != null)
+            {
+                var navigation = selectable.navigation;
+                navigation.mode = Navigation.Mode.None;
+                selectable.navigation = navigation;
+            }
             RefreshPanels();
         }
 
@@ -118,7 +132,7 @@ namespace EachOneCoin.Gameplay
                 UpdateNetworkUI();
                 return;
             }
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
+            if (Application.isFocused && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1))))
             {
                 if (settingsOpen) CloseSettings();
                 else if (match.IsPaused) Resume();
@@ -231,7 +245,7 @@ namespace EachOneCoin.Gameplay
             var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
             var state = match.NetworkController;
             if (network == null || state == null || network.LocalSlot < 0 || network.LocalSlot >= 4) return;
-            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || (NetworkMenuOpen && Input.GetKeyDown(KeyCode.JoystickButton1)))
+            if (Application.isFocused && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || (NetworkMenuOpen && Input.GetKeyDown(KeyCode.JoystickButton1))))
             {
                 if (settingsOpen) CloseSettings();
                 else if (networkMenuOpen) Resume();
@@ -277,16 +291,56 @@ namespace EachOneCoin.Gameplay
             info.Append("\n预警圈出现后 ").Append(CoinSpawnSchedule.WarningSeconds.ToString("0.#")).Append(" 秒生成金币，需涂色连通才能拾取");
             var status = state.StatusAt(slot);
             if (status != ParticipantStatus.Active) info.Append("\n").Append(StatusText(status)).Append(state.CurrentMatchStatus == MatchStatus.Playing ? "，其他玩家继续" : "");
+            if (state.IsSpectating)
+            {
+                int target = state.SpectateSlot;
+                info.Append(target < 0 ? "\n等待其他参与者结束" : "\n观战 " + (state.IsHuman(target) ? "席位 " : "NPC ") + (target + 1) + "（Tab / RB 切换）");
+            }
             feedbackText.text = info.ToString();
             if (!resultShown && state.CurrentMatchStatus == MatchStatus.Finished)
             {
                 resultShown = true; networkMenuOpen = false; settingsOpen = false;
                 resultText.text = status == ParticipantStatus.Won ? "游戏胜利" : "游戏结束";
-                resultCoinsText.text = $"金币：{coins} / {match.Model.CoinsToWin}";
+                resultCoinsText.text = BuildNetworkRanking(state, slot);
                 if (gameAudio != null) { if (status == ParticipantStatus.Won) gameAudio.PlayWin(); else gameAudio.PlayLose(); }
                 RefreshPanels();
             }
+            if (resultShown && network.LocalReturned)
+            {
+                resultText.text = "已返回房间，等待其他玩家";
+                var exit = resultPanel.transform.Find("MainMenuButton");
+                if (exit != null) { var label = exit.GetComponentInChildren<TMP_Text>(true); if (label != null) label.text = "退出房间"; }
+                var waiting = new System.Text.StringBuilder();
+                for (int i = 0; i < 4; i++) if ((network.Snapshot.occupiedMask & (1 << i)) != 0)
+                    waiting.Append("席位 ").Append(i + 1).Append((network.ReturnedMask & (1 << i)) != 0 ? "：已返回\n" : "：查看结算中\n");
+                resultCoinsText.text = waiting.ToString();
+            }
             firstRefresh = false;
+        }
+
+        private static string BuildNetworkRanking(EachOneCoin.Networking.NetworkMatchController state, int localSlot)
+        {
+            var slots = new System.Collections.Generic.List<int>();
+            for (int i = 0; i < 4; i++) if (state.IsParticipant(i)) slots.Add(i);
+            slots.Sort((a, b) =>
+            {
+                int ao = state.FinishOrderAt(a), bo = state.FinishOrderAt(b);
+                if (ao > 0 && bo > 0) return ao.CompareTo(bo);
+                if (ao > 0) return -1;
+                if (bo > 0) return 1;
+                int score = state.ScoreAt(b).CompareTo(state.ScoreAt(a));
+                return score != 0 ? score : a.CompareTo(b);
+            });
+            var text = new System.Text.StringBuilder("最终排名\n");
+            int rank = 0;
+            for (int i = 0; i < slots.Count; i++)
+            {
+                int id = slots[i];
+                if (i == 0 || state.FinishOrderAt(id) > 0 || state.FinishOrderAt(slots[i - 1]) > 0 || state.ScoreAt(id) != state.ScoreAt(slots[i - 1])) rank = i + 1;
+                text.Append(rank).Append(". ").Append(id == localSlot ? "你" : state.IsHuman(id) ? "席位 " + (id + 1) : "NPC " + (id + 1));
+                text.Append("  金币 ").Append(state.ScoreAt(id)).Append("  ").Append(StatusText(state.StatusAt(id))).Append('\n');
+            }
+            return text.ToString();
         }
 
         private static string StatusText(ParticipantStatus status)
@@ -302,11 +356,15 @@ namespace EachOneCoin.Gameplay
 
         private void LateUpdate()
         {
-            if (!usingGamepad || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != null) return;
-            var panel = settingsOpen ? settingsPanel : match != null && (match.IsPaused || networkMenuOpen) ? pausePanel : resultShown ? resultPanel : null;
-            if (panel == null || !panel.activeInHierarchy) return;
-            var first = panel.GetComponentInChildren<Selectable>();
-            if (first != null && first.IsInteractable()) EventSystem.current.SetSelectedGameObject(first.gameObject);
+            GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
+        }
+
+        private GameObject CurrentNavigationPanel()
+        {
+            if (settingsOpen) return settingsPanel;
+            if (resultShown) return resultPanel;
+            if (match != null && (match.IsPaused || networkMenuOpen)) return pausePanel;
+            return null;
         }
 
         private void RefreshPanels()
@@ -317,25 +375,33 @@ namespace EachOneCoin.Gameplay
             var resultRestart = resultPanel.transform.Find("RestartButton");
             if (pauseRestart != null) pauseRestart.gameObject.SetActive(!network);
             if (resultRestart != null) resultRestart.gameObject.SetActive(!network);
+            var resultMenu = resultPanel.transform.Find("MainMenuButton");
+            if (resultMenu != null && network)
+            {
+                var label = resultMenu.GetComponentInChildren<TMP_Text>(true);
+                if (label != null) label.text = "返回房间";
+            }
             hudPanel.SetActive(!resultShown);
             pausePanel.SetActive(paused && !settingsOpen);
             settingsPanel.SetActive(settingsOpen);
             resultPanel.SetActive(resultShown && !settingsOpen);
             if (EventSystem.current != null)
             {
-                EventSystem.current.sendNavigationEvents = usingGamepad;
+                EventSystem.current.sendNavigationEvents = usingGamepad && Application.isFocused;
                 EventSystem.current.SetSelectedGameObject(null);
+                GamepadNavigation.Configure(CurrentNavigationPanel());
+                GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
             }
             if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, !paused && !resultShown, paused || settingsOpen);
             if (attackPromptText != null)
             {
                 attackPromptText.gameObject.SetActive(showPrompts && !paused && !resultShown);
-                attackPromptText.text = usingGamepad ? "按住 X + 右摇杆瞄准，松开攻击" : "按住空格 + 鼠标瞄准，松开攻击";
+                attackPromptText.text = usingGamepad ? "按住 A + 左摇杆瞄准，松开攻击\n按住 B 冲刺" : "按住空格 + 鼠标瞄准，松开攻击\n按住 Shift 冲刺";
             }
         }
 
         public void Pause() { if (match == null || resultShown) return; if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
-        public void Resume() { if (match == null) return; settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
+        public void Resume() { if (match == null) return; match.SuppressGamepadActionsUntilReleased(); settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
         public void OpenSettings()
         {
             if (match == null || (!match.IsPaused && !networkMenuOpen)) return;
@@ -355,6 +421,20 @@ namespace EachOneCoin.Gameplay
             RefreshPanels();
         }
         public void Restart() { if (match != null && match.IsNetworkMovementTest) { MainMenu(); return; } if (match != null) match.Resume(); if (gameAudio != null) gameAudio.PlayRestart(); SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
-        public void MainMenu() { if (match != null && match.IsNetworkMovementTest) { var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager; if (network != null) { network.ExitMovementTest(); return; } } if (match != null) match.Resume(); SceneManager.LoadScene("BootScene"); }
+        public void MainMenu()
+        {
+            if (match != null && match.IsNetworkMovementTest)
+            {
+                var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+                if (network != null)
+                {
+                    if (resultShown && !network.LocalReturned) { network.RequestReturnToRoom(); return; }
+                    network.ExitMovementTest();
+                    return;
+                }
+            }
+            if (match != null) match.Resume();
+            SceneManager.LoadScene("BootScene");
+        }
     }
 }

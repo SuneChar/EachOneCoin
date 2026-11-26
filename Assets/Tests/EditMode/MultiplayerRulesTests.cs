@@ -136,6 +136,21 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void Victory_AssignsFinishOrderByCompletionNotSeat()
+        {
+            var match = CreateMatch(target: 1);
+            rules.StartMatch();
+            Assert.That(rules.TryCollectCoin(2, P(0, 2)), Is.True);
+            Assert.That(rules.TryCollectCoin(0, P(0, 0)), Is.True);
+            Assert.That(match.Participants[2].FinishOrder, Is.EqualTo(1));
+            Assert.That(match.Participants[0].FinishOrder, Is.EqualTo(2));
+            Assert.That(match.Participants[1].FinishOrder, Is.Zero);
+            rules.AdvanceTime(60f);
+            Assert.That(match.Participants[1].FinishOrder, Is.Zero);
+            Assert.That(match.Participants[2].FinishOrder, Is.EqualTo(1));
+        }
+
+        [Test]
         public void ActiveSlots_IgnoreEmptySeatsAndFinishWhenAllParticipantsWin()
         {
             var match = CreateMatch(target: 1);

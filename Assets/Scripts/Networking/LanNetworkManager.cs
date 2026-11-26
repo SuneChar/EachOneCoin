@@ -26,6 +26,11 @@ namespace EachOneCoin.Networking
         private readonly HashSet<int> movementReady = new HashSet<int>();
         private readonly HashSet<int> reconnecting = new HashSet<int>();
         private readonly HashSet<int> voluntaryLeaving = new HashSet<int>();
+        private readonly HashSet<int> returnedConnections = new HashSet<int>();
+        private bool returningToRoom;
+        public bool MatchFinished { get; private set; }
+        public byte ReturnedMask { get; private set; }
+        public bool LocalReturned => HasSnapshot && (ReturnedMask & (1 << LocalSlot)) != 0;
         private bool leaveAcknowledged;
         private bool recoveryStorageAvailable = true;
         private string savedAddress;
@@ -235,6 +240,13 @@ namespace EachOneCoin.Networking
                 conn.Send(new VoluntaryLeaveAcknowledged());
                 BroadcastSnapshot();
             });
+            NetworkServer.RegisterHandler<ReturnRoomRequest>((conn, _) =>
+            {
+                if (!MatchFinished || ServerSlot(conn.connectionId) < 0) return;
+                returnedConnections.Add(conn.connectionId);
+                BroadcastReturnState();
+                TryReturnEveryone();
+            });
             NetworkServer.RegisterHandler<RoomSnapshotRequest>((conn, _) => SendSnapshot(conn));
             NetworkServer.RegisterHandler<MovementReady>(OnMovementReady);
             NetworkServer.RegisterHandler<CoinSnapshotRequest>((conn, _) =>
@@ -267,6 +279,7 @@ namespace EachOneCoin.Networking
             NetworkClient.RegisterHandler<VoluntaryLeaveAcknowledged>(_ => leaveAcknowledged = true);
             NetworkClient.RegisterHandler<ResumeComplete>(_ => { ClientResuming = false; IsReconnectAttempt = false; Status = "已恢复对局"; });
             NetworkClient.RegisterHandler<ResumeRejected>(_ => OnAuthenticationRejected(2));
+            NetworkClient.RegisterHandler<ReturnRoomState>(message => ReturnedMask = message.returnedMask);
             NetworkClient.RegisterHandler<RoomSnapshot>(message => { Snapshot = message; HasSnapshot = true; });
             NetworkClient.RegisterHandler<MovementBegin>(message =>
             {
@@ -341,11 +354,12 @@ namespace EachOneCoin.Networking
         {
             int slot = ServerSlot(conn.connectionId);
             bool voluntary = voluntaryLeaving.Remove(conn.connectionId);
+            returnedConnections.Remove(conn.connectionId);
             movementReady.Remove(conn.connectionId); reconnecting.Remove(conn.connectionId);
             var controller = FindObjectOfType<NetworkMatchController>();
             if (slot >= 0)
             {
-                if (!voluntary && MatchStarted && slot != 0 && room.Reserve(conn.connectionId, Time.realtimeSinceStartupAsDouble))
+                if (!voluntary && MatchStarted && !MatchFinished && slot != 0 && room.Reserve(conn.connectionId, Time.realtimeSinceStartupAsDouble))
                 {
                     if (controller != null) controller.SuspendPlayer(slot);
                 }
@@ -358,6 +372,7 @@ namespace EachOneCoin.Networking
             base.OnServerDisconnect(conn);
             if (MatchStarted && !MovementRunning) TryBeginMovement();
             BroadcastSnapshot();
+            if (MatchFinished) { BroadcastReturnState(); TryReturnEveryone(); }
         }
 
         public override void OnClientConnect()
@@ -384,6 +399,53 @@ namespace EachOneCoin.Networking
             if (!leaving) Status = "连接失败：" + error + "（请检查地址及防火墙）";
         }
 
+        public void MarkMatchFinished()
+        {
+            if (!NetworkServer.active || MatchFinished) return;
+            MatchFinished = true;
+            returnedConnections.Clear();
+            BroadcastReturnState();
+        }
+
+        public void RequestReturnToRoom()
+        {
+            if (NetworkClient.isConnected && !LocalReturned) NetworkClient.Send(new ReturnRoomRequest());
+        }
+
+        private void BroadcastReturnState()
+        {
+            byte mask = 0;
+            foreach (int id in returnedConnections)
+            {
+                int slot = ServerSlot(id);
+                if (slot >= 0) mask |= (byte)(1 << slot);
+            }
+            ReturnedMask = mask;
+            foreach (var conn in NetworkServer.connections.Values)
+                if (conn != null && conn.isAuthenticated) conn.Send(new ReturnRoomState { returnedMask = mask });
+        }
+
+        private void TryReturnEveryone()
+        {
+            if (!NetworkServer.active || !MatchFinished || returningToRoom) return;
+            foreach (var conn in NetworkServer.connections.Values)
+                if (conn != null && conn.isAuthenticated && ServerSlot(conn.connectionId) >= 0 && !returnedConnections.Contains(conn.connectionId)) return;
+            returningToRoom = true;
+            StartCoroutine(ReturnEveryoneToRoom());
+        }
+
+        private System.Collections.IEnumerator ReturnEveryoneToRoom()
+        {
+            yield return new WaitForSecondsRealtime(.2f);
+            if (!NetworkServer.active || room == null) { returningToRoom = false; yield break; }
+            for (int slot = 1; slot < RoomState.Capacity; slot++) if (room.IsReserved(slot)) room.Release(slot);
+            MatchStarted = false; MovementRunning = false; MatchFinished = false;
+            MatchOccupied = 0; MatchFillNpcs = false; ReturnedMask = 0;
+            returnedConnections.Clear(); movementReady.Clear(); reconnecting.Clear(); returningToRoom = false;
+            ServerChangeScene("BootScene");
+            BroadcastSnapshot();
+        }
+
         public void StartMovementTest()
         {
             if (!NetworkServer.active || room == null || MatchStarted) return;
@@ -400,6 +462,11 @@ namespace EachOneCoin.Networking
         {
             base.OnClientSceneChanged();
             if (SceneManager.GetActiveScene().name == "ArenaScene") StartCoroutine(SendReadyWhenInitialized());
+            else if (SceneManager.GetActiveScene().name == "BootScene")
+            {
+                MatchStarted = false; MovementRunning = false; MatchFinished = false; ReturnedMask = 0;
+                if (NetworkClient.isConnected) NetworkClient.Send(new RoomSnapshotRequest());
+            }
         }
 
         private System.Collections.IEnumerator SendReadyWhenInitialized()
@@ -532,7 +599,7 @@ namespace EachOneCoin.Networking
             if (!leaving && HasRecoverySession && !NetworkClient.active && !NetworkServer.active) Reconnect();
         }
 
-        public override void OnStopServer() { room = null; reconnecting.Clear(); voluntaryLeaving.Clear(); }
+        public override void OnStopServer() { room = null; reconnecting.Clear(); voluntaryLeaving.Clear(); returnedConnections.Clear(); MatchFinished = false; returningToRoom = false; ReturnedMask = 0; }
 
         private void BroadcastSnapshot()
         {

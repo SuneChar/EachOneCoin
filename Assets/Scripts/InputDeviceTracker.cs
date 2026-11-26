@@ -38,8 +38,10 @@ public class InputDeviceTracker : MonoBehaviour
 
     private void OnApplicationFocus(bool focused)
     {
-        if (!focused) return;
-        mouseOrigin = Input.mousePosition;
+            if (EventSystem.current != null) EventSystem.current.sendNavigationEvents = focused && UsingGamepad;
+            if (!focused) return;
+            mouseOrigin = Input.mousePosition;
+            for (int i = 0; i < GamepadAxes.Length; i++) previousAxes[i] = Input.GetAxisRaw(GamepadAxes[i]);
     }
 
     private void OnDestroy()
@@ -49,7 +51,8 @@ public class InputDeviceTracker : MonoBehaviour
 
     private void Update()
     {
-        if (Time.unscaledTime >= nextConnectionCheck) CheckConnections();
+            if (!Application.isFocused) return;
+            if (Time.unscaledTime >= nextConnectionCheck) CheckConnections();
 
         bool mouseOrKeyboard = false;
         if (Input.anyKeyDown)
@@ -91,8 +94,10 @@ public class InputDeviceTracker : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (!UsingGamepad && EventSystem.current != null && EventSystem.current.currentSelectedGameObject != null)
-            EventSystem.current.SetSelectedGameObject(null);
+        if (UsingGamepad || EventSystem.current == null) return;
+        var selected = EventSystem.current.currentSelectedGameObject;
+        if (selected == null || selected.GetComponent<UnityEngine.UI.InputField>() != null || selected.GetComponent<TMPro.TMP_InputField>() != null) return;
+        EventSystem.current.SetSelectedGameObject(null);
     }
 
     private void CheckConnections()

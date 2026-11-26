@@ -8,6 +8,7 @@ namespace EachOneCoin
         public GridPosition Spawn { get; }
         public bool IsParticipating { get; internal set; } = true;
         public int Coins { get; internal set; }
+        public int FinishOrder { get; internal set; }
         public int Health { get; internal set; }
         public int MaxHealth { get; internal set; }
         public ParticipantStatus Status { get; internal set; }

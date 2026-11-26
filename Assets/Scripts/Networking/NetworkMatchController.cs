@@ -71,6 +71,8 @@ namespace EachOneCoin.Networking
         private bool hasMineStatus;
         private float nextMineStatus;
         public int ScoreAt(int slot) => NetworkServer.active ? match.Model.Participants[slot].Coins : hasMatchState ? replicaMatchState.ScoreAt(slot) : replicaScores[slot];
+        public int FinishOrderAt(int slot) => NetworkServer.active ? match.Model.Participants[slot].FinishOrder : hasMatchState ? replicaMatchState.OrderAt(slot) : 0;
+        public bool IsHuman(int slot) => slot >= 0 && slot < RoomState.Capacity && (network.MatchOccupied & (1 << slot)) != 0;
 
         public void Initialize(MatchCoordinator coordinator, LanNetworkManager manager, LocalPlayerInput input)
         {
@@ -148,7 +150,8 @@ namespace EachOneCoin.Networking
             var message = new MatchStateMessage { sequence = ++matchStateSequence, matchStatus = (byte)match.Model.Status,
                 participantMask = mask, remaining = match.Model.RemainingTime,
                 status0 = (byte)players[0].Status, status1 = (byte)players[1].Status, status2 = (byte)players[2].Status, status3 = (byte)players[3].Status,
-                score0 = players[0].Coins, score1 = players[1].Coins, score2 = players[2].Coins, score3 = players[3].Coins };
+                score0 = players[0].Coins, score1 = players[1].Coins, score2 = players[2].Coins, score3 = players[3].Coins,
+                order0 = players[0].FinishOrder, order1 = players[1].FinishOrder, order2 = players[2].FinishOrder, order3 = players[3].FinishOrder };
             if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
@@ -158,7 +161,7 @@ namespace EachOneCoin.Networking
             if (message.matchStatus > (byte)MatchStatus.Finished || (message.participantMask & ~15) != 0 || message.participantMask == 0 ||
                 float.IsNaN(message.remaining) || float.IsInfinity(message.remaining) || message.remaining < 0f || message.remaining > 60.01f) return;
             for (int i = 0; i < RoomState.Capacity; i++)
-                if (message.StatusAt(i) > (byte)ParticipantStatus.Lost || message.ScoreAt(i) < 0 ||
+                if (message.StatusAt(i) > (byte)ParticipantStatus.Lost || message.ScoreAt(i) < 0 || message.OrderAt(i) < 0 || message.OrderAt(i) > RoomState.Capacity ||
                     (hasMatchState && (replicaMatchState.StatusAt(i) == (byte)ParticipantStatus.Won || replicaMatchState.StatusAt(i) == (byte)ParticipantStatus.Lost) && message.StatusAt(i) != replicaMatchState.StatusAt(i))) return;
             if (hasMatchState && replicaMatchState.matchStatus == (byte)MatchStatus.Finished && message.matchStatus != (byte)MatchStatus.Finished) return;
             replicaMatchState = message; hasMatchState = true;
@@ -446,19 +449,42 @@ namespace EachOneCoin.Networking
             }
         }
 
+        private int spectateSlot = -1;
+        public int SpectateSlot => spectateSlot;
+        public bool IsSpectating => started && CurrentMatchStatus == MatchStatus.Playing && StatusAt(network.LocalSlot) == ParticipantStatus.Lost;
+
+        private void UpdateSpectator()
+        {
+            if (!IsSpectating) return;
+            bool next = Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.JoystickButton5);
+            bool valid = spectateSlot >= 0 && IsParticipant(spectateSlot) && StatusAt(spectateSlot) == ParticipantStatus.Active && IsSlotActive(spectateSlot);
+            if (valid && !next) return;
+            int start = spectateSlot < 0 ? network.LocalSlot : spectateSlot;
+            spectateSlot = -1;
+            for (int n = 1; n <= RoomState.Capacity; n++)
+            {
+                int candidate = (start + n) % RoomState.Capacity;
+                if (candidate == network.LocalSlot || !IsParticipant(candidate) || StatusAt(candidate) != ParticipantStatus.Active || !IsSlotActive(candidate)) continue;
+                spectateSlot = candidate;
+                break;
+            }
+            if (spectateSlot >= 0) match.SetViewTarget(spectateSlot);
+        }
+
         private void Update()
         {
             if (network == null || match == null) return;
             if (!started) return;
             bool menuOpen = gameUI != null && gameUI.NetworkMenuOpen;
+            if (Application.isFocused && !menuOpen) UpdateSpectator();
             if (!network.ClientResuming && CurrentMatchStatus == MatchStatus.Playing && StatusAt(network.LocalSlot) == ParticipantStatus.Active && NetworkClient.isConnected && Time.unscaledTime >= nextInput)
             {
                 nextInput = Time.unscaledTime + 0.05f;
-                Vector3 direction = menuOpen ? Vector3.zero : localInput.Movement;
+                Vector3 direction = menuOpen || !Application.isFocused ? Vector3.zero : localInput.Movement;
                 NetworkClient.Send(new MovementInput { direction = new Vector2(direction.x, direction.z), sprint = !menuOpen && localInput.SprintHeld });
             }
             if (!NetworkServer.active && CurrentMatchStatus == MatchStatus.Finished) { if (hasSnapshot) UpdatePlayback(); return; }
-            if (!network.ClientResuming && !menuOpen) UpdateLocalAim();
+            if (Application.isFocused && !network.ClientResuming && !menuOpen) UpdateLocalAim();
             else if (aiming)
             {
                 match.Characters[network.LocalSlot].SetAttackAim(false, aimDirection, 0f, 0f);
@@ -501,6 +527,7 @@ namespace EachOneCoin.Networking
                     if (match.Model.Participants[i].Status == ParticipantStatus.Won || match.Model.Participants[i].Status == ParticipantStatus.Lost)
                         match.Characters[i].SetActiveState(false);
                 bool finished = match.Model.Status == MatchStatus.Finished;
+                if (finished) network.MarkMatchFinished();
                 if ((finished && !finalStateSent) || (!finished && Time.unscaledTime >= nextMatchState))
                 {
                     nextMatchState = Time.unscaledTime + 0.1f;

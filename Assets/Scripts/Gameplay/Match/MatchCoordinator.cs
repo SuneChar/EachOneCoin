@@ -78,6 +78,11 @@ namespace EachOneCoin.Gameplay
             Time.timeScale = 0f;
         }
 
+        public void SuppressGamepadActionsUntilReleased()
+        {
+            if (localInput != null) localInput.SuppressGamepadActionsUntilReleased();
+        }
+
         public void Resume()
         {
             if (!IsPaused) return;
@@ -140,6 +145,13 @@ namespace EachOneCoin.Gameplay
             }
         }
 
+        public void SetViewTarget(int slot)
+        {
+            if (Characters == null) return;
+            for (int i = 0; i < Characters.Length; i++)
+                foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(i == slot);
+        }
+
         private void Update()
         {
             if (IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
@@ -153,7 +165,7 @@ namespace EachOneCoin.Gameplay
             {
                 float speed = moveSpeed * (Stamina.IsSprinting ? Mathf.Max(1f, sprintSpeedMultiplier) : 1f);
                 Characters[0].MoveWithVelocity(movement * speed, Time.deltaTime);
-                if (Model.Participants[0].Status == ParticipantStatus.Active) UpdateAim();
+                if (Application.isFocused && Model.Participants[0].Status == ParticipantStatus.Active) UpdateAim();
                 else CancelAim();
             }
             for (int i = 1; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) npcs.Tick(i, Time.deltaTime);
