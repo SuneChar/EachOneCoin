@@ -76,11 +76,16 @@ namespace EachOneCoin
         }
 
         public void TickStamina(float deltaTime, bool active, bool moving, bool sprintHeld, float drainPerSecond, float recoveryPerSecond)
+            => TickStamina(0, deltaTime, active, moving, sprintHeld, drainPerSecond, recoveryPerSecond);
+
+        public void TickStamina(int participantId, float deltaTime, bool active, bool moving, bool sprintHeld, float drainPerSecond, float recoveryPerSecond)
         {
             if (float.IsNaN(deltaTime) || float.IsInfinity(deltaTime) || deltaTime < 0f) throw new ArgumentOutOfRangeException(nameof(deltaTime));
             if (float.IsNaN(drainPerSecond) || float.IsInfinity(drainPerSecond) || drainPerSecond < 0f) throw new ArgumentOutOfRangeException(nameof(drainPerSecond));
             if (float.IsNaN(recoveryPerSecond) || float.IsInfinity(recoveryPerSecond) || recoveryPerSecond < 0f) throw new ArgumentOutOfRangeException(nameof(recoveryPerSecond));
-            var stamina = session?.Stamina ?? throw new InvalidOperationException("No active match session is available.");
+            var match = CurrentMatch;
+            if (participantId < 0 || participantId >= match.Participants.Count) throw new ArgumentOutOfRangeException(nameof(participantId));
+            var stamina = session.StaminaAt(participantId);
             if (!sprintHeld) stamina.ExhaustedUntilRelease = false;
             stamina.IsSprinting = active && moving && sprintHeld && !stamina.ExhaustedUntilRelease && stamina.Current > 0f;
             if (!active) return;

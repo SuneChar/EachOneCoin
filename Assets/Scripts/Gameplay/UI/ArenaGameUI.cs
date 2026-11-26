@@ -112,7 +112,7 @@ namespace EachOneCoin.Gameplay
                     rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
                     rect.pivot = new Vector2(1f, 1f);
                     rect.anchoredPosition = new Vector2(-30f, -25f);
-                    rect.sizeDelta = new Vector2(360f, 130f);
+                    rect.sizeDelta = new Vector2(400f, 230f);
                 }
                 var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
                 if (networkCoinText != null && network != null && match.NetworkController != null && Time.unscaledTime >= nextNetworkInfo)
@@ -120,6 +120,11 @@ namespace EachOneCoin.Gameplay
                     nextNetworkInfo = Time.unscaledTime + 0.25f;
                     int slot = network.LocalSlot;
                     string text = $"金币：{match.NetworkController.ScoreAt(slot)}（测试）";
+                    text += $"\n血量：{match.NetworkController.HealthAt(slot)} / {match.NetworkController.MaxHealthAt(slot)}";
+                    text += $"\n体力：{Mathf.CeilToInt(match.NetworkController.StaminaAt(slot))} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
+                    var combatStatus = match.NetworkController.StatusAt(slot);
+                    if (combatStatus == ParticipantStatus.Respawning) text += "\n复活中";
+                    else if (combatStatus == ParticipantStatus.Lost) text += "\n已淘汰";
                     double elapsed = match.NetworkController.CoinTestElapsed;
                     if (elapsed >= 60d) text += "\n金币测试周期结束";
                     else if (elapsed >= 55d) text += "\n本局随机刷新结束";

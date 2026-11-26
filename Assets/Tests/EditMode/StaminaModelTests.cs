@@ -65,6 +65,22 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void Participants_HaveIndependentStaminaAndExhaustion()
+        {
+            var session = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>();
+            session.CreateMatch(2, 2, new[] { new GridPosition(0, 0), new GridPosition(1, 1) }, 3, 100f);
+            rules.TickStamina(0, 4f, true, true, true, 25f, 20f);
+            rules.TickStamina(1, 1f, true, true, true, 25f, 20f);
+            Assert.That(session.Stamina, Is.SameAs(session.StaminaAt(0)));
+            Assert.That(session.StaminaAt(0).Current, Is.Zero);
+            Assert.That(session.StaminaAt(1).Current, Is.EqualTo(75f));
+            Assert.That(session.StaminaAt(1).IsSprinting, Is.True);
+            rules.TickStamina(0, 1f, true, true, true, 25f, 20f);
+            Assert.That(session.StaminaAt(0).IsSprinting, Is.False);
+            Assert.That(session.StaminaAt(1).Current, Is.EqualTo(75f));
+        }
+
+        [Test]
         public void Inactive_FreezesStaminaAndDisablesSprint()
         {
             rules.TickStamina(1f, true, true, true, 25f, 20f);

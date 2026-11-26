@@ -39,6 +39,10 @@ namespace EachOneCoin.Gameplay
         public float OwnRegionSpeedMultiplier => Mathf.Max(0.01f, ownRegionSpeedMultiplier);
         public float EnemyRegionSpeedMultiplier => Mathf.Max(0.01f, enemyRegionSpeedMultiplier);
         public StaminaModel Stamina { get; private set; }
+        public StaminaModel StaminaAt(int id) => session.StaminaAt(id);
+        public float SprintStaminaPerSecond => Mathf.Max(0f, sprintStaminaPerSecond);
+        public float StaminaRecoveryPerSecond => Mathf.Max(0f, staminaRecoveryPerSecond);
+        public float SprintSpeedMultiplier => Mathf.Max(1f, sprintSpeedMultiplier);
         public float ObstacleInvulnerabilitySeconds => Mathf.Max(0f, obstacleInvulnerabilitySeconds);
         public float ObstacleKnockbackDistance => Mathf.Max(0f, obstacleKnockbackDistance);
         public float ObstacleKnockbackSeconds => Mathf.Max(0.01f, obstacleKnockbackSeconds);

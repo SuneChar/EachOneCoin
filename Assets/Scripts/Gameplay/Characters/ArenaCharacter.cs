@@ -276,7 +276,7 @@ namespace EachOneCoin.Gameplay
 
         private void TryHazard(Collider other)
         {
-            if (match == null || match.IsNetworkMovementTest || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
+            if (match == null || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
             var disguised = other.GetComponentInParent<DisguisedObstacle>();
             Vector3 center = transform.TransformPoint(controller.center);
             Vector3 direction = center - other.ClosestPoint(center);

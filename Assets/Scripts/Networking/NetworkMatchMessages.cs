@@ -5,7 +5,7 @@ namespace EachOneCoin.Networking
 {
     public struct MovementReady : NetworkMessage { }
     public struct MovementBegin : NetworkMessage { public byte occupied; public bool fillNpcs; }
-    public struct MovementInput : NetworkMessage { public Vector2 direction; }
+    public struct MovementInput : NetworkMessage { public Vector2 direction; public bool sprint; }
     public struct MovementSnapshot : NetworkMessage
     {
         public byte visible;

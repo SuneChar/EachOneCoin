@@ -217,8 +217,10 @@ namespace EachOneCoin.Gameplay
             for (int i = slots.Count - 1; i >= 0; i--)
             {
                 if (slots[i].Obstacle != obstacle) continue;
+                var removed = slots[i];
                 slots.RemoveAt(i);
                 Destroy(obstacle.gameObject);
+                PublishChange(1, removed);
                 return;
             }
         }
@@ -287,7 +289,7 @@ namespace EachOneCoin.Gameplay
                 if (delta.sqrMagnitude > 0.16f) continue;
                 if (slot.Kind == CoinKind.DisguisedObstacle)
                 {
-                    if (!match.IsNetworkMovementTest && slot.Obstacle != null) character.ContactDisguisedObstacle(slot.Obstacle);
+                    if (slot.Obstacle != null && (!match.IsNetworkMovementTest || NetworkServer.active)) character.ContactDisguisedObstacle(slot.Obstacle);
                     continue;
                 }
                 bool collected = slot.Kind == CoinKind.Random ? match.Rules.TryCollectRandomCoin(character.Id) : match.Rules.TryCollectCoin(character.Id, slot.Position);

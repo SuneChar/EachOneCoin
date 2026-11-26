@@ -6,16 +6,19 @@ namespace EachOneCoin
     public sealed class MatchSessionModel : AbstractModel
     {
         public MatchModel Match { get; private set; }
-        public StaminaModel Stamina { get; private set; }
+        private StaminaModel[] stamina;
+        public StaminaModel Stamina => stamina != null && stamina.Length > 0 ? stamina[0] : null;
+        public StaminaModel StaminaAt(int participantId) => stamina[participantId];
 
         protected override void OnInit() { }
 
         public MatchModel CreateMatch(int width, int height, IReadOnlyList<GridPosition> spawns, int maxHealth, float maxStamina, int coinsToWin = 10, float duration = 60f)
         {
             var match = new MatchModel(width, height, spawns, maxHealth, coinsToWin, duration);
-            var stamina = new StaminaModel(maxStamina);
+            var models = new StaminaModel[spawns.Count];
+            for (int i = 0; i < models.Length; i++) models[i] = new StaminaModel(maxStamina);
             Match = match;
-            Stamina = stamina;
+            stamina = models;
             return match;
         }
 
@@ -23,13 +26,13 @@ namespace EachOneCoin
         {
             if (match == null || !ReferenceEquals(Match, match)) return;
             Match = null;
-            Stamina = null;
+            stamina = null;
         }
 
         protected override void OnDeinit()
         {
             Match = null;
-            Stamina = null;
+            stamina = null;
         }
     }
 }
