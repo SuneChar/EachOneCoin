@@ -122,7 +122,6 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
-            coins.BeginFrame();
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
@@ -192,8 +191,6 @@ namespace EachOneCoin.Gameplay
         public bool IsHazard(Collider collider)
         {
             if (collider == null) return false;
-            var disguised = collider.GetComponentInParent<DisguisedObstacle>();
-            if (disguised != null) return !disguised.Consumed;
             var spike = collider.GetComponentInParent<TimedSpikeTrap>();
             if (spike != null && !spike.IsActive) return false;
             return collider.GetComponentInParent<LethalContact>() != null || collider.GetComponentInParent<LethalObstacle>() != null || spike != null;
@@ -202,11 +199,9 @@ namespace EachOneCoin.Gameplay
         public bool IsBlocked(GridPosition cell)
         {
             if (Model != null && Model.Grid.Contains(cell) && Model.Grid.IsBlocked(cell)) return true;
-            if (coins != null && coins.IsRevealedObstacle(cell)) return true;
             int count = Physics.OverlapSphereNonAlloc(grid.CellToWorld(cell) + Vector3.up * 0.5f, 0.42f, overlap, ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < count; i++)
             {
-                if (overlap[i] != null && overlap[i].GetComponentInParent<DisguisedObstacle>() != null) continue;
                 if (IsHazard(overlap[i])) return true;
             }
             return false;

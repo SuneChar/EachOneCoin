@@ -121,17 +121,6 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
-        public void RandomCoin_DoesNotRequireConnectedCell()
-        {
-            var match = CreateMatch();
-            rules.StartMatch();
-            Assert.That(match.Grid.IsConnected(0, P(2, 1)), Is.False);
-            Assert.That(rules.TryCollectRandomCoin(0), Is.True);
-            Assert.That(match.Participants[0].Coins, Is.EqualTo(1));
-            Assert.That(rules.TryCollectCoin(0, P(2, 1)), Is.False);
-        }
-
-        [Test]
         public void Victory_IsIndividualUntilEveryoneFinishes()
         {
             var match = CreateMatch(target: 1);

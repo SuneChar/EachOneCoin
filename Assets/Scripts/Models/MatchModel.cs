@@ -15,7 +15,7 @@ namespace EachOneCoin
         public float RemainingTime { get; internal set; }
         public int CoinsToWin { get; }
         public GridModel Grid { get; }
-        public IReadOnlyList<MineCycleModel> Mines { get; internal set; } = Array.AsReadOnly(Array.Empty<MineCycleModel>());
+        public IReadOnlyList<GridPosition> Mines { get; internal set; } = Array.AsReadOnly(Array.Empty<GridPosition>());
         public IReadOnlyList<ParticipantState> Participants => participantView;
 
         public MatchModel(int width, int height, IReadOnlyList<GridPosition> spawns, int maxHealth, int coinsToWin = 10, float duration = 60f)

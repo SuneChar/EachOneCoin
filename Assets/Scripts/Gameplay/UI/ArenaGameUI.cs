@@ -33,9 +33,10 @@ namespace EachOneCoin.Gameplay
         private readonly int[] lastMaxHealth = { -1, -1, -1, -1 };
         private readonly ParticipantStatus[] lastStatus = new ParticipantStatus[4];
         private bool firstRefresh = true;
-        private readonly bool[] lastMineConnected = new bool[5];
-        private readonly bool[] lastMineScattered = new bool[5];
-        private readonly int[] lastMineProgress = { -1, -1, -1, -1, -1 };
+        private bool lastUpcomingWarning;
+        private bool lastUpcomingConnected;
+        private int lastUpcomingMine = int.MaxValue;
+        private int lastUpcomingSeconds = -1;
         private float lastStamina = -1f;
 
         private void Awake()
@@ -166,29 +167,36 @@ namespace EachOneCoin.Gameplay
             }
             var localPlayer = model.Participants[0];
             bool mineChanged = changed;
-            for (int i = 0; i < model.Mines.Count; i++)
+            int upcomingMine = -1;
+            float upcomingSeconds = 0f;
+            bool upcomingWarning = false;
+            bool hasUpcoming = match.Coins != null && match.Coins.TryDescribeNextEvent(out upcomingMine, out upcomingSeconds, out upcomingWarning);
+            bool upcomingConnected = hasUpcoming && upcomingMine >= 0 && match.Coins.IsMineConnected(upcomingMine, 0);
+            int upcomingCountdown = hasUpcoming ? Mathf.CeilToInt(upcomingSeconds) : -1;
+            if (lastUpcomingMine != upcomingMine || lastUpcomingWarning != upcomingWarning || lastUpcomingSeconds != upcomingCountdown)
             {
-                bool isConnected = match.Coins.IsConnectedToMine(i, 0);
-                bool scattered = model.Mines[i].Scattered;
-                int progress = Mathf.FloorToInt((float)model.Mines[i].Progress(0));
-                if (lastMineConnected[i] != isConnected || lastMineScattered[i] != scattered || lastMineProgress[i] != progress) mineChanged = true;
-                lastMineConnected[i] = isConnected; lastMineScattered[i] = scattered; lastMineProgress[i] = progress;
+                mineChanged = true;
+                lastUpcomingMine = upcomingMine; lastUpcomingWarning = upcomingWarning; lastUpcomingSeconds = upcomingCountdown;
+            }
+            if (lastUpcomingConnected != upcomingConnected)
+            {
+                mineChanged = true;
+                lastUpcomingConnected = upcomingConnected;
             }
             if (mineChanged)
             {
                 if (localPlayer.Status != ParticipantStatus.Active) feedbackText.text = StatusText(localPlayer.Status);
                 else
                 {
-                    var text = new System.Text.StringBuilder("矿 ");
-                    for (int i = 0; i < model.Mines.Count; i++)
+                    var text = new System.Text.StringBuilder(hasUpcoming ? "下一批金币：" : "金币已全部产出");
+                    if (hasUpcoming)
                     {
-                        if (i > 0) text.Append("  ");
-                        text.Append(match.Coins.MineName(i)[0]).Append(':');
-                        if (lastMineScattered[i]) text.Append("已产出");
-                        else if (lastMineConnected[i]) text.Append(lastMineProgress[i]).Append("/5");
-                        else text.Append("--");
+                        if (upcomingMine >= 0) text.Append(match.Coins.MineName(upcomingMine)[0]).Append("矿 ").Append(upcomingConnected ? "已连通 " : "未连通 ");
+                        else text.Append("任一矿 ");
+                        text.Append(upcomingCountdown).Append('s');
+                        if (upcomingWarning) text.Append("（预警中）");
                     }
-                    text.Append("\n随机金币可直接拾取");
+                    text.Append("\n预警圈出现后 ").Append(CoinSpawnSchedule.WarningSeconds.ToString("0.#")).Append(" 秒生成金币，需涂色连通才能拾取");
                     feedbackText.text = text.ToString();
                 }
             }

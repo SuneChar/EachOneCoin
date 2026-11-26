@@ -39,28 +39,11 @@ namespace EachOneCoin.Tests
         private static object Call(object target, string method, params object[] args) => target.GetType().GetMethod(method).Invoke(target, args);
         private Component Character(int id) => (Component)characters.GetValue(id);
         private Vector3 CellToWorld(GridPosition cell) => (Vector3)Call(grid, "CellToWorld", cell);
-        private Component ActiveDisguisedObstacle()
-        {
-            var type = Type.GetType("EachOneCoin.Gameplay.DisguisedObstacle, Assembly-CSharp", true);
-            return coinRoot.Cast<Transform>().Select(t => t.GetComponent(type)).FirstOrDefault(c => c != null && !(bool)Get(c, "Consumed"));
-        }
-        private void SpawnDisguisedObstacle(GridPosition cell)
-        {
-            var type = coins.GetType();
-            var kind = Enum.Parse(type.GetNestedType("CoinKind", BindingFlags.NonPublic), "DisguisedObstacle");
-            type.GetMethod("Spawn", Private).Invoke(coins, new[] { (object)cell, kind });
-            Call(coins, "UpdateDisguisedObstacleVisibility");
-        }
-        private GridPosition ConnectCentralMine()
-        {
-            var spawn = model.Participants[0].Spawn;
-            int x = spawn.X, y = spawn.Y;
-            var cut = new GridPosition(x + 1, y);
-            while (x < 8) { x++; rules.TryPaint(0, new GridPosition(x, y)); }
-            while (y < 9) { y++; rules.TryPaint(0, new GridPosition(x, y)); }
-            while (x < 10) { x++; rules.TryPaint(0, new GridPosition(x, y)); }
-            return cut;
-        }
+        private int LastMineIndex() => (int)coins.GetType().GetField("lastMineIndex", Private).GetValue(coins);
+        private System.Collections.Generic.IEnumerable<Transform> WarningMarkers() => warningRoot.Cast<Transform>().Where(t => t.name == "Coin Warning");
+        private System.Collections.Generic.IEnumerable<Transform> MineCoins() => coinRoot.Cast<Transform>().Where(t => t.name == "Mine Coin");
+        private GridPosition[] MineCoinCells() => MineCoins().Select(t => (GridPosition)Call(grid, "WorldToCell", t.position)).ToArray();
+        private static int Manhattan(GridPosition a, GridPosition b) => Math.Abs(a.X - b.X) + Math.Abs(a.Y - b.Y);
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -138,7 +121,7 @@ namespace EachOneCoin.Tests
 
             Call(coins, "AdvanceMatch", 5f);
             yield return null;
-            var coin = coinRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Random Coin");
+            var coin = coinRoot.Cast<Transform>().FirstOrDefault(t => t.name == "Mine Coin");
             Assert.That(coin, Is.Not.Null);
             var shadowType = Type.GetType("EachOneCoin.Gameplay.GroundShadow, Assembly-CSharp", true);
             var component = coin.GetComponent(shadowType);
@@ -292,127 +275,40 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
-        public IEnumerator RandomCoin_SpawnsAtFiveAndIsReplacedAtFifteen()
+        public IEnumerator MineSchedule_WarnsThenDropsTwoDispersedCoins()
         {
-            Call(coins, "AdvanceMatch", 4f);
-            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.Zero);
-            Call(coins, "AdvanceMatch", 1f);
-            var first = coinRoot.Cast<Transform>().Single(t => t.name == "Random Coin");
-            Call(coins, "AdvanceMatch", 10f);
+            Assert.That(model.Mines.Count, Is.EqualTo(4));
+            Call(coins, "AdvanceMatch", 3.6f);
+            Assert.That(MineCoinCells().Length, Is.Zero, "Coins must not appear before the scheduled event.");
+            Assert.That(WarningMarkers().Count(), Is.EqualTo(2), "Both coins of an event are announced in advance.");
+            int warnedMine = LastMineIndex();
+            Assert.That(warnedMine, Is.InRange(0, 3));
+            Assert.That(WarningMarkers().All(m => Manhattan((GridPosition)Call(grid, "WorldToCell", m.position), model.Mines[warnedMine]) <= 5), Is.True);
+            Call(coins, "AdvanceMatch", 1.4f);
+            var cells = MineCoinCells();
+            Assert.That(cells.Length, Is.EqualTo(2));
+            Assert.That(cells[0], Is.Not.EqualTo(cells[1]));
+            Assert.That(Manhattan(cells[0], cells[1]), Is.GreaterThanOrEqualTo(2), "Coins of one event must not be neighbours.");
+            Assert.That(cells.All(c => Manhattan(c, model.Mines[warnedMine]) >= 2), Is.True, "Coins must stay off the cells next to the mine.");
             yield return null;
-            yield return null;
-            Assert.That(first == null, Is.True);
-            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.EqualTo(1));
+            Assert.That(WarningMarkers().Count(), Is.Zero, "Warnings clear once the coins spawn.");
         }
 
         [UnityTest]
-        public IEnumerator DisguisedObstacle_SpawnsWithCoinAndReplacesOnNextCycle()
+        public IEnumerator MineSchedule_DeliversSixteenCoinsBeforeFortyAndTwentySixInTotal()
+        {
+            Call(coins, "AdvanceMatch", 40f);
+            Assert.That(MineCoinCells().Length, Is.EqualTo(16));
+            Call(coins, "AdvanceMatch", 20f);
+            Assert.That(MineCoinCells().Length, Is.EqualTo(26));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator MineCoin_RequiresConnectedPaint()
         {
             Call(coins, "AdvanceMatch", 5f);
-            var first = ActiveDisguisedObstacle();
-            Assert.That(first, Is.Not.Null);
-            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.EqualTo(1));
-            var real = coinRoot.Cast<Transform>().Single(t => t.name == "Random Coin");
-            Assert.That(Vector3.Distance(real.position, first.transform.position), Is.GreaterThan(0.5f));
-            Call(coins, "AdvanceMatch", 10f);
-            Assert.That(Get(first, "Consumed"), Is.EqualTo(true));
-            var next = ActiveDisguisedObstacle();
-            Assert.That(next, Is.Not.Null.And.Not.SameAs(first));
-            yield return null;
-            yield return null;
-            Assert.That(first == null, Is.True);
-        }
-
-        [UnityTest]
-        public IEnumerator DisguisedObstacle_RevealsAtManhattanTwoAndHidesAfterLeaving()
-        {
-            var cell = new GridPosition(16, 8);
-            SpawnDisguisedObstacle(cell);
-            var obstacle = ActiveDisguisedObstacle();
-            var far = new GridPosition(1, 19);
-            for (int i = 0; i < characters.Length; i++) Call(Character(i), "Teleport", CellToWorld(far));
-            Call(coins, "UpdateDisguisedObstacleVisibility");
-            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false));
-            Assert.That(Call(coins, "HasCoin", cell), Is.EqualTo(true));
-            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(false));
-            Call(Character(0), "Teleport", CellToWorld(new GridPosition(cell.X + 1, cell.Y + 2)));
-            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false), "Manhattan distance 3 must stay disguised.");
-            Call(Character(0), "Teleport", CellToWorld(new GridPosition(cell.X + 1, cell.Y + 1)));
-            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(true), "Manhattan distance 2 must reveal the obstacle.");
-            Assert.That(Call(coins, "HasCoin", cell), Is.EqualTo(false));
-            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(true));
-            var renderer = obstacle.GetComponentInChildren<Renderer>();
-            var block = new MaterialPropertyBlock();
-            renderer.GetPropertyBlock(block);
-            Assert.That(block.GetColor("_BaseColor"), Is.EqualTo(Color.black));
-            Call(Character(0), "Teleport", CellToWorld(far));
-            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false));
-            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(false));
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator DisguisedObstacle_ContactDamagesOnceAndProtectionStillConsumesNext()
-        {
-            var character = Character(0);
-            SpawnDisguisedObstacle(new GridPosition(16, 8));
-            var first = ActiveDisguisedObstacle();
-            Call(character, "ContactDisguisedObstacle", first);
-            Assert.That(Get(first, "Consumed"), Is.EqualTo(true));
-            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
-            Assert.That(model.Participants[0].Coins, Is.Zero);
-            Call(Character(1), "ContactDisguisedObstacle", first);
-            Assert.That(model.Participants[1].MaxHealth, Is.EqualTo(3), "The same obstacle cannot hit twice.");
-            SpawnDisguisedObstacle(new GridPosition(17, 8));
-            var second = ActiveDisguisedObstacle();
-            Call(character, "ContactDisguisedObstacle", second);
-            Assert.That(Get(second, "Consumed"), Is.EqualTo(true));
-            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2), "Protection prevents damage, not disappearance.");
-            Assert.That(model.Participants[0].Coins, Is.Zero);
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator DisguisedObstacle_MovementContactDoesNotAwardCoin()
-        {
-            var cell = new GridPosition(16, 1);
-            SpawnDisguisedObstacle(cell);
-            var obstacle = ActiveDisguisedObstacle();
-            var character = Character(0);
-            Call(character, "Teleport", CellToWorld(new GridPosition(14, 1)));
-            Physics.SyncTransforms();
-            Call(character, "Move", Vector3.right * 2f);
-            Assert.That(Get(obstacle, "Consumed"), Is.EqualTo(true));
-            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
-            Assert.That(model.Participants[0].Coins, Is.Zero);
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator DisguisedObstacle_NpcTargetsDisguiseButAvoidsRevealedCell()
-        {
-            foreach (var mine in model.Mines) mine.Advance(5d, new[] { true, false, false, false });
-            var cell = new GridPosition(16, 1);
-            SpawnDisguisedObstacle(cell);
-            var obstacle = ActiveDisguisedObstacle();
-            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false));
-            var path = new System.Collections.Generic.List<GridPosition>();
-            var find = npcs.GetType().GetMethod("FindPath", Private);
-            Assert.That(find.Invoke(npcs, new object[] { 1, false, path }), Is.EqualTo(true));
-            Assert.That(path.Last(), Is.EqualTo(cell));
-            Call(Character(1), "Teleport", CellToWorld(new GridPosition(18, 1)));
-            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(true));
-            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(true));
-            path.Clear();
-            Assert.That(find.Invoke(npcs, new object[] { 1, false, path }), Is.EqualTo(false));
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator RandomCoin_CanBeCollectedWithoutConnectedPaint()
-        {
-            Call(coins, "AdvanceMatch", 5f);
-            var coin = coinRoot.Cast<Transform>().Single(t => t.name == "Random Coin");
+            var coin = MineCoins().First();
             var cell = (GridPosition)Call(grid, "WorldToCell", coin.position);
             Assert.That(model.Grid.IsConnected(0, cell), Is.False);
             var character = Character(0);
@@ -423,31 +319,7 @@ namespace EachOneCoin.Tests
             character.transform.position = position;
             controller.enabled = true;
             Call(coins, "TryCollect", character);
-            Assert.That(model.Participants[0].Coins, Is.EqualTo(1));
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator Mine_ConnectedForFiveSecondsScattersThreeDistinctCoins()
-        {
-            Assert.That(model.Mines.Count, Is.EqualTo(5));
-            Call(coins, "BeginFrame");
-            ConnectCentralMine();
-            Call(coins, "AdvanceMatch", 1f);
-            Assert.That(model.Mines[0].Progress(0), Is.Zero, "A connection made during the frame must not receive time from before it existed.");
-            Call(coins, "BeginFrame");
-            Call(coins, "AdvanceMatch", 4f);
-            Assert.That(model.Mines[0].Scattered, Is.False);
-            Call(coins, "BeginFrame");
-            Call(coins, "AdvanceMatch", 1f);
-            Assert.That(model.Mines[0].Scattered, Is.True);
-            var positions = coinRoot.Cast<Transform>().Where(t => t.name == "Mine Coin").Select(t => (GridPosition)Call(grid, "WorldToCell", t.position)).ToArray();
-            Assert.That(positions.Length, Is.EqualTo(3));
-            Assert.That(positions.Distinct().Count(), Is.EqualTo(3));
-            Assert.That(positions.All(p => (bool)Call(match, "IsSpawn", p) == false), Is.True);
-            Call(coins, "BeginFrame");
-            Call(coins, "AdvanceMatch", 4f);
-            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Mine Coin"), Is.EqualTo(3), "Mine coins must remain after the next rotation.");
+            Assert.That(model.Participants[0].Coins, Is.Zero, "A coin outside the connected region cannot be collected.");
             yield return null;
         }
 
@@ -455,7 +327,7 @@ namespace EachOneCoin.Tests
         public IEnumerator FixedMine_BlocksMovementAndKnockbackWithoutDamage()
         {
             var character = Character(0);
-            var mine = model.Mines[0].Position;
+            var mine = model.Mines[0];
             Assert.That((bool)Call(match, "IsBlocked", mine), Is.True);
             Call(character, "Teleport", CellToWorld(new GridPosition(mine.X, mine.Y - 2)));
             Physics.SyncTransforms();
@@ -476,56 +348,21 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
-        public IEnumerator FixedMines_ProduceIndependentlyInSameCycle()
+        public IEnumerator Mines_KeepFourFixedPositionsAndNeverRepeatConsecutively()
         {
-            var spawn = model.Participants[0].Spawn;
-            int x = spawn.X, y = spawn.Y;
-            while (x < 9) { x++; rules.TryPaint(0, new GridPosition(x, y)); }
-            while (y < 10) { y++; rules.TryPaint(0, new GridPosition(x, y)); }
-            Call(coins, "BeginFrame");
-            Call(coins, "AdvanceMatch", 5f);
-            Assert.That(model.Mines[0].Scattered, Is.True);
-            Assert.That(model.Mines[1].Scattered, Is.True);
-            Assert.That(model.Mines[2].Scattered, Is.False);
-            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Mine Coin"), Is.EqualTo(6));
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator Mines_StayFixedAcrossCyclesAndDoNotResetAtSixty()
-        {
-            Assert.That(model.Mines.Count, Is.EqualTo(5));
-            var positions = model.Mines.Select(m => m.Position).ToArray();
-            double initialElapsed = model.Mines[0].Elapsed;
+            Assert.That(model.Mines.Count, Is.EqualTo(4));
+            var positions = model.Mines.ToArray();
+            Assert.That(positions.Distinct().Count(), Is.EqualTo(4));
+            Assert.That(LastMineIndex(), Is.EqualTo(-1));
+            var chosen = new System.Collections.Generic.List<int>();
             for (int i = 0; i < 5; i++)
             {
-                Call(coins, "BeginFrame");
-                Call(coins, "AdvanceMatch", 10f);
-                Assert.That(model.Mines.Select(m => m.Position), Is.EqualTo(positions));
-                Assert.That(model.Mines.All(m => Math.Abs(m.Elapsed - initialElapsed) < 0.0001), Is.True);
+                Call(coins, "AdvanceMatch", 5f);
+                chosen.Add(LastMineIndex());
+                Assert.That(model.Mines.ToArray(), Is.EqualTo(positions));
             }
-            Call(coins, "BeginFrame");
-            Call(coins, "AdvanceMatch", 10f);
-            Assert.That(model.Mines.Select(m => m.Position), Is.EqualTo(positions));
-            Assert.That(model.Mines.All(m => Math.Abs(m.Elapsed - 10d) < 0.0001), Is.True);
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator Mine_CutAndReconnectInSameFrameResetsProgress()
-        {
-            var cut = ConnectCentralMine();
-            Call(coins, "BeginFrame");
-            Call(coins, "AdvanceMatch", 3f);
-            Assert.That(model.Mines[0].Progress(0), Is.EqualTo(3d).Within(0.0001));
-            Call(coins, "BeginFrame");
-            Assert.That(rules.TryPaint(1, cut), Is.True);
-            Call(coins, "NotifyGridChanged");
-            Assert.That(rules.TryPaint(0, cut), Is.True);
-            Call(coins, "NotifyGridChanged");
-            Call(coins, "AdvanceMatch", 0.1f);
-            Assert.That(model.Mines[0].Progress(0), Is.Zero);
-            Assert.That(model.Mines[0].Scattered, Is.False);
+            for (int i = 1; i < chosen.Count; i++)
+                Assert.That(chosen[i], Is.Not.EqualTo(chosen[i - 1]), "Consecutive events must use different mines.");
             yield return null;
         }
 
@@ -621,16 +458,15 @@ namespace EachOneCoin.Tests
         [UnityTest]
         public IEnumerator Npc_RoutesAroundFixedMineToCoin()
         {
-            foreach (var mine in model.Mines) mine.Advance(5d, new[] { true, false, false, false });
-            var start = new GridPosition(8, 10);
-            var target = new GridPosition(12, 10);
+            var start = new GridPosition(5, 7);
+            var target = new GridPosition(5, 13);
             Call(Character(1), "Teleport", CellToWorld(start));
             Call(coins, "Drop", target, 1);
             Physics.SyncTransforms();
             var path = new System.Collections.Generic.List<GridPosition>();
             bool found = (bool)npcs.GetType().GetMethod("FindPath", Private).Invoke(npcs, new object[] { 1, false, path });
             Assert.That(found, Is.True);
-            Assert.That(path.Count, Is.GreaterThan(4));
+            Assert.That(path.Count, Is.GreaterThan(6), "The west mine at (5,10) forces a detour around its cell.");
             Assert.That(path.Last(), Is.EqualTo(target));
             Assert.That(path.All(p => !model.Grid.IsBlocked(p)), Is.True);
             yield return null;

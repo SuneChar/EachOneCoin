@@ -219,12 +219,7 @@ namespace EachOneCoin.Gameplay
             var cell = match.Grid.WorldToCell(transform.position);
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
-            if (match.Rules.TryPaint(Id, cell))
-            {
-                match.Grid.Refresh(match.Model.Grid);
-                if (match.Coins != null) match.Coins.NotifyGridChanged();
-            }
-            if (match.Coins != null) match.Coins.UpdateDisguisedObstacleVisibility();
+            if (match.Rules.TryPaint(Id, cell)) match.Grid.Refresh(match.Model.Grid);
         }
 
         private void UpdateFacing(float deltaTime)
@@ -253,21 +248,11 @@ namespace EachOneCoin.Gameplay
         private void OnTriggerStay(Collider other) => TryHazard(other);
         private void OnTriggerExit(Collider other) => touching.Remove(other);
 
-        public void ContactDisguisedObstacle(DisguisedObstacle obstacle)
-        {
-            if (obstacle != null) TryHazard(obstacle.ContactCollider);
-        }
-
         private void TryHazard(Collider other)
         {
             if (match == null || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
-            var disguised = other.GetComponentInParent<DisguisedObstacle>();
             Vector3 center = transform.TransformPoint(controller.center);
             Vector3 direction = center - other.ClosestPoint(center);
-            if (disguised != null)
-            {
-                if (match.IsPaused || match.Model.Status != MatchStatus.Playing || match.Model.Participants[Id].Status != ParticipantStatus.Active || !disguised.TryConsume()) return;
-            }
             touching.Add(other);
             if (obstacleProtection > 0f || !match.HitObstacle(Id)) return;
             if (match.Model.Participants[Id].Status != ParticipantStatus.Active) return;

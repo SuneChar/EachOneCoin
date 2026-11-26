@@ -53,13 +53,9 @@ namespace EachOneCoin
                 foreach (var participant in match.Participants)
                     if (participant.Spawn.Equals(position)) throw new ArgumentException("A mine cannot occupy a spawn.", nameof(positions));
             }
-            var mines = new MineCycleModel[positions.Count];
-            for (int i = 0; i < mines.Length; i++)
-            {
-                match.Grid.SetBlocked(positions[i], true);
-                mines[i] = new MineCycleModel(match.Participants.Count);
-                mines[i].BeginCycle(positions[i]);
-            }
+            var mines = new GridPosition[positions.Count];
+            for (int i = 0; i < mines.Length; i++) mines[i] = positions[i];
+            foreach (var position in mines) match.Grid.SetBlocked(position, true);
             match.Mines = Array.AsReadOnly(mines);
         }
 
@@ -98,12 +94,6 @@ namespace EachOneCoin
             var match = CurrentMatch;
             if (!IsActive(match, participantId) || !match.Grid.IsConnected(participantId, position)) return false;
             return AwardCoin(match, participantId);
-        }
-
-        public bool TryCollectRandomCoin(int participantId)
-        {
-            var match = CurrentMatch;
-            return IsActive(match, participantId) && AwardCoin(match, participantId);
         }
 
         private static bool AwardCoin(MatchModel match, int participantId)
