@@ -12,6 +12,9 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Transform warningRoot;
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
         [SerializeField, Min(0.1f)] private float warningSeconds = 1f;
+        // Magnet radius in cells; a coin in the character's own cell always counts.
+        [SerializeField, Min(0.1f)] private float coinPickupRadius = 0.8f;
+        private const float ObstacleContactRadiusSquared = 0.16f;
         private enum CoinKind { Random, Mine, Dropped, DisguisedObstacle }
         private sealed class Slot { public GridPosition Position; public CoinKind Kind; public GameObject Coin; public DisguisedObstacle Obstacle; }
         private readonly List<Slot> slots = new List<Slot>();
@@ -269,17 +272,22 @@ namespace EachOneCoin.Gameplay
         public void TryCollect(ArenaCharacter character)
         {
             var position = character.transform.position;
+            float pickupRadius = Mathf.Max(0f, coinPickupRadius);
+            float pickupRadiusSquared = pickupRadius * pickupRadius;
+            var cell = match.Grid.WorldToCell(position);
             for (int i = slots.Count - 1; i >= 0; i--)
             {
                 var slot = slots[i];
                 if (slot.Coin == null) continue;
                 var delta = position - match.Grid.CellToWorld(slot.Position); delta.y = 0f;
-                if (delta.sqrMagnitude > 0.16f) continue;
                 if (slot.Kind == CoinKind.DisguisedObstacle)
                 {
+                    if (delta.sqrMagnitude > ObstacleContactRadiusSquared) continue;
                     if (slot.Obstacle != null) character.ContactDisguisedObstacle(slot.Obstacle);
                     continue;
                 }
+                // Same cell always counts, so standing in a corner of the coin's cell cannot miss it.
+                if (!cell.Equals(slot.Position) && delta.sqrMagnitude > pickupRadiusSquared) continue;
                 bool collected = slot.Kind == CoinKind.Random ? match.Rules.TryCollectRandomCoin(character.Id) : match.Rules.TryCollectCoin(character.Id, slot.Position);
                 if (!collected) continue;
                 Destroy(slot.Coin);

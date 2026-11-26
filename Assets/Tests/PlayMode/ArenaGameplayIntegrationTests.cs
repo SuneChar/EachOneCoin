@@ -51,6 +51,21 @@ namespace EachOneCoin.Tests
             type.GetMethod("Spawn", Private).Invoke(coins, new[] { (object)cell, kind });
             Call(coins, "UpdateDisguisedObstacleVisibility");
         }
+        private void SpawnCoin(GridPosition cell)
+        {
+            var type = coins.GetType();
+            var kind = Enum.Parse(type.GetNestedType("CoinKind", BindingFlags.NonPublic), "Random");
+            type.GetMethod("Spawn", Private).Invoke(coins, new[] { (object)cell, kind });
+        }
+        private void PlaceCharacter(Component character, Vector3 position)
+        {
+            var controller = character.GetComponent<CharacterController>();
+            controller.enabled = false;
+            position.y = character.transform.position.y;
+            character.transform.position = position;
+            controller.enabled = true;
+            Physics.SyncTransforms();
+        }
         private GridPosition ConnectCentralMine()
         {
             var spawn = model.Participants[0].Spawn;
@@ -424,6 +439,33 @@ namespace EachOneCoin.Tests
             controller.enabled = true;
             Call(coins, "TryCollect", character);
             Assert.That(model.Participants[0].Coins, Is.EqualTo(1));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Coin_MagnetCollectsAtCellCornerAndNearEdgeButNotFar()
+        {
+            var character = Character(0);
+            int before = model.Participants[0].Coins;
+
+            var corner = new GridPosition(18, 2);
+            SpawnCoin(corner);
+            PlaceCharacter(character, CellToWorld(corner) + new Vector3(0.45f, 0f, 0.45f));
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(before + 1), "Same cell corner must still collect.");
+
+            var near = new GridPosition(18, 6);
+            SpawnCoin(near);
+            PlaceCharacter(character, CellToWorld(near) + new Vector3(0.7f, 0f, 0f));
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(before + 2), "A coin within 0.8 cells must be collected.");
+
+            var far = new GridPosition(18, 10);
+            SpawnCoin(far);
+            PlaceCharacter(character, CellToWorld(far) + new Vector3(0.9f, 0f, 0f));
+            Call(coins, "TryCollect", character);
+            Assert.That(model.Participants[0].Coins, Is.EqualTo(before + 2), "A coin outside 0.8 cells must stay.");
+            Assert.That((bool)Call(coins, "HasCoin", far), Is.True);
             yield return null;
         }
 
