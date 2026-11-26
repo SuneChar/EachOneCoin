@@ -342,6 +342,19 @@ namespace EachOneCoin.Networking
             if (NetworkServer.active) SendToReadyClients(new AttackEvent { slot = (byte)slot, direction = direction });
         }
 
+        public void BroadcastDamage(int slot, bool obstacle)
+        {
+            if (NetworkServer.active && started && slot >= 0 && slot < RoomState.Capacity)
+                SendToReadyClients(new DamageEvent { slot = (byte)slot, kind = obstacle ? (byte)0 : (byte)1 });
+        }
+
+        public void ReceiveDamageEvent(DamageEvent message)
+        {
+            if (NetworkServer.active || !started || match == null || network == null || network.ClientResuming ||
+                message.slot >= RoomState.Capacity || message.kind > 1 || message.slot != network.LocalSlot) return;
+            match.NotifyNetworkDamage(message.slot, message.kind == 0);
+        }
+
         public void ReceiveAttackEvent(AttackEvent message)
         {
             if (NetworkServer.active || match == null || message.slot >= RoomState.Capacity) return;

@@ -5,6 +5,7 @@ namespace EachOneCoin.Networking
 {
     public struct AttackRequest : NetworkMessage { public uint sequence; public Vector3 direction; }
     public struct AttackEvent : NetworkMessage { public byte slot; public Vector3 direction; }
+    public struct DamageEvent : NetworkMessage { public byte slot; public byte kind; }
     public struct CombatParticipant
     {
         public byte status;

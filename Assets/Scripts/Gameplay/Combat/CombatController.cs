@@ -55,6 +55,7 @@ namespace EachOneCoin.Gameplay
                 direction.y = 0f;
                 if (!IsWithinAttack(direction, aimDirection, AttackRange, AttackAngle)) continue;
                 if (!match.Rules.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) continue;
+                match.NotifyAttackHit(target);
                 if (match.Model.Participants[target].Status != ParticipantStatus.Respawning)
                 {
                     if (direction.sqrMagnitude < 0.000001f) direction = aimDirection;

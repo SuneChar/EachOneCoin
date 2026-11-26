@@ -289,6 +289,11 @@ namespace EachOneCoin.Networking
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.ReceiveAttackEvent(message);
             });
+            NetworkClient.RegisterHandler<DamageEvent>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.ReceiveDamageEvent(message);
+            });
             NetworkClient.RegisterHandler<MineStatusMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();

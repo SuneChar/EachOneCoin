@@ -51,16 +51,30 @@ namespace EachOneCoin.Gameplay
             RefreshPanels();
         }
 
-        private void OnEnable() { if (match != null) match.ObstacleHit += OnObstacleHit; }
-        private void OnDisable() { if (match != null) match.ObstacleHit -= OnObstacleHit; }
+        private void OnEnable() { if (match != null) { match.ObstacleHit += OnObstacleHit; match.AttackHit += OnAttackHit; } }
+        private void OnDisable() { if (match != null) { match.ObstacleHit -= OnObstacleHit; match.AttackHit -= OnAttackHit; } }
         private void OnDestroy() { if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged; }
 
         private void OnObstacleHit(int id)
         {
-            if (id != 0) return;
+            if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             hitTextRemaining = 0.8f;
             UpdateHitFrame();
+        }
+
+        private void OnAttackHit(int id)
+        {
+            if (!IsLocalParticipant(id)) return;
+            hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
+            UpdateHitFrame();
+        }
+
+        private bool IsLocalParticipant(int id)
+        {
+            if (match == null || !match.IsNetworkMovementTest) return id == 0;
+            var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+            return network != null && id == network.LocalSlot;
         }
 
         private void CreateHitFrame()
@@ -98,6 +112,8 @@ namespace EachOneCoin.Gameplay
             if (match == null || match.Model == null) return;
             if (match.IsNetworkMovementTest)
             {
+                if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
+                if (hitTextRemaining > 0f) hitTextRemaining = Mathf.Max(0f, hitTextRemaining - Time.deltaTime);
                 UpdateNetworkUI();
                 return;
             }
@@ -225,7 +241,7 @@ namespace EachOneCoin.Gameplay
             if (!firstRefresh && !Mirror.NetworkServer.active && !network.ClientResuming && coins > lastCoins[slot] && gameAudio != null) gameAudio.PlayCoin();
             lastCoins[slot] = coins;
             coinText.text = $"金币：{coins} / {match.Model.CoinsToWin}";
-            healthText.text = $"生命：{health} / {maxHealth}";
+            healthText.text = $"生命：{health} / {maxHealth}" + (hitTextRemaining > 0f ? "  上限 -1" : "");
             var healthRect = healthFill.rectTransform;
             healthRect.anchorMax = new Vector2(Mathf.Clamp01((float)health / match.InitialHealth), healthRect.anchorMax.y);
             float stamina = state.StaminaAt(slot);

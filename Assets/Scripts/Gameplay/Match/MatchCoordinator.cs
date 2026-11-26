@@ -48,6 +48,7 @@ namespace EachOneCoin.Gameplay
         public float ObstacleKnockbackSeconds => Mathf.Max(0.01f, obstacleKnockbackSeconds);
         public int InitialHealth => Mathf.Max(1, initialHealth);
         public event System.Action<int> ObstacleHit;
+        public event System.Action<int> AttackHit;
         public bool IsPaused { get; private set; }
         public bool IsNetworkMovementTest { get; private set; }
         public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
@@ -205,8 +206,25 @@ namespace EachOneCoin.Gameplay
             if (IsPaused || !Rules.TryObstacleContact(id)) return false;
             if (id == 0 && gameAudio != null) gameAudio.PlayObstacleHit();
             ObstacleHit?.Invoke(id);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active) NetworkController.BroadcastDamage(id, true);
             if (Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
             return true;
+        }
+
+        public void NotifyAttackHit(int id)
+        {
+            AttackHit?.Invoke(id);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active) NetworkController.BroadcastDamage(id, false);
+        }
+
+        public void NotifyNetworkDamage(int id, bool obstacle)
+        {
+            if (obstacle)
+            {
+                if (gameAudio != null) gameAudio.PlayObstacleHit();
+                ObstacleHit?.Invoke(id);
+            }
+            else AttackHit?.Invoke(id);
         }
 
         public bool IsHazard(Collider collider)
