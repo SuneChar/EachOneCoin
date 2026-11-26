@@ -35,6 +35,15 @@ namespace EachOneCoin.Gameplay
         private AttackVisual attackVisual;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
+        public float RegionSpeedMultiplier
+        {
+            get
+            {
+                if (match == null || match.Model == null || match.Grid == null) return 1f;
+                var owner = match.Model.Grid.OwnerAt(match.Grid.WorldToCell(transform.position));
+                return !owner.HasValue ? 1f : owner.Value == Id ? match.OwnRegionSpeedMultiplier : match.EnemyRegionSpeedMultiplier;
+            }
+        }
         public bool IsKnockedBack => knockbackTime > 0f || attackKnockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
         public int LastTeleportFrame { get; private set; } = -1;
         private int lastKnockbackFrame = -1;
@@ -123,14 +132,15 @@ namespace EachOneCoin.Gameplay
                 movementVelocity = Vector3.zero;
                 return;
             }
-            movementVelocity = PlanarVelocity.Advance(movementVelocity, desiredVelocity, match.MovementAcceleration, match.MovementDeceleration, deltaTime);
+            desiredVelocity = PlanarVelocity.Cardinal(desiredVelocity, Vector3.zero) * RegionSpeedMultiplier;
+            movementVelocity = PlanarVelocity.AdvanceCardinal(movementVelocity, desiredVelocity, match.MovementAcceleration, match.MovementDeceleration, deltaTime);
             Move(movementVelocity * Mathf.Max(0f, deltaTime));
         }
 
         public void Move(Vector3 delta)
         {
             if (!controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active || IsKnockedBack) return;
-            delta.y = 0f;
+            delta = PlanarVelocity.Cardinal(delta, Vector3.zero);
             if (delta.sqrMagnitude > 0.000001f) lastMovement = delta;
             if (arrow != null && delta.sqrMagnitude > 0.000001f) arrow.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
             if (delta.x != 0f) desiredFacing = delta.x < 0f ? -1 : 1;

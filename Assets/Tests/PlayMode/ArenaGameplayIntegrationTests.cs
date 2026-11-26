@@ -310,6 +310,95 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator NormalMovement_UsesOnlyOneAxisWhenStartingAndTurning()
+        {
+            var character = Character(0);
+            Call(character, "Teleport", CellToWorld(new GridPosition(2, 2)));
+            Physics.SyncTransforms();
+            var start = character.transform.position;
+            Call(character, "MoveWithVelocity", new Vector3(2f, 0f, 2f), 0.1f);
+            var afterFirst = character.transform.position;
+            Assert.That(afterFirst.x, Is.GreaterThan(start.x));
+            Assert.That(afterFirst.z, Is.EqualTo(start.z).Within(0.001f));
+            Call(character, "MoveWithVelocity", Vector3.forward * 2f, 0.1f);
+            var afterTurn = character.transform.position;
+            Assert.That(afterTurn.x, Is.EqualTo(afterFirst.x).Within(0.001f));
+            Assert.That(afterTurn.z, Is.GreaterThan(afterFirst.z));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator RegionSpeed_TracksCurrentOwnershipAndMultipliesSprint()
+        {
+            var character = Character(0);
+            var cell = new GridPosition(2, 2);
+            Call(character, "Teleport", CellToWorld(cell));
+            Physics.SyncTransforms();
+            Assert.That((float)Get(character, "RegionSpeedMultiplier"), Is.EqualTo(1.2f).Within(0.001f));
+            Assert.That(rules.TryPaint(1, cell), Is.True);
+            Assert.That((float)Get(character, "RegionSpeedMultiplier"), Is.EqualTo(0.8f).Within(0.001f));
+            Call(character, "MoveWithVelocity", Vector3.right * 3f, 0.1f);
+            Assert.That(((Vector3)Get(character, "MovementVelocity")).x, Is.EqualTo(2.4f).Within(0.001f));
+            Assert.That(rules.TryPaint(0, cell), Is.True);
+            Assert.That((float)Get(character, "RegionSpeedMultiplier"), Is.EqualTo(1.2f).Within(0.001f));
+
+            var neutral = new GridPosition(4, 2);
+            var controller = character.GetComponent<CharacterController>();
+            controller.enabled = false;
+            var position = CellToWorld(neutral);
+            position.y = character.transform.position.y;
+            character.transform.position = position;
+            controller.enabled = true;
+            Assert.That(model.Grid.OwnerAt(neutral), Is.Null);
+            Assert.That((float)Get(character, "RegionSpeedMultiplier"), Is.EqualTo(1f).Within(0.001f));
+            Physics.SyncTransforms();
+            Call(character, "MoveWithVelocity", Vector3.right * 2f, 0.05f);
+            Assert.That(model.Grid.OwnerAt(neutral), Is.EqualTo(0));
+            Assert.That((float)Get(character, "RegionSpeedMultiplier"), Is.EqualTo(1.2f).Within(0.001f));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_UsesSameRegionSpeedRules()
+        {
+            var npc = Character(1);
+            var cell = new GridPosition(10, 2);
+            Call(npc, "Teleport", CellToWorld(cell));
+            Assert.That((float)Get(npc, "RegionSpeedMultiplier"), Is.EqualTo(1.2f).Within(0.001f));
+            Assert.That(rules.TryPaint(0, cell), Is.True);
+            Assert.That((float)Get(npc, "RegionSpeedMultiplier"), Is.EqualTo(0.8f).Within(0.001f));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_TurnsAtWaypointWithoutDiagonalMovement()
+        {
+            var spawn = model.Participants[1].Spawn;
+            int dx = spawn.X < 10 ? 1 : -1;
+            int dy = spawn.Y < 10 ? 1 : -1;
+            var corner = new GridPosition(spawn.X + dx, spawn.Y);
+            var target = new GridPosition(spawn.X + dx, spawn.Y + dy);
+            Assert.That((bool)Call(match, "IsBlocked", corner), Is.False);
+            Assert.That((bool)Call(match, "IsBlocked", target), Is.False);
+            Call(coins, "Drop", target, 1);
+            var paths = (System.Collections.IList[])npcs.GetType().GetField("paths", Private).GetValue(npcs);
+            paths[1].Clear();
+            paths[1].Add(corner);
+            paths[1].Add(target);
+            var npc = Character(1);
+            float deadline = Time.realtimeSinceStartup + 5f;
+            while (model.Grid.OwnerAt(target) != 1 && Time.realtimeSinceStartup < deadline)
+            {
+                Vector3 before = npc.transform.position;
+                Call(npcs, "Tick", 1, 0.05f);
+                Vector3 delta = npc.transform.position - before;
+                Assert.That(Mathf.Abs(delta.x) < 0.001f || Mathf.Abs(delta.z) < 0.001f, Is.True, "NPC moved diagonally.");
+                yield return null;
+            }
+            Assert.That(model.Grid.OwnerAt(target), Is.EqualTo(1), "NPC did not reach the cell after turning.");
+        }
+
+        [UnityTest]
         public IEnumerator Npc_MovesTowardCoinAndPaintsNewCell()
         {
             var spawn = model.Participants[1].Spawn;

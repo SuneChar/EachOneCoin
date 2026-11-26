@@ -88,7 +88,7 @@ namespace EachOneCoin.Gameplay
                 if (match.Characters[i].IsKnockedBack) knockbackSinceSample[i] = true;
                 if (match.Characters[i].LastTeleportFrame == Time.frameCount || match.Model.Participants[i].Status != previousStatus[i]) invalidSinceSample[i] = true;
             }
-            Vector3 movement = input.Movement;
+            Vector3 movement = PlanarVelocity.Cardinal(input.Movement, match.Characters[0].MovementVelocity).normalized;
             if (movement != lastInput)
             {
                 var r = NewRecord("input"); r.input_x = movement.x; r.input_z = movement.z; Add(r); lastInput = movement;

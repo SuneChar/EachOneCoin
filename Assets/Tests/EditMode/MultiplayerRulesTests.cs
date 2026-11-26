@@ -43,6 +43,22 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void Grid_AlternativePathRemainsConnectedUntilAllRoutesAreCut()
+        {
+            var match = CreateMatch();
+            rules.StartMatch();
+            foreach (var cell in new[] { P(1, 0), P(2, 0), P(2, 1), P(0, 1), P(1, 1) })
+                Assert.That(rules.TryPaint(0, cell), Is.True);
+            Assert.That(match.Grid.IsConnected(0, P(2, 1)), Is.True);
+            rules.TryPaint(1, P(1, 0));
+            Assert.That(match.Grid.IsConnected(0, P(2, 1)), Is.True);
+            rules.TryPaint(1, P(1, 1));
+            Assert.That(match.Grid.IsConnected(0, P(2, 1)), Is.False);
+            rules.TryPaint(0, P(1, 0));
+            Assert.That(match.Grid.IsConnected(0, P(2, 1)), Is.True);
+        }
+
+        [Test]
         public void Grid_CopyConnectedTo_TracksCutAndReconnect()
         {
             var grid = TestMatchArchitecture.Interface.GetModel<MatchSessionModel>().CreateMatch(4, 2, new[] { P(0, 0), P(3, 1) }, 3, 100f).Grid;

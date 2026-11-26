@@ -70,7 +70,7 @@ namespace EachOneCoin.Gameplay
                 var outgoing = next - target;
                 needsBraking = Vector3.Dot(incoming.normalized, outgoing.normalized) < 0.99f;
             }
-            if (needsBraking) speed = Mathf.Min(speed, Mathf.Sqrt(2f * match.MovementDeceleration * Mathf.Max(0f, offset.magnitude - ArrivalRadius * 0.5f)));
+            if (needsBraking) speed = Mathf.Min(speed, Mathf.Sqrt(2f * match.MovementDeceleration * Mathf.Max(0f, offset.magnitude - ArrivalRadius * 0.5f)) / character.RegionSpeedMultiplier);
             Vector3 desired = offset.normalized * speed;
             Vector3 before = character.transform.position;
             character.MoveWithVelocity(desired, deltaTime);

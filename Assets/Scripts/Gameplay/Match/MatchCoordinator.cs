@@ -15,6 +15,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
         [SerializeField, Min(0.1f)] private float movementAcceleration = 35f;
         [SerializeField, Min(0.1f)] private float movementDeceleration = 35f;
+        [SerializeField, Min(0.01f)] private float ownRegionSpeedMultiplier = 1.2f;
+        [SerializeField, Min(0.01f)] private float enemyRegionSpeedMultiplier = 0.8f;
         [SerializeField, Min(0.1f)] private float maxStamina = 100f;
         [SerializeField, Min(0f)] private float sprintStaminaPerSecond = 25f;
         [SerializeField, Min(0f)] private float staminaRecoveryPerSecond = 20f;
@@ -34,6 +36,8 @@ namespace EachOneCoin.Gameplay
         public float MoveSpeed => moveSpeed;
         public float MovementAcceleration => Mathf.Max(0.1f, movementAcceleration);
         public float MovementDeceleration => Mathf.Max(0.1f, movementDeceleration);
+        public float OwnRegionSpeedMultiplier => Mathf.Max(0.01f, ownRegionSpeedMultiplier);
+        public float EnemyRegionSpeedMultiplier => Mathf.Max(0.01f, enemyRegionSpeedMultiplier);
         public StaminaModel Stamina { get; private set; }
         public float ObstacleInvulnerabilitySeconds => Mathf.Max(0f, obstacleInvulnerabilitySeconds);
         public float ObstacleKnockbackDistance => Mathf.Max(0f, obstacleKnockbackDistance);
@@ -121,7 +125,7 @@ namespace EachOneCoin.Gameplay
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
-            Vector3 movement = playerActive ? localInput.Movement : Vector3.zero;
+            Vector3 movement = playerActive ? PlanarVelocity.Cardinal(localInput.Movement, Characters[0].MovementVelocity).normalized : Vector3.zero;
             Rules.TickStamina(Time.deltaTime, playerActive && !Characters[0].IsKnockedBack,
                 movement.sqrMagnitude > 0f, localInput.SprintHeld, Mathf.Max(0f, sprintStaminaPerSecond), Mathf.Max(0f, staminaRecoveryPerSecond));
             if (playerActive)
