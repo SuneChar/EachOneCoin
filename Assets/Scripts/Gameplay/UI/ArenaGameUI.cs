@@ -14,6 +14,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private GameObject hudPanel, pausePanel, settingsPanel, resultPanel;
         [SerializeField] private TMP_Text timeText, coinText, healthText, resultText, resultCoinsText, participantText, feedbackText, attackPromptText, volumeValueText;
         [SerializeField] private Image healthFill;
+        [SerializeField] private HealthHeartsView healthHeartsView;
         [SerializeField] private Image staminaFill;
         [SerializeField] private TMP_Text staminaText;
         [SerializeField] private Slider volumeSlider;
@@ -24,7 +25,6 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(1f)] private float hitFrameThickness = 24f;
         private readonly Image[] hitFrame = new Image[4];
         private float hitFlashRemaining;
-        private float hitTextRemaining;
         private InputDeviceTracker inputDevice;
         private bool usingGamepad, showPrompts, settingsOpen, resultShown;
         private int lastTime = -1;
@@ -39,6 +39,10 @@ namespace EachOneCoin.Gameplay
         private int lastUpcomingSeconds = -1;
         private float lastStamina = -1f;
         private bool networkMenuOpen;
+        private bool heartsInitialized;
+        private bool legacyHealthHidden;
+        private bool leftHudAdjusted;
+        private bool networkHealthSynced;
         public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
 
         private void Awake()
@@ -55,6 +59,8 @@ namespace EachOneCoin.Gameplay
             }
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
             CreateHitFrame();
+            HideLegacyHealthUI();
+            legacyHealthHidden = true;
             var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
             var selectable = pauseButton != null ? pauseButton.GetComponent<Selectable>() : null;
             if (selectable != null)
@@ -74,7 +80,6 @@ namespace EachOneCoin.Gameplay
         {
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
-            hitTextRemaining = 0.8f;
             UpdateHitFrame();
         }
 
@@ -128,7 +133,6 @@ namespace EachOneCoin.Gameplay
             if (match.IsNetworkMovementTest)
             {
                 if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
-                if (hitTextRemaining > 0f) hitTextRemaining = Mathf.Max(0f, hitTextRemaining - Time.deltaTime);
                 UpdateNetworkUI();
                 return;
             }
@@ -149,11 +153,11 @@ namespace EachOneCoin.Gameplay
                 }
                 if (staminaText != null) staminaText.text = $"体力：{Mathf.CeilToInt(lastStamina)} / {Mathf.CeilToInt(match.Stamina.Maximum)}";
             }
-            bool hitTextExpired = false;
+            EnsureHealthHearts(match.InitialHealth);
             if (!match.IsPaused)
             {
                 if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
-                if (hitTextRemaining > 0f) { hitTextRemaining = Mathf.Max(0f, hitTextRemaining - Time.deltaTime); hitTextExpired = hitTextRemaining == 0f; }
+                if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
             }
             if (model.Status == MatchStatus.Finished && !resultShown)
             {
@@ -182,12 +186,7 @@ namespace EachOneCoin.Gameplay
             {
                 var p = model.Participants[0];
                 coinText.text = $"金币：{p.Coins} / {model.CoinsToWin}";
-                healthText.text = $"生命：{p.Health} / {p.MaxHealth}" + (hitTextRemaining > 0f ? "  上限 -1" : "");
-                float healthFraction = Mathf.Clamp01((float)p.Health / match.InitialHealth);
-                // Resize the sprite-less Image; fillAmount alone does not clip its quad.
-                healthFill.type = Image.Type.Simple;
-                var fillRect = healthFill.rectTransform;
-                fillRect.anchorMax = new Vector2(healthFraction, fillRect.anchorMax.y);
+                if (healthHeartsView != null) healthHeartsView.SetHealth(p.Health, p.MaxHealth, !firstRefresh);
                 var text = new System.Text.StringBuilder();
                 for (int i = 0; i < model.Participants.Count; i++)
                 {
@@ -196,11 +195,6 @@ namespace EachOneCoin.Gameplay
                     text.Append($"<color=#{color}>●</color> {(i == 0 ? "玩家" : "电脑 " + i)}  {player.Coins}/{model.CoinsToWin}  {StatusText(player.Status)}\n");
                 }
                 participantText.text = text.ToString();
-            }
-            if (hitTextExpired && !changed)
-            {
-                var p = model.Participants[0];
-                healthText.text = $"生命：{p.Health} / {p.MaxHealth}";
             }
             var localPlayer = model.Participants[0];
             bool mineChanged = changed;
@@ -259,13 +253,23 @@ namespace EachOneCoin.Gameplay
                 lastTime = time;
                 timeText.text = time.ToString();
             }
+            EnsureHealthHearts(match.InitialHealth);
             int coins = state.ScoreAt(slot), health = state.HealthAt(slot), maxHealth = state.MaxHealthAt(slot);
             if (!firstRefresh && !Mirror.NetworkServer.active && !network.ClientResuming && coins > lastCoins[slot] && gameAudio != null) gameAudio.PlayCoin();
             lastCoins[slot] = coins;
             coinText.text = $"金币：{coins} / {match.Model.CoinsToWin}";
-            healthText.text = $"生命：{health} / {maxHealth}" + (hitTextRemaining > 0f ? "  上限 -1" : "");
-            var healthRect = healthFill.rectTransform;
-            healthRect.anchorMax = new Vector2(Mathf.Clamp01((float)health / match.InitialHealth), healthRect.anchorMax.y);
+            bool waitingFirstReplica = !Mirror.NetworkServer.active && !networkHealthSynced && maxHealth == 0 && state.StatusAt(slot) == ParticipantStatus.Active;
+            if (!waitingFirstReplica)
+            {
+                bool isInitialSync = !networkHealthSynced;
+                bool healthChanged = isInitialSync || lastHealth[slot] != health || lastMaxHealth[slot] != maxHealth;
+                lastHealth[slot] = health;
+                lastMaxHealth[slot] = maxHealth;
+                networkHealthSynced = true;
+                if (healthChanged && healthHeartsView != null)
+                    healthHeartsView.SetHealth(health, maxHealth, !isInitialSync && !network.ClientResuming);
+            }
+            if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
             float stamina = state.StaminaAt(slot);
             if (staminaFill != null) { var rect = staminaFill.rectTransform; rect.anchorMax = new Vector2(Mathf.Clamp01(stamina / match.StaminaAt(slot).Maximum), rect.anchorMax.y); }
             if (staminaText != null) staminaText.text = $"体力：{Mathf.CeilToInt(stamina)} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
@@ -352,6 +356,82 @@ namespace EachOneCoin.Gameplay
                 case ParticipantStatus.Lost: return "已失败";
                 default: return "比赛中";
             }
+        }
+
+        private void EnsureHealthHearts(int initialMaxHealth)
+        {
+            if (!legacyHealthHidden)
+            {
+                legacyHealthHidden = true;
+                HideLegacyHealthUI();
+            }
+            if (heartsInitialized && healthHeartsView != null) return;
+            if (healthHeartsView == null && hudPanel != null)
+            {
+                var container = new GameObject("HealthHearts", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                rt.anchorMin = new Vector2(0f, 1f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                healthHeartsView = container.AddComponent<HealthHeartsView>();
+                rt.anchoredPosition = healthHeartsView.TopLeftPosition;
+            }
+            if (healthHeartsView != null)
+            {
+                healthHeartsView.Initialize(initialMaxHealth);
+                heartsInitialized = true;
+                AdjustLeftHudBelowHearts();
+            }
+        }
+
+        private void AdjustLeftHudBelowHearts()
+        {
+            if (leftHudAdjusted || healthHeartsView == null || coinText == null) return;
+            leftHudAdjusted = true;
+
+            var heartsRect = healthHeartsView.transform as RectTransform;
+            var coinRect = coinText.rectTransform;
+            if (heartsRect == null || coinRect == null) return;
+
+            // Visible heart tip sits around 86% down from the top of the heart slot.
+            float heartsVisualBottom = heartsRect.anchoredPosition.y - healthHeartsView.HeartSize * 0.88f;
+            float coinTop = coinRect.anchoredPosition.y + coinRect.sizeDelta.y * (1f - coinRect.pivot.y);
+            const float minGap = 18f;
+            float shiftDown = coinTop - (heartsVisualBottom - minGap);
+            if (shiftDown <= 1f) return;
+
+            coinRect.anchoredPosition -= new Vector2(0f, shiftDown);
+            if (feedbackText != null)
+                feedbackText.rectTransform.anchoredPosition -= new Vector2(0f, shiftDown);
+
+            Transform staminaRoot = null;
+            if (staminaFill != null && staminaFill.transform.parent != null &&
+                (hudPanel == null || staminaFill.transform.parent.gameObject != hudPanel) &&
+                staminaFill.transform.parent.name.IndexOf("Stamina", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                staminaRoot = staminaFill.transform.parent;
+            }
+            if (staminaRoot != null && staminaRoot.gameObject.activeSelf && staminaRoot is RectTransform staminaRect)
+                staminaRect.anchoredPosition -= new Vector2(0f, shiftDown);
+        }
+
+        private void HideLegacyHealthUI()
+        {
+            Transform legacyRoot = null;
+            if (healthFill != null && healthFill.transform.parent != null &&
+                (hudPanel == null || healthFill.transform.parent.gameObject != hudPanel) &&
+                healthFill.transform.parent.name.IndexOf("Health", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                legacyRoot = healthFill.transform.parent;
+            }
+            if (legacyRoot != null)
+            {
+                legacyRoot.gameObject.SetActive(false);
+                return;
+            }
+            if (healthFill != null) healthFill.gameObject.SetActive(false);
+            if (healthText != null) healthText.gameObject.SetActive(false);
         }
 
         private void LateUpdate()
