@@ -45,6 +45,8 @@ namespace EachOneCoin.Gameplay
         public int InitialHealth => Mathf.Max(1, initialHealth);
         public event System.Action<int> ObstacleHit;
         public bool IsPaused { get; private set; }
+        public bool IsNetworkMovementTest { get; private set; }
+        public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
         private float timeScaleBeforePause = 1f;
         private MatchSessionModel session;
         private MatchSystem matchSystem;
@@ -86,6 +88,8 @@ namespace EachOneCoin.Gameplay
 
         private void Start()
         {
+            var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+            IsNetworkMovementTest = network != null && Mirror.NetworkClient.active && network.HasSnapshot;
             grid.Initialize();
             Spawns = new GridPosition[4];
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
@@ -102,7 +106,8 @@ namespace EachOneCoin.Gameplay
             {
                 Characters[i] = Instantiate(playerTemplate, playerTemplate.transform.parent);
                 Characters[i].name = "NPC " + i;
-                foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(false);
+                if (!IsNetworkMovementTest)
+                    foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(false);
             }
             for (int i = 0; i < Characters.Length; i++)
             {
@@ -111,6 +116,16 @@ namespace EachOneCoin.Gameplay
             }
             grid.Refresh(Model.Grid);
             coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
+            if (IsNetworkMovementTest)
+            {
+                for (int i = 0; i < Characters.Length; i++)
+                    foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(i == network.LocalSlot);
+                foreach (var root in gameObject.scene.GetRootGameObjects())
+                    foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.enabled = false;
+                NetworkController = gameObject.AddComponent<EachOneCoin.Networking.NetworkMatchController>();
+                NetworkController.Initialize(this, network, localInput);
+                return;
+            }
             if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
                 System.Array.Exists(System.Environment.GetCommandLineArgs(), arg => arg == "--movement-telemetry"))
             {
@@ -121,7 +136,7 @@ namespace EachOneCoin.Gameplay
 
         private void Update()
         {
-            if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            if (IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
             coins.BeginFrame();
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);

@@ -94,6 +94,16 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (match == null || match.Model == null) return;
+            if (match.IsNetworkMovementTest)
+            {
+                if (hudPanel != null) hudPanel.SetActive(false);
+                if (pausePanel != null) pausePanel.SetActive(false);
+                if (settingsPanel != null) settingsPanel.SetActive(false);
+                if (resultPanel != null) resultPanel.SetActive(false);
+                if (promptImages != null) promptImages.gameObject.SetActive(false);
+                enabled = false;
+                return;
+            }
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
             {
                 if (settingsOpen) CloseSettings();
