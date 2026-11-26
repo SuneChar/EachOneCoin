@@ -37,6 +37,8 @@ namespace EachOneCoin.Gameplay
         private readonly bool[] lastMineScattered = new bool[5];
         private readonly int[] lastMineProgress = { -1, -1, -1, -1, -1 };
         private float lastStamina = -1f;
+        private TMP_Text networkCoinText;
+        private float nextNetworkInfo;
 
         private void Awake()
         {
@@ -101,7 +103,36 @@ namespace EachOneCoin.Gameplay
                 if (settingsPanel != null) settingsPanel.SetActive(false);
                 if (resultPanel != null) resultPanel.SetActive(false);
                 if (promptImages != null) promptImages.gameObject.SetActive(false);
-                enabled = false;
+                if (networkCoinText == null && coinText != null)
+                {
+                    networkCoinText = Instantiate(coinText, transform);
+                    networkCoinText.name = "Network Coin Score";
+                    networkCoinText.gameObject.SetActive(true);
+                    var rect = networkCoinText.rectTransform;
+                    rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+                    rect.pivot = new Vector2(1f, 1f);
+                    rect.anchoredPosition = new Vector2(-30f, -25f);
+                    rect.sizeDelta = new Vector2(360f, 130f);
+                }
+                var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+                if (networkCoinText != null && network != null && match.NetworkController != null && Time.unscaledTime >= nextNetworkInfo)
+                {
+                    nextNetworkInfo = Time.unscaledTime + 0.25f;
+                    int slot = network.LocalSlot;
+                    string text = $"金币：{match.NetworkController.ScoreAt(slot)}（测试）";
+                    double elapsed = match.NetworkController.CoinTestElapsed;
+                    if (elapsed >= 60d) text += "\n金币测试周期结束";
+                    else if (elapsed >= 55d) text += "\n本局随机刷新结束";
+                    else
+                    {
+                        double next = elapsed < 5d ? 5d : 5d + 10d * (System.Math.Floor((elapsed - 5d) / 10d) + 1d);
+                        text += $"\n下次随机刷新：{Mathf.CeilToInt((float)(next - elapsed))}秒";
+                    }
+                    for (int i = 0; i < match.Model.Mines.Count; i++)
+                        if (match.NetworkController.MineConnectedAt(i, slot))
+                            text += $"\n{match.Coins.MineName(i)}金矿：{match.NetworkController.MineProgressAt(i, slot):F1} / 5秒";
+                    networkCoinText.text = text;
+                }
                 return;
             }
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1)))

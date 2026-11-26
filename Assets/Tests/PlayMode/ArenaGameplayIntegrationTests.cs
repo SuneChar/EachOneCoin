@@ -619,6 +619,26 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator CoinReplica_SameCellEntriesHaveDistinctIdsAndRemoveIndependently()
+        {
+            var position = new GridPosition(2, 2);
+            Call(coins, "Drop", position, 2);
+            var entries = (Array)Call(coins, "CaptureReplicaEntries");
+            Assert.That(entries.Length, Is.EqualTo(2));
+            var first = entries.GetValue(0);
+            var second = entries.GetValue(1);
+            var entryType = first.GetType();
+            Assert.That(entryType.GetField("id").GetValue(first), Is.Not.EqualTo(entryType.GetField("id").GetValue(second)));
+            Assert.That(entryType.GetField("x").GetValue(first), Is.EqualTo(entryType.GetField("x").GetValue(second)));
+            Assert.That(entryType.GetField("y").GetValue(first), Is.EqualTo(entryType.GetField("y").GetValue(second)));
+            Assert.That((bool)Call(coins, "ApplyReplicaChange", (byte)1, first, (byte)0), Is.True);
+            var remaining = (Array)Call(coins, "CaptureReplicaEntries");
+            Assert.That(remaining.Length, Is.EqualTo(1));
+            Assert.That(entryType.GetField("id").GetValue(remaining.GetValue(0)), Is.EqualTo(entryType.GetField("id").GetValue(second)));
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Npc_RoutesAroundFixedMineToCoin()
         {
             foreach (var mine in model.Mines) mine.Advance(5d, new[] { true, false, false, false });

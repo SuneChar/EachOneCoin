@@ -87,6 +87,12 @@ namespace EachOneCoin.Networking
             room = new RoomState();
             NetworkServer.RegisterHandler<RoomSnapshotRequest>((conn, _) => SendSnapshot(conn));
             NetworkServer.RegisterHandler<MovementReady>(OnMovementReady);
+            NetworkServer.RegisterHandler<CoinSnapshotRequest>((conn, _) =>
+            {
+                if (!MatchStarted || ServerSlot(conn.connectionId) < 0) return;
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.SendCoinSnapshot(conn);
+            });
             NetworkServer.RegisterHandler<GridSnapshotRequest>((conn, _) =>
             {
                 if (!MatchStarted || ServerSlot(conn.connectionId) < 0) return;
@@ -108,6 +114,21 @@ namespace EachOneCoin.Networking
                 MatchOccupied = message.occupied; MatchFillNpcs = message.fillNpcs; MovementRunning = true;
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.Begin(message.occupied, message.fillNpcs);
+            });
+            NetworkClient.RegisterHandler<MineStatusMessage>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.ReceiveMineStatus(message);
+            });
+            NetworkClient.RegisterHandler<CoinSnapshotMessage>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.ReceiveCoinSnapshot(message);
+            });
+            NetworkClient.RegisterHandler<CoinChangeMessage>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.ReceiveCoinChange(message);
             });
             NetworkClient.RegisterHandler<GridSnapshotMessage>(message =>
             {
@@ -206,7 +227,7 @@ namespace EachOneCoin.Networking
             for (int i = 0; i < RoomState.Capacity; i++) if (room.IsOccupied(i)) mask |= (byte)(1 << i);
             MatchOccupied = mask; MatchFillNpcs = room.FillEmptyWithNpcs; MovementRunning = true;
             var controller = FindObjectOfType<NetworkMatchController>();
-            if (controller != null) { controller.Begin(mask, MatchFillNpcs); controller.SendGridSnapshot(); }
+            if (controller != null) { controller.Begin(mask, MatchFillNpcs); controller.SendGridSnapshot(); controller.SendCoinSnapshot(); }
             NetworkServer.SendToAll(new MovementBegin { occupied = mask, fillNpcs = MatchFillNpcs });
         }
 

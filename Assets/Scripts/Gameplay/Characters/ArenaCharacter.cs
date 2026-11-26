@@ -152,7 +152,7 @@ namespace EachOneCoin.Gameplay
             {
                 MoveOnPlane(delta / steps);
                 ReportCell();
-                if (!match.IsNetworkMovementTest) match.Coins.TryCollect(this);
+                if (!match.IsNetworkMovementTest || Mirror.NetworkServer.active) match.Coins.TryCollect(this);
                 if (match.Model.Participants[Id].Status != ParticipantStatus.Active || knockbackTime > 0f) break;
             }
             if ((transform.position - before).sqrMagnitude > 0.000001f)
@@ -238,7 +238,7 @@ namespace EachOneCoin.Gameplay
             {
                 match.Grid.Refresh(match.Model.Grid);
                 if (match.IsNetworkMovementTest) match.NetworkController.BroadcastGridChange(cell, Id);
-                else if (match.Coins != null) match.Coins.NotifyGridChanged();
+                if (match.Coins != null) match.Coins.NotifyGridChanged();
             }
             if (!match.IsNetworkMovementTest && match.Coins != null) match.Coins.UpdateDisguisedObstacleVisibility();
         }
@@ -328,7 +328,7 @@ namespace EachOneCoin.Gameplay
                 knockbackTime -= stepTime;
                 MoveOnPlane(knockback);
                 ReportCell();
-                if (!match.IsNetworkMovementTest) match.Coins.TryCollect(this);
+                if (!match.IsNetworkMovementTest || Mirror.NetworkServer.active) match.Coins.TryCollect(this);
             }
             if (controller == null || !controller.enabled || touching.Count == 0) return;
             var center = transform.TransformPoint(controller.center);

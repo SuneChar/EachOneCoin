@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using EachOneCoin.Networking;
+using Mirror;
 using UnityEngine;
 
 namespace EachOneCoin.Gameplay
@@ -13,7 +15,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
         [SerializeField, Min(0.1f)] private float warningSeconds = 1f;
         private enum CoinKind { Random, Mine, Dropped, DisguisedObstacle }
-        private sealed class Slot { public GridPosition Position; public CoinKind Kind; public GameObject Coin; public DisguisedObstacle Obstacle; }
+        private sealed class Slot { public uint Id; public GridPosition Position; public CoinKind Kind; public GameObject Coin; public DisguisedObstacle Obstacle; }
+        private uint nextId;
         private readonly List<Slot> slots = new List<Slot>();
         private readonly List<GridPosition> candidates = new List<GridPosition>();
         private readonly GridPosition[] minePoints = { new GridPosition(10, 10), new GridPosition(10, 5), new GridPosition(10, 15), new GridPosition(5, 10), new GridPosition(15, 10) };
@@ -26,6 +29,7 @@ namespace EachOneCoin.Gameplay
         private uint[] connectedRevision;
         private bool[] connectedCacheValid;
         private double elapsed, duration, nextRandom, nextMine;
+        public double ElapsedSeconds => elapsed;
         private Renderer[] mineRenderers;
         private Material mineMaterial;
         private MaterialPropertyBlock mineBlock;
@@ -79,7 +83,7 @@ namespace EachOneCoin.Gameplay
         {
             foreach (var slot in slots)
                 if (slot.Coin != null) slot.Coin.transform.Rotate(Vector3.up, 90f * deltaTime, Space.World);
-            UpdateDisguisedObstacleVisibility();
+            if (!match.IsNetworkMovementTest || NetworkServer.active) UpdateDisguisedObstacleVisibility();
         }
 
         // Sample before movement so a connection made this frame cannot receive time from before it existed.
@@ -106,6 +110,7 @@ namespace EachOneCoin.Gameplay
                     {
                         ScatterMineCoins(match.Model.Mines[mine].Position);
                         RefreshMineVisual(mine);
+                        PublishChange(3, null);
                     }
                 }
                 elapsed = boundary;
@@ -117,6 +122,7 @@ namespace EachOneCoin.Gameplay
                         var cycle = match.Model.Mines[mine];
                         cycle.BeginCycle(cycle.Position);
                         RefreshMineVisual(mine);
+                        PublishChange(3, null);
                     }
                     nextMine += MineCycleModel.CycleSeconds;
                     UpdateConnectivity();
@@ -146,7 +152,7 @@ namespace EachOneCoin.Gameplay
             for (int i = 0; i < connectedCells.Length; i++)
             {
                 for (int mine = 0; mine < connected.Length; mine++) connected[mine][i] = false;
-                if (match.Model.Participants[i].Status != ParticipantStatus.Active) continue;
+                if (match.Model.Participants[i].Status != ParticipantStatus.Active || (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(i))) continue;
                 if (!connectedCacheValid[i] || connectedRevision[i] != match.Model.Grid.Revision)
                 {
                     match.Model.Grid.CopyConnectedTo(i, connectedCells[i]);
@@ -189,11 +195,13 @@ namespace EachOneCoin.Gameplay
                 bool near = false;
                 for (int i = 0; i < match.Characters.Length; i++)
                 {
-                    if (match.Model.Participants[i].Status != ParticipantStatus.Active) continue;
+                    if (match.Model.Participants[i].Status != ParticipantStatus.Active || (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(i))) continue;
                     var cell = match.Grid.WorldToCell(match.Characters[i].transform.position);
                     if (Math.Abs(cell.X - slot.Position.X) + Math.Abs(cell.Y - slot.Position.Y) <= 2) { near = true; break; }
                 }
+                bool changed = obstacle.Revealed != near;
                 obstacle.SetRevealed(near);
+                if (changed) PublishChange(2, slot);
             }
         }
 
@@ -222,7 +230,9 @@ namespace EachOneCoin.Gameplay
                 if (slots[i].Kind != CoinKind.Random && slots[i].Kind != CoinKind.DisguisedObstacle) continue;
                 if (slots[i].Obstacle != null) slots[i].Obstacle.Expire();
                 if (slots[i].Coin != null) Destroy(slots[i].Coin);
+                var removed = slots[i];
                 slots.RemoveAt(i);
+                PublishChange(1, removed);
             }
             candidates.Clear();
             for (int x = 0; x < ArenaGridView.Size; x++) for (int y = 0; y < ArenaGridView.Size; y++)
@@ -277,7 +287,7 @@ namespace EachOneCoin.Gameplay
                 if (delta.sqrMagnitude > 0.16f) continue;
                 if (slot.Kind == CoinKind.DisguisedObstacle)
                 {
-                    if (slot.Obstacle != null) character.ContactDisguisedObstacle(slot.Obstacle);
+                    if (!match.IsNetworkMovementTest && slot.Obstacle != null) character.ContactDisguisedObstacle(slot.Obstacle);
                     continue;
                 }
                 bool collected = slot.Kind == CoinKind.Random ? match.Rules.TryCollectRandomCoin(character.Id) : match.Rules.TryCollectCoin(character.Id, slot.Position);
@@ -285,6 +295,7 @@ namespace EachOneCoin.Gameplay
                 Destroy(slot.Coin);
                 slots.RemoveAt(i);
                 match.CoinCollected(character.Id);
+                PublishChange(1, slot);
             }
         }
 
@@ -308,7 +319,9 @@ namespace EachOneCoin.Gameplay
             return false;
         }
 
-        private void Spawn(GridPosition position, CoinKind kind)
+        private void Spawn(GridPosition position, CoinKind kind) => SpawnCore(position, kind, 0, false, false);
+
+        private void SpawnCore(GridPosition position, CoinKind kind, uint id, bool replica, bool revealed)
         {
             var coin = coinModel != null ? Instantiate(coinModel, coinRoot) : GameObject.CreatePrimitive(PrimitiveType.Sphere);
             coin.name = kind == CoinKind.Random ? "Random Coin" : kind == CoinKind.Mine ? "Mine Coin" : kind == CoinKind.DisguisedObstacle ? "Disguised Obstacle" : "Dropped Coin";
@@ -322,8 +335,85 @@ namespace EachOneCoin.Gameplay
             {
                 obstacle = coin.AddComponent<DisguisedObstacle>();
                 obstacle.Initialize(this, position);
+                if (replica && obstacle.ContactCollider != null) obstacle.ContactCollider.enabled = false;
+                obstacle.SetRevealed(revealed);
             }
-            slots.Add(new Slot { Position = position, Kind = kind, Coin = coin, Obstacle = obstacle });
+            var slot = new Slot { Id = replica ? id : ++nextId, Position = position, Kind = kind, Coin = coin, Obstacle = obstacle };
+            slots.Add(slot);
+            if (!replica) PublishChange(0, slot);
+        }
+
+        private CoinEntry Entry(Slot slot) => new CoinEntry { id = slot.Id, kind = (byte)slot.Kind,
+            x = (ushort)slot.Position.X, y = (ushort)slot.Position.Y, revealed = slot.Obstacle != null && slot.Obstacle.Revealed };
+
+        public CoinEntry[] CaptureReplicaEntries()
+        {
+            var result = new CoinEntry[slots.Count];
+            for (int i = 0; i < slots.Count; i++) result[i] = Entry(slots[i]);
+            return result;
+        }
+
+        public byte ScatteredMineMask()
+        {
+            byte mask = 0;
+            for (int i = 0; i < match.Model.Mines.Count; i++) if (match.Model.Mines[i].Scattered) mask |= (byte)(1 << i);
+            return mask;
+        }
+
+        private void PublishChange(byte operation, Slot slot)
+        {
+            if (match != null && match.IsNetworkMovementTest && NetworkServer.active && match.NetworkController != null)
+                match.NetworkController.BroadcastCoinChange(operation, slot == null ? default : Entry(slot), ScatteredMineMask());
+        }
+
+        private bool ValidEntry(CoinEntry entry) => entry.id != 0 && entry.kind <= (byte)CoinKind.DisguisedObstacle &&
+            entry.x < ArenaGridView.Size && entry.y < ArenaGridView.Size && (entry.kind == (byte)CoinKind.DisguisedObstacle || !entry.revealed);
+
+        public bool ApplyReplicaSnapshot(CoinEntry[] entries, byte mineMask)
+        {
+            if (entries == null || (mineMask & ~31) != 0) return false;
+            var ids = new HashSet<uint>();
+            foreach (var entry in entries) if (!ValidEntry(entry) || !ids.Add(entry.id)) return false;
+            foreach (var slot in slots) if (slot.Coin != null) Destroy(slot.Coin);
+            slots.Clear();
+            foreach (var entry in entries) SpawnCore(new GridPosition(entry.x, entry.y), (CoinKind)entry.kind, entry.id, true, entry.revealed);
+            ApplyReplicaMineMask(mineMask);
+            return true;
+        }
+
+        public bool ApplyReplicaChange(byte operation, CoinEntry entry, byte mineMask)
+        {
+            if (operation > 3 || (mineMask & ~31) != 0) return false;
+            int index = -1;
+            for (int i = 0; i < slots.Count; i++) if (slots[i].Id == entry.id) { index = i; break; }
+            if (operation == 0)
+            {
+                if (!ValidEntry(entry) || index >= 0) return false;
+                SpawnCore(new GridPosition(entry.x, entry.y), (CoinKind)entry.kind, entry.id, true, entry.revealed);
+            }
+            else if (operation == 1)
+            {
+                if (index < 0) return false;
+                if (slots[index].Coin != null) Destroy(slots[index].Coin);
+                slots.RemoveAt(index);
+            }
+            else if (operation == 2)
+            {
+                if (!ValidEntry(entry) || index < 0 || slots[index].Obstacle == null) return false;
+                slots[index].Obstacle.SetRevealed(entry.revealed);
+            }
+            ApplyReplicaMineMask(mineMask);
+            return true;
+        }
+
+        public void ApplyReplicaMineMask(byte mask)
+        {
+            for (int i = 0; i < mineRenderers.Length; i++)
+            {
+                Color color = (mask & (1 << i)) != 0 ? new Color(0.3f, 1f, 0.35f) : new Color(0.75f, 0.45f, 0.06f);
+                mineBlock.Clear(); mineBlock.SetColor("_BaseColor", color); mineBlock.SetColor("_Color", color);
+                mineRenderers[i].SetPropertyBlock(mineBlock);
+            }
         }
 
         private void OnDestroy()

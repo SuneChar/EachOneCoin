@@ -28,6 +28,20 @@ namespace EachOneCoin.Networking
         private bool hasGridSnapshot;
         private bool gridResyncPending;
         public bool IsRunning => started;
+        public bool IsSlotActive(int slot) => slot >= 0 && slot < RoomState.Capacity && (visible & (1 << slot)) != 0;
+        private uint coinVersion;
+        private bool hasCoinSnapshot;
+        private bool coinResyncPending;
+        private readonly int[] replicaScores = new int[RoomState.Capacity];
+        private readonly float[] replicaMineProgress = new float[20];
+        private readonly double[] replicaMineElapsed = new double[5];
+        private double replicaTestElapsed;
+        public double CoinTestElapsed => NetworkServer.active ? match.Coins.ElapsedSeconds : replicaTestElapsed;
+        private uint replicaMineConnections;
+        private float nextMineStatus;
+        public float MineProgressAt(int mine, int slot) => NetworkServer.active ? (float)match.Model.Mines[mine].Progress(slot) : replicaMineProgress[mine * 4 + slot];
+        public bool MineConnectedAt(int mine, int slot) => NetworkServer.active ? match.Coins.IsConnectedToMine(mine, slot) : (replicaMineConnections & (1u << (mine * 4 + slot))) != 0;
+        public int ScoreAt(int slot) => NetworkServer.active ? match.Model.Participants[slot].Coins : replicaScores[slot];
 
         public void Initialize(MatchCoordinator coordinator, LanNetworkManager manager, LocalPlayerInput input)
         {
@@ -98,6 +112,81 @@ namespace EachOneCoin.Networking
             NetworkClient.Send(new GridSnapshotRequest());
         }
 
+        public void SendCoinSnapshot(NetworkConnectionToClient connection = null)
+        {
+            if (!NetworkServer.active || match == null) return;
+            var scores = match.Model.Participants;
+            var message = new CoinSnapshotMessage { version = coinVersion, entries = match.Coins.CaptureReplicaEntries(),
+                scatteredMines = match.Coins.ScatteredMineMask(), score0 = scores[0].Coins, score1 = scores[1].Coins,
+                score2 = scores[2].Coins, score3 = scores[3].Coins };
+            if (connection == null) NetworkServer.SendToAll(message); else connection.Send(message);
+        }
+
+        public void BroadcastCoinChange(byte operation, CoinEntry entry, byte mineMask)
+        {
+            if (!NetworkServer.active || !started) return;
+            unchecked { coinVersion++; }
+            var scores = match.Model.Participants;
+            NetworkServer.SendToAll(new CoinChangeMessage { version = coinVersion, operation = operation, entry = entry,
+                scatteredMines = mineMask, score0 = scores[0].Coins, score1 = scores[1].Coins, score2 = scores[2].Coins, score3 = scores[3].Coins });
+        }
+
+        public void ReceiveCoinSnapshot(CoinSnapshotMessage message)
+        {
+            if (NetworkServer.active || match == null || (hasCoinSnapshot && message.version < coinVersion)) return;
+            if (!ValidScores(message.score0, message.score1, message.score2, message.score3) ||
+                !match.Coins.ApplyReplicaSnapshot(message.entries, message.scatteredMines)) { RequestCoinSnapshot(); return; }
+            SetScores(message.score0, message.score1, message.score2, message.score3);
+            coinVersion = message.version; hasCoinSnapshot = true; coinResyncPending = false;
+        }
+
+        public void ReceiveCoinChange(CoinChangeMessage message)
+        {
+            if (NetworkServer.active || match == null) return;
+            if (hasCoinSnapshot && message.version <= coinVersion) return;
+            if (!hasCoinSnapshot || coinResyncPending || message.version != coinVersion + 1 ||
+                !ValidScores(message.score0, message.score1, message.score2, message.score3) ||
+                !match.Coins.ApplyReplicaChange(message.operation, message.entry, message.scatteredMines))
+            { RequestCoinSnapshot(); return; }
+            SetScores(message.score0, message.score1, message.score2, message.score3); coinVersion = message.version;
+        }
+
+        private static bool ValidScores(int a, int b, int c, int d) => a >= 0 && b >= 0 && c >= 0 && d >= 0;
+        private void SetScores(int a, int b, int c, int d) { replicaScores[0] = a; replicaScores[1] = b; replicaScores[2] = c; replicaScores[3] = d; }
+        private void RequestCoinSnapshot()
+        {
+            if (coinResyncPending || !NetworkClient.isConnected) return;
+            coinResyncPending = true; NetworkClient.Send(new CoinSnapshotRequest());
+        }
+
+        private void SendMineStatus()
+        {
+            var progress = new float[20]; var elapsed = new double[5]; uint connected = 0;
+            for (int i = 0; i < 5; i++)
+            {
+                elapsed[i] = match.Model.Mines[i].Elapsed;
+                for (int j = 0; j < RoomState.Capacity; j++)
+                {
+                    progress[i * 4 + j] = (float)match.Model.Mines[i].Progress(j);
+                    if (match.Coins.IsConnectedToMine(i, j)) connected |= 1u << (i * 4 + j);
+                }
+            }
+            NetworkServer.SendToAll(new MineStatusMessage { progress = progress, elapsed = elapsed, testElapsed = match.Coins.ElapsedSeconds, connectedMask = connected, scatteredMines = match.Coins.ScatteredMineMask() });
+        }
+
+        public void ReceiveMineStatus(MineStatusMessage message)
+        {
+            if (NetworkServer.active || match == null || message.progress == null || message.progress.Length != 20 || message.elapsed == null || message.elapsed.Length != 5 || (message.scatteredMines & ~31) != 0) return;
+            if (double.IsNaN(message.testElapsed) || double.IsInfinity(message.testElapsed) || message.testElapsed < 0d || message.testElapsed > 60.01d) return;
+            for (int i = 0; i < 20; i++) if (float.IsNaN(message.progress[i]) || float.IsInfinity(message.progress[i]) || message.progress[i] < 0f) return;
+            for (int i = 0; i < 5; i++) if (double.IsNaN(message.elapsed[i]) || double.IsInfinity(message.elapsed[i]) || message.elapsed[i] < 0d) return;
+            System.Array.Copy(message.progress, replicaMineProgress, 20);
+            System.Array.Copy(message.elapsed, replicaMineElapsed, 5);
+            replicaMineConnections = message.connectedMask;
+            replicaTestElapsed = message.testElapsed;
+            match.Coins.ApplyReplicaMineMask(message.scatteredMines);
+        }
+
         public void ReceiveInput(int slot, Vector2 direction)
         {
             if (!started || slot < 0 || slot >= RoomState.Capacity || (humans & (1 << slot)) == 0) return;
@@ -139,8 +228,10 @@ namespace EachOneCoin.Networking
                 Vector3 direction = localInput.Movement;
                 NetworkClient.Send(new MovementInput { direction = new Vector2(direction.x, direction.z) });
             }
+            match.Coins.Tick(Time.deltaTime);
             if (NetworkServer.active)
             {
+                match.Coins.BeginFrame();
                 for (int i = 0; i < RoomState.Capacity; i++)
                 {
                     if ((visible & (1 << i)) == 0) continue;
@@ -154,6 +245,8 @@ namespace EachOneCoin.Networking
                     }
                     match.Characters[i].MoveWithVelocity(direction * match.MoveSpeed, Time.deltaTime);
                 }
+                match.Coins.AdvanceMatch(Time.deltaTime);
+                if (Time.unscaledTime >= nextMineStatus) { nextMineStatus = Time.unscaledTime + 0.25f; SendMineStatus(); }
                 if (Time.unscaledTime >= nextSnapshot)
                 {
                     nextSnapshot = Time.unscaledTime + 0.05f;
@@ -204,7 +297,7 @@ namespace EachOneCoin.Networking
 
         private void OnGUI()
         {
-            GUI.Box(new Rect(10, 10, 360, 65), started ? "LAN paint test - attack and gameplay disabled" : "Waiting for all players to load...");
+            GUI.Box(new Rect(10, 10, 360, 65), started ? "LAN coin test - combat disabled" : "Waiting for all players to load...");
             if (GUI.Button(new Rect(20, 40, 160, 25), "Exit (Esc)")) network.ExitMovementTest();
         }
     }
