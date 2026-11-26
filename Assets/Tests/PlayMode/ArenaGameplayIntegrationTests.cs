@@ -39,6 +39,18 @@ namespace EachOneCoin.Tests
         private static object Call(object target, string method, params object[] args) => target.GetType().GetMethod(method).Invoke(target, args);
         private Component Character(int id) => (Component)characters.GetValue(id);
         private Vector3 CellToWorld(GridPosition cell) => (Vector3)Call(grid, "CellToWorld", cell);
+        private Component ActiveDisguisedObstacle()
+        {
+            var type = Type.GetType("EachOneCoin.Gameplay.DisguisedObstacle, Assembly-CSharp", true);
+            return coinRoot.Cast<Transform>().Select(t => t.GetComponent(type)).FirstOrDefault(c => c != null && !(bool)Get(c, "Consumed"));
+        }
+        private void SpawnDisguisedObstacle(GridPosition cell)
+        {
+            var type = coins.GetType();
+            var kind = Enum.Parse(type.GetNestedType("CoinKind", BindingFlags.NonPublic), "DisguisedObstacle");
+            type.GetMethod("Spawn", Private).Invoke(coins, new[] { (object)cell, kind });
+            Call(coins, "UpdateDisguisedObstacleVisibility");
+        }
         private GridPosition ConnectCentralMine()
         {
             var spawn = model.Participants[0].Spawn;
@@ -291,6 +303,109 @@ namespace EachOneCoin.Tests
             yield return null;
             Assert.That(first == null, Is.True);
             Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator DisguisedObstacle_SpawnsWithCoinAndReplacesOnNextCycle()
+        {
+            Call(coins, "AdvanceMatch", 5f);
+            var first = ActiveDisguisedObstacle();
+            Assert.That(first, Is.Not.Null);
+            Assert.That(coinRoot.Cast<Transform>().Count(t => t.name == "Random Coin"), Is.EqualTo(1));
+            var real = coinRoot.Cast<Transform>().Single(t => t.name == "Random Coin");
+            Assert.That(Vector3.Distance(real.position, first.transform.position), Is.GreaterThan(0.5f));
+            Call(coins, "AdvanceMatch", 10f);
+            Assert.That(Get(first, "Consumed"), Is.EqualTo(true));
+            var next = ActiveDisguisedObstacle();
+            Assert.That(next, Is.Not.Null.And.Not.SameAs(first));
+            yield return null;
+            yield return null;
+            Assert.That(first == null, Is.True);
+        }
+
+        [UnityTest]
+        public IEnumerator DisguisedObstacle_RevealsAtManhattanTwoAndHidesAfterLeaving()
+        {
+            var cell = new GridPosition(16, 8);
+            SpawnDisguisedObstacle(cell);
+            var obstacle = ActiveDisguisedObstacle();
+            var far = new GridPosition(1, 19);
+            for (int i = 0; i < characters.Length; i++) Call(Character(i), "Teleport", CellToWorld(far));
+            Call(coins, "UpdateDisguisedObstacleVisibility");
+            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false));
+            Assert.That(Call(coins, "HasCoin", cell), Is.EqualTo(true));
+            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(false));
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(cell.X + 1, cell.Y + 2)));
+            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false), "Manhattan distance 3 must stay disguised.");
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(cell.X + 1, cell.Y + 1)));
+            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(true), "Manhattan distance 2 must reveal the obstacle.");
+            Assert.That(Call(coins, "HasCoin", cell), Is.EqualTo(false));
+            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(true));
+            var renderer = obstacle.GetComponentInChildren<Renderer>();
+            var block = new MaterialPropertyBlock();
+            renderer.GetPropertyBlock(block);
+            Assert.That(block.GetColor("_BaseColor"), Is.EqualTo(Color.black));
+            Call(Character(0), "Teleport", CellToWorld(far));
+            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false));
+            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(false));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator DisguisedObstacle_ContactDamagesOnceAndProtectionStillConsumesNext()
+        {
+            var character = Character(0);
+            SpawnDisguisedObstacle(new GridPosition(16, 8));
+            var first = ActiveDisguisedObstacle();
+            Call(character, "ContactDisguisedObstacle", first);
+            Assert.That(Get(first, "Consumed"), Is.EqualTo(true));
+            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
+            Assert.That(model.Participants[0].Coins, Is.Zero);
+            Call(Character(1), "ContactDisguisedObstacle", first);
+            Assert.That(model.Participants[1].MaxHealth, Is.EqualTo(3), "The same obstacle cannot hit twice.");
+            SpawnDisguisedObstacle(new GridPosition(17, 8));
+            var second = ActiveDisguisedObstacle();
+            Call(character, "ContactDisguisedObstacle", second);
+            Assert.That(Get(second, "Consumed"), Is.EqualTo(true));
+            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2), "Protection prevents damage, not disappearance.");
+            Assert.That(model.Participants[0].Coins, Is.Zero);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator DisguisedObstacle_MovementContactDoesNotAwardCoin()
+        {
+            var cell = new GridPosition(16, 1);
+            SpawnDisguisedObstacle(cell);
+            var obstacle = ActiveDisguisedObstacle();
+            var character = Character(0);
+            Call(character, "Teleport", CellToWorld(new GridPosition(14, 1)));
+            Physics.SyncTransforms();
+            Call(character, "Move", Vector3.right * 2f);
+            Assert.That(Get(obstacle, "Consumed"), Is.EqualTo(true));
+            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
+            Assert.That(model.Participants[0].Coins, Is.Zero);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator DisguisedObstacle_NpcTargetsDisguiseButAvoidsRevealedCell()
+        {
+            foreach (var mine in model.Mines) mine.Advance(5d, new[] { true, false, false, false });
+            var cell = new GridPosition(16, 1);
+            SpawnDisguisedObstacle(cell);
+            var obstacle = ActiveDisguisedObstacle();
+            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(false));
+            var path = new System.Collections.Generic.List<GridPosition>();
+            var find = npcs.GetType().GetMethod("FindPath", Private);
+            Assert.That(find.Invoke(npcs, new object[] { 1, false, path }), Is.EqualTo(true));
+            Assert.That(path.Last(), Is.EqualTo(cell));
+            Call(Character(1), "Teleport", CellToWorld(new GridPosition(18, 1)));
+            Assert.That(Get(obstacle, "Revealed"), Is.EqualTo(true));
+            Assert.That(Call(match, "IsBlocked", cell), Is.EqualTo(true));
+            path.Clear();
+            Assert.That(find.Invoke(npcs, new object[] { 1, false, path }), Is.EqualTo(false));
+            yield return null;
         }
 
         [UnityTest]

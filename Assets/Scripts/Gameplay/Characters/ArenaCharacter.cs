@@ -224,6 +224,7 @@ namespace EachOneCoin.Gameplay
                 match.Grid.Refresh(match.Model.Grid);
                 if (match.Coins != null) match.Coins.NotifyGridChanged();
             }
+            if (match.Coins != null) match.Coins.UpdateDisguisedObstacleVisibility();
         }
 
         private void UpdateFacing(float deltaTime)
@@ -252,15 +253,25 @@ namespace EachOneCoin.Gameplay
         private void OnTriggerStay(Collider other) => TryHazard(other);
         private void OnTriggerExit(Collider other) => touching.Remove(other);
 
+        public void ContactDisguisedObstacle(DisguisedObstacle obstacle)
+        {
+            if (obstacle != null) TryHazard(obstacle.ContactCollider);
+        }
+
         private void TryHazard(Collider other)
         {
             if (match == null || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
+            var disguised = other.GetComponentInParent<DisguisedObstacle>();
+            Vector3 center = transform.TransformPoint(controller.center);
+            Vector3 direction = center - other.ClosestPoint(center);
+            if (disguised != null)
+            {
+                if (match.IsPaused || match.Model.Status != MatchStatus.Playing || match.Model.Participants[Id].Status != ParticipantStatus.Active || !disguised.TryConsume()) return;
+            }
             touching.Add(other);
             if (obstacleProtection > 0f || !match.HitObstacle(Id)) return;
             if (match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
             obstacleProtection = match.ObstacleInvulnerabilitySeconds;
-            Vector3 center = transform.TransformPoint(controller.center);
-            Vector3 direction = center - other.ClosestPoint(center);
             direction.y = 0f;
             if (direction.sqrMagnitude < 0.000001f) { direction = -lastMovement; direction.y = 0f; }
             if (direction.sqrMagnitude < 0.000001f) { direction = transform.forward; direction.y = 0f; }

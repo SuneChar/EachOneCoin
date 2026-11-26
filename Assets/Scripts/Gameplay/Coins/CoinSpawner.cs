@@ -12,8 +12,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Transform warningRoot;
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
         [SerializeField, Min(0.1f)] private float warningSeconds = 1f;
-        private enum CoinKind { Random, Mine, Dropped }
-        private sealed class Slot { public GridPosition Position; public CoinKind Kind; public GameObject Coin; }
+        private enum CoinKind { Random, Mine, Dropped, DisguisedObstacle }
+        private sealed class Slot { public GridPosition Position; public CoinKind Kind; public GameObject Coin; public DisguisedObstacle Obstacle; }
         private readonly List<Slot> slots = new List<Slot>();
         private readonly List<GridPosition> candidates = new List<GridPosition>();
         private readonly GridPosition[] minePoints = { new GridPosition(10, 10), new GridPosition(10, 5), new GridPosition(10, 15), new GridPosition(5, 10), new GridPosition(15, 10) };
@@ -79,6 +79,7 @@ namespace EachOneCoin.Gameplay
         {
             foreach (var slot in slots)
                 if (slot.Coin != null) slot.Coin.transform.Rotate(Vector3.up, 90f * deltaTime, Space.World);
+            UpdateDisguisedObstacleVisibility();
         }
 
         // Sample before movement so a connection made this frame cannot receive time from before it existed.
@@ -178,17 +179,65 @@ namespace EachOneCoin.Gameplay
             return match.Model.Grid.Contains(p) && !match.IsSpawn(p) && !match.Model.Grid.IsBlocked(p) && !match.IsObstructed(p) && !HasCoin(p);
         }
 
+        public void UpdateDisguisedObstacleVisibility()
+        {
+            if (match == null || match.Characters == null) return;
+            foreach (var slot in slots)
+            {
+                var obstacle = slot.Obstacle;
+                if (obstacle == null || obstacle.Consumed) continue;
+                bool near = false;
+                for (int i = 0; i < match.Characters.Length; i++)
+                {
+                    if (match.Model.Participants[i].Status != ParticipantStatus.Active) continue;
+                    var cell = match.Grid.WorldToCell(match.Characters[i].transform.position);
+                    if (Math.Abs(cell.X - slot.Position.X) + Math.Abs(cell.Y - slot.Position.Y) <= 2) { near = true; break; }
+                }
+                obstacle.SetRevealed(near);
+            }
+        }
+
+        public bool IsRevealedObstacle(GridPosition position)
+        {
+            foreach (var slot in slots)
+                if (slot.Obstacle != null && !slot.Obstacle.Consumed && slot.Obstacle.Revealed && slot.Position.Equals(position)) return true;
+            return false;
+        }
+
+        public void RemoveDisguisedObstacle(DisguisedObstacle obstacle)
+        {
+            for (int i = slots.Count - 1; i >= 0; i--)
+            {
+                if (slots[i].Obstacle != obstacle) continue;
+                slots.RemoveAt(i);
+                Destroy(obstacle.gameObject);
+                return;
+            }
+        }
+
         private void ReplaceRandomCoin()
         {
             for (int i = slots.Count - 1; i >= 0; i--)
-                if (slots[i].Kind == CoinKind.Random) { if (slots[i].Coin != null) Destroy(slots[i].Coin); slots.RemoveAt(i); }
+            {
+                if (slots[i].Kind != CoinKind.Random && slots[i].Kind != CoinKind.DisguisedObstacle) continue;
+                if (slots[i].Obstacle != null) slots[i].Obstacle.Expire();
+                if (slots[i].Coin != null) Destroy(slots[i].Coin);
+                slots.RemoveAt(i);
+            }
             candidates.Clear();
             for (int x = 0; x < ArenaGridView.Size; x++) for (int y = 0; y < ArenaGridView.Size; y++)
             {
                 var p = new GridPosition(x, y);
                 if (IsSafe(p)) candidates.Add(p);
             }
-            if (candidates.Count > 0) Spawn(candidates[UnityEngine.Random.Range(0, candidates.Count)], CoinKind.Random);
+            if (candidates.Count > 0)
+            {
+                int index = UnityEngine.Random.Range(0, candidates.Count);
+                Spawn(candidates[index], CoinKind.Random);
+                candidates.RemoveAt(index);
+            }
+            if (candidates.Count > 0) Spawn(candidates[UnityEngine.Random.Range(0, candidates.Count)], CoinKind.DisguisedObstacle);
+            UpdateDisguisedObstacleVisibility();
         }
 
         private void ScatterMineCoins(GridPosition origin)
@@ -226,6 +275,11 @@ namespace EachOneCoin.Gameplay
                 if (slot.Coin == null) continue;
                 var delta = position - match.Grid.CellToWorld(slot.Position); delta.y = 0f;
                 if (delta.sqrMagnitude > 0.16f) continue;
+                if (slot.Kind == CoinKind.DisguisedObstacle)
+                {
+                    if (slot.Obstacle != null) character.ContactDisguisedObstacle(slot.Obstacle);
+                    continue;
+                }
                 bool collected = slot.Kind == CoinKind.Random ? match.Rules.TryCollectRandomCoin(character.Id) : match.Rules.TryCollectCoin(character.Id, slot.Position);
                 if (!collected) continue;
                 Destroy(slot.Coin);
@@ -242,7 +296,8 @@ namespace EachOneCoin.Gameplay
 
         public bool HasCoin(GridPosition position)
         {
-            foreach (var slot in slots) if (slot.Coin != null && slot.Position.Equals(position)) return true;
+            foreach (var slot in slots)
+                if (slot.Coin != null && slot.Position.Equals(position) && (slot.Obstacle == null || (!slot.Obstacle.Consumed && !slot.Obstacle.Revealed))) return true;
             return false;
         }
 
@@ -256,13 +311,19 @@ namespace EachOneCoin.Gameplay
         private void Spawn(GridPosition position, CoinKind kind)
         {
             var coin = coinModel != null ? Instantiate(coinModel, coinRoot) : GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            coin.name = kind == CoinKind.Random ? "Random Coin" : kind == CoinKind.Mine ? "Mine Coin" : "Dropped Coin";
+            coin.name = kind == CoinKind.Random ? "Random Coin" : kind == CoinKind.Mine ? "Mine Coin" : kind == CoinKind.DisguisedObstacle ? "Disguised Obstacle" : "Dropped Coin";
             coin.transform.SetParent(coinRoot);
             coin.transform.position = match.Grid.CellToWorld(position) + Vector3.up * 0.45f;
             if (coinModel == null) coin.transform.localScale = Vector3.one * 0.35f;
             foreach (var collider in coin.GetComponentsInChildren<Collider>()) collider.enabled = false;
             GroundShadow.Create(coin, 0.55f);
-            slots.Add(new Slot { Position = position, Kind = kind, Coin = coin });
+            DisguisedObstacle obstacle = null;
+            if (kind == CoinKind.DisguisedObstacle)
+            {
+                obstacle = coin.AddComponent<DisguisedObstacle>();
+                obstacle.Initialize(this, position);
+            }
+            slots.Add(new Slot { Position = position, Kind = kind, Coin = coin, Obstacle = obstacle });
         }
 
         private void OnDestroy()
