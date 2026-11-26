@@ -97,9 +97,13 @@ namespace EachOneCoin.Networking
             connectedHumans = NetworkServer.active ? (byte)0 : occupied;
             if (NetworkServer.active) for (int i = 0; i < RoomState.Capacity; i++) if ((occupied & (1 << i)) != 0 && network.IsSeatConnected(i)) connectedHumans |= (byte)(1 << i);
             match.Rules.ConfigureParticipants(visible);
+            if (NetworkServer.active) match.Npcs.AssignPersonalities((byte)(visible & ~humans));
             match.Rules.StartMatch();
             for (int i = 0; i < RoomState.Capacity; i++)
             {
+                bool human = (humans & (1 << i)) != 0;
+                byte personality = NetworkServer.active ? match.Npcs.PersonalityCode(i) : hasCombatState ? replicaCombat[i].npcPersonality : (byte)0;
+                match.Characters[i].SetDisplayName(human ? "玩家" + (i + 1) : NpcController.PersonalityName(personality));
                 bool active = (visible & (1 << i)) != 0 && StatusAt(i) == ParticipantStatus.Active;
                 match.Characters[i].SetActiveState(active);
                 inputTimes[i] = float.NegativeInfinity;
@@ -168,6 +172,8 @@ namespace EachOneCoin.Networking
             if (message.matchStatus == (byte)MatchStatus.Finished)
             {
                 match.Coins.ClearReplicaWarnings();
+                if (started) for (int i = 0; i < RoomState.Capacity; i++)
+                    if ((humans & (1 << i)) == 0) match.Characters[i].SetAttackAim(false, Vector3.zero, 0f, 0f);
                 if (network != null) network.ClearRecoverySession();
             }
             if (!started) return;
@@ -354,7 +360,9 @@ namespace EachOneCoin.Networking
         {
             var p = match.Model.Participants[slot];
             return new CombatParticipant { status = (byte)p.Status, health = p.Health, maxHealth = p.MaxHealth,
-                stamina = match.StaminaAt(slot).Current, position = match.Characters[slot].transform.position };
+                stamina = match.StaminaAt(slot).Current, position = match.Characters[slot].transform.position,
+                npcPersonality = (humans & (1 << slot)) == 0 && (visible & (1 << slot)) != 0 ? match.Npcs.PersonalityCode(slot) : (byte)0,
+                npcWindup = match.Npcs.IsWindingUp(slot), npcWindupDirection = match.Npcs.WindupDirection(slot) };
         }
 
         public void SendCombatState(NetworkConnectionToClient connection = null)
@@ -372,10 +380,11 @@ namespace EachOneCoin.Networking
             for (int i = 0; i < RoomState.Capacity; i++)
             {
                 var p = message.Participant(i);
-                if (p.status > (byte)ParticipantStatus.Lost || p.health < 0 || p.maxHealth < 0 || p.health > p.maxHealth ||
+                if (p.status > (byte)ParticipantStatus.Lost || p.npcPersonality > 3 || p.health < 0 || p.maxHealth < 0 || p.health > p.maxHealth ||
                     float.IsNaN(p.stamina) || float.IsInfinity(p.stamina) || p.stamina < 0f ||
                     float.IsNaN(p.position.x) || float.IsInfinity(p.position.x) || float.IsNaN(p.position.y) || float.IsInfinity(p.position.y) ||
-                    float.IsNaN(p.position.z) || float.IsInfinity(p.position.z)) return;
+                    float.IsNaN(p.position.z) || float.IsInfinity(p.position.z) || !Finite(p.npcWindupDirection.x) || !Finite(p.npcWindupDirection.y) || !Finite(p.npcWindupDirection.z) ||
+                    (p.npcWindup && (p.npcWindupDirection.sqrMagnitude < 0.5f || p.npcWindupDirection.sqrMagnitude > 1.5f))) return;
             }
             for (int i = 0; i < RoomState.Capacity; i++)
             {
@@ -390,6 +399,12 @@ namespace EachOneCoin.Networking
                     match.Characters[i].ApplyNetworkPosition(p.position);
                 }
                 match.Characters[i].SetActiveState((visible & (1 << i)) != 0 && StatusAt(i) == ParticipantStatus.Active);
+                if ((humans & (1 << i)) == 0)
+                {
+                    match.Characters[i].SetDisplayName(NpcController.PersonalityName(p.npcPersonality));
+                    match.Characters[i].SetAttackAim(p.npcWindup && p.status == (byte)ParticipantStatus.Active && CurrentMatchStatus != MatchStatus.Finished,
+                        p.npcWindupDirection, match.Combat.AttackRange, match.Combat.AttackAngle);
+                }
             }
             hasCombatState = true; lastCombatSequence = message.sequence;
         }
@@ -527,7 +542,7 @@ namespace EachOneCoin.Networking
                     if (match.Model.Participants[i].Status == ParticipantStatus.Won || match.Model.Participants[i].Status == ParticipantStatus.Lost)
                         match.Characters[i].SetActiveState(false);
                 bool finished = match.Model.Status == MatchStatus.Finished;
-                if (finished) network.MarkMatchFinished();
+                if (finished) { match.Npcs.CancelAllWindups(); network.MarkMatchFinished(); }
                 if ((finished && !finalStateSent) || (!finished && Time.unscaledTime >= nextMatchState))
                 {
                     nextMatchState = Time.unscaledTime + 0.1f;

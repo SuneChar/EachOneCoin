@@ -547,6 +547,54 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator Npc_StraightPathDoesNotBrakeAtIntermediateCells()
+        {
+            var spawn = model.Participants[1].Spawn;
+            int dx = spawn.X < 10 ? 1 : -1;
+            var npc = Character(1);
+            // Reproduce the small cross-axis offset left by a previous corner.
+            Call(npc, "Teleport", CellToWorld(spawn) + Vector3.forward * 0.14f);
+            var target = new GridPosition(spawn.X + dx * 4, spawn.Y);
+            for (int step = 1; step <= 4; step++)
+                Assert.That((bool)Call(match, "IsBlocked", new GridPosition(spawn.X + dx * step, spawn.Y)), Is.False, "Test corridor must be clear.");
+            Call(coins, "Drop", target, 1);
+            Physics.SyncTransforms();
+            Call(npcs, "ResetPath", 1);
+            var paths = (System.Collections.IList[])npcs.GetType().GetField("paths", Private).GetValue(npcs);
+            ((GridPosition[])npcs.GetType().GetField("pathOrigins", Private).GetValue(npcs))[1] = spawn;
+            for (int step = 1; step <= 4; step++) paths[1].Add(new GridPosition(spawn.X + dx * step, spawn.Y));
+            var indices = (int[])npcs.GetType().GetField("pathIndices", Private).GetValue(npcs);
+            int crossings = 0;
+            for (int frame = 0; frame < 200 && indices[1] < 3; frame++)
+            {
+                int before = indices[1];
+                Call(npcs, "Tick", 1, 0.01f);
+                if (indices[1] > before && indices[1] <= 2)
+                {
+                    float speed = ((Vector3)Get(npc, "MovementVelocity")).magnitude;
+                    Assert.That(speed, Is.GreaterThan(5f), "NPC braked at an intermediate straight waypoint.");
+                    crossings++;
+                }
+            }
+            Assert.That(crossings, Is.EqualTo(2), "NPC did not cross two straight intermediate waypoints.");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_OpenAreaExplorationPrefersMultipleCells()
+        {
+            var npc = Character(1);
+            Call(npc, "Teleport", CellToWorld(model.Participants[1].Spawn));
+            Physics.SyncTransforms();
+            var path = new System.Collections.Generic.List<GridPosition>();
+            bool found = (bool)npcs.GetType().GetMethod("FindAlternativePath", Private).Invoke(npcs, new object[] { 1, path });
+            Assert.That(found, Is.True);
+            Assert.That(path.Count, Is.GreaterThanOrEqualTo(3), "Open-area exploration should not repeatedly choose the nearest cell.");
+            Assert.That(path.All(p => !(bool)Call(match, "IsBlocked", p)), Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Npc_UsesSameRegionSpeedRules()
         {
             var npc = Character(1);
@@ -575,6 +623,91 @@ namespace EachOneCoin.Tests
             var remaining = (Array)Call(coins, "CaptureReplicaEntries");
             Assert.That(remaining.Length, Is.EqualTo(1));
             Assert.That(entryType.GetField("id").GetValue(remaining.GetValue(0)), Is.EqualTo(entryType.GetField("id").GetValue(second)));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Nameplates_ShowAssignedNamesAndFollowActiveState()
+        {
+            var npcType = npcs.GetType();
+            var codeMethod = npcType.GetMethod("PersonalityCode");
+            var nameMethod = npcType.GetMethod("PersonalityName", BindingFlags.Static | BindingFlags.Public);
+            for (int i = 0; i < 4; i++)
+            {
+                var character = Character(i);
+                var nameplate = character.GetType().GetField("nameplate", Private).GetValue(character);
+                Assert.That(nameplate, Is.Not.Null);
+                var label = nameplate.GetType().GetField("label", Private).GetValue(nameplate);
+                string expected = i == 0 ? "玩家1" : (string)nameMethod.Invoke(null, new[] { codeMethod.Invoke(npcs, new object[] { i }) });
+                Assert.That(Get(label, "text"), Is.EqualTo(expected));
+                var font = Get(label, "font");
+                Assert.That(font, Is.Not.Null);
+                var hasCharacter = font.GetType().GetMethod("HasCharacter", new[] { typeof(char), typeof(bool) });
+                foreach (char c in expected) Assert.That((bool)hasCharacter.Invoke(font, new object[] { c, true }), Is.True, "Nameplate font is missing " + c);
+            }
+            var npc = Character(1);
+            var plate = npc.GetType().GetField("nameplate", Private).GetValue(npc);
+            var canvas = (Canvas)plate.GetType().GetField("canvas", Private).GetValue(plate);
+            Call(npc, "SetActiveState", false);
+            Assert.That(canvas.gameObject.activeSelf, Is.False);
+            Call(npc, "SetActiveState", true);
+            Assert.That(canvas.gameObject.activeSelf, Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_AssignsDistinctPersonalitiesAndKeepsThemOnPathReset()
+        {
+            Call(npcs, "AssignPersonalities", (byte)14);
+            var values = (Array)npcs.GetType().GetField("personalities", Private).GetValue(npcs);
+            var before = Enumerable.Range(1, 3).Select(i => values.GetValue(i).ToString()).ToArray();
+            Assert.That(before.Distinct().Count(), Is.EqualTo(3));
+            Call(npcs, "ResetPath", 1);
+            Assert.That(values.GetValue(1).ToString(), Is.EqualTo(before[0]));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_WithoutCoinTargetFindsAlternativePath()
+        {
+            var path = new System.Collections.Generic.List<GridPosition>();
+            bool found = (bool)npcs.GetType().GetMethod("FindAlternativePath", Private).Invoke(npcs, new object[] { 1, path });
+            Assert.That(found, Is.True);
+            Assert.That(path.Count, Is.GreaterThan(0));
+            Assert.That(path.All(p => !(bool)Call(match, "IsBlocked", p)), Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_AttackWaitsForWindupAndCanMissWhenTargetMoves()
+        {
+            var npc = Character(1);
+            var player = Character(0);
+            Call(npc, "Teleport", CellToWorld(new GridPosition(10, 2)));
+            Call(player, "Teleport", CellToWorld(new GridPosition(11, 2)));
+            Physics.SyncTransforms();
+            int health = model.Participants[0].Health;
+            Call(npcs, "Tick", 1, 0.1f);
+            Assert.That((bool)Call(npcs, "IsWindingUp", 1), Is.True);
+            Assert.That(model.Participants[0].Health, Is.EqualTo(health));
+            Call(player, "Teleport", CellToWorld(new GridPosition(13, 2)));
+            Physics.SyncTransforms();
+            Call(npcs, "Tick", 1, 0.7f);
+            Assert.That((bool)Call(npcs, "IsWindingUp", 1), Is.False);
+            Assert.That(model.Participants[0].Health, Is.EqualTo(health));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_WindupIsCancelledWhenPathIsReset()
+        {
+            Call(Character(1), "Teleport", CellToWorld(new GridPosition(10, 2)));
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(11, 2)));
+            Physics.SyncTransforms();
+            Call(npcs, "Tick", 1, 0.01f);
+            Assert.That((bool)Call(npcs, "IsWindingUp", 1), Is.True);
+            Call(npcs, "ResetPath", 1);
+            Assert.That((bool)Call(npcs, "IsWindingUp", 1), Is.False);
             yield return null;
         }
 
@@ -608,6 +741,7 @@ namespace EachOneCoin.Tests
             Call(coins, "Drop", target, 1);
             var paths = (System.Collections.IList[])npcs.GetType().GetField("paths", Private).GetValue(npcs);
             paths[1].Clear();
+            ((GridPosition[])npcs.GetType().GetField("pathOrigins", Private).GetValue(npcs))[1] = spawn;
             paths[1].Add(corner);
             paths[1].Add(target);
             var npc = Character(1);

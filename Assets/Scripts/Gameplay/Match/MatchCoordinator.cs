@@ -32,6 +32,7 @@ namespace EachOneCoin.Gameplay
         public CombatController Combat => combat;
         public NpcController Npcs => npcs;
         public ArenaCharacter[] Characters { get; private set; }
+        public TMPro.TMP_FontAsset NameplateFont { get; private set; }
         public GridPosition[] Spawns { get; private set; }
         public float MoveSpeed => moveSpeed;
         public float MovementAcceleration => Mathf.Max(0.1f, movementAcceleration);
@@ -109,7 +110,14 @@ namespace EachOneCoin.Gameplay
             if (!IsNetworkMovementTest) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
+            {
                 foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.BindArena(this);
+                if (NameplateFont == null)
+                {
+                    var ui = root.GetComponentInChildren<ArenaGameUI>(true);
+                    if (ui != null) NameplateFont = ui.NameplateFont;
+                }
+            }
             Characters = new ArenaCharacter[4];
             Characters[0] = playerTemplate;
             for (int i = 1; i < Characters.Length; i++)
@@ -126,6 +134,12 @@ namespace EachOneCoin.Gameplay
             }
             grid.Refresh(Model.Grid);
             coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
+            if (!IsNetworkMovementTest)
+            {
+                npcs.AssignPersonalities(14);
+                Characters[0].SetDisplayName("玩家1");
+                for (int i = 1; i < Characters.Length; i++) Characters[i].SetDisplayName(NpcController.PersonalityName(npcs.PersonalityCode(i)));
+            }
             if (IsNetworkMovementTest)
             {
                 for (int i = 0; i < Characters.Length; i++)
@@ -172,6 +186,7 @@ namespace EachOneCoin.Gameplay
             for (int i = 0; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) Characters[i].TickAttackKnockback(Time.deltaTime);
             coins.AdvanceMatch(Time.deltaTime);
             Rules.AdvanceTime(Time.deltaTime);
+            if (Model.Status != MatchStatus.Playing) npcs.CancelAllWindups();
             RefreshStates();
         }
 

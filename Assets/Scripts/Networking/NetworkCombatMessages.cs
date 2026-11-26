@@ -9,9 +9,13 @@ namespace EachOneCoin.Networking
     public struct CombatParticipant
     {
         public byte status;
+        // Zero for human or unknown; 1-3 identify the server-assigned NPC personality.
+        public byte npcPersonality;
         public int health, maxHealth;
         public float stamina;
         public Vector3 position;
+        public bool npcWindup;
+        public Vector3 npcWindupDirection;
     }
     public struct CombatStateMessage : NetworkMessage
     {

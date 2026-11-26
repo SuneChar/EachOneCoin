@@ -39,6 +39,7 @@ namespace EachOneCoin.Gameplay
         private int lastUpcomingSeconds = -1;
         private float lastStamina = -1f;
         private bool networkMenuOpen;
+        public TMPro.TMP_FontAsset NameplateFont => timeText != null ? timeText.font : null;
         public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
 
         private void Awake()

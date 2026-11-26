@@ -34,6 +34,8 @@ namespace EachOneCoin.Gameplay
             }
         }
 
+        public bool CanAttack(int attacker) => match != null && attacker >= 0 && attacker < cooldowns.Length && match.Model.Status == MatchStatus.Playing && match.Model.Participants[attacker].Status == ParticipantStatus.Active && cooldowns[attacker] <= 0f && (!match.IsNetworkMovementTest || (Mirror.NetworkServer.active && match.NetworkController.IsSlotActive(attacker)));
+
         public void Attack(int attacker, Vector3 aimDirection) => TryAttack(attacker, aimDirection);
 
         public bool TryAttack(int attacker, Vector3 aimDirection)
