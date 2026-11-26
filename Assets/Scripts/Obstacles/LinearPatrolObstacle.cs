@@ -10,6 +10,24 @@ public class LinearPatrolObstacle : ObstacleBehaviour
     private Vector3 startPoint;
     private Vector3 endPoint;
     private bool headingToEnd = true;
+    private bool hasReplicaPosition;
+    private Vector3 replicaPosition;
+    public Vector3 NetworkPosition => body.position;
+
+    public void ApplyNetworkPosition(Vector3 position)
+    {
+        replicaPosition = position;
+        if (!hasReplicaPosition)
+        {
+            body.position = position;
+            hasReplicaPosition = true;
+        }
+    }
+
+    private void Update()
+    {
+        if (hasReplicaPosition) body.position = Vector3.Lerp(body.position, replicaPosition, 1f - Mathf.Exp(-12f * Time.deltaTime));
+    }
 
     private void Awake()
     {

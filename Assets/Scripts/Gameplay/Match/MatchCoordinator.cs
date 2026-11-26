@@ -39,12 +39,19 @@ namespace EachOneCoin.Gameplay
         public float OwnRegionSpeedMultiplier => Mathf.Max(0.01f, ownRegionSpeedMultiplier);
         public float EnemyRegionSpeedMultiplier => Mathf.Max(0.01f, enemyRegionSpeedMultiplier);
         public StaminaModel Stamina { get; private set; }
+        public StaminaModel StaminaAt(int id) => session.StaminaAt(id);
+        public float SprintStaminaPerSecond => Mathf.Max(0f, sprintStaminaPerSecond);
+        public float StaminaRecoveryPerSecond => Mathf.Max(0f, staminaRecoveryPerSecond);
+        public float SprintSpeedMultiplier => Mathf.Max(1f, sprintSpeedMultiplier);
         public float ObstacleInvulnerabilitySeconds => Mathf.Max(0f, obstacleInvulnerabilitySeconds);
         public float ObstacleKnockbackDistance => Mathf.Max(0f, obstacleKnockbackDistance);
         public float ObstacleKnockbackSeconds => Mathf.Max(0.01f, obstacleKnockbackSeconds);
         public int InitialHealth => Mathf.Max(1, initialHealth);
         public event System.Action<int> ObstacleHit;
+        public event System.Action<int> AttackHit;
         public bool IsPaused { get; private set; }
+        public bool IsNetworkMovementTest { get; private set; }
+        public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
         private float timeScaleBeforePause = 1f;
         private MatchSessionModel session;
         private MatchSystem matchSystem;
@@ -86,13 +93,15 @@ namespace EachOneCoin.Gameplay
 
         private void Start()
         {
+            var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+            IsNetworkMovementTest = network != null && Mirror.NetworkClient.active && network.HasSnapshot;
             grid.Initialize();
             Spawns = new GridPosition[4];
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
             session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
             matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
             Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina));
-            Rules.StartMatch();
+            if (!IsNetworkMovementTest) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
                 foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.BindArena(this);
@@ -102,7 +111,8 @@ namespace EachOneCoin.Gameplay
             {
                 Characters[i] = Instantiate(playerTemplate, playerTemplate.transform.parent);
                 Characters[i].name = "NPC " + i;
-                foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(false);
+                if (!IsNetworkMovementTest)
+                    foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(false);
             }
             for (int i = 0; i < Characters.Length; i++)
             {
@@ -111,6 +121,17 @@ namespace EachOneCoin.Gameplay
             }
             grid.Refresh(Model.Grid);
             coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
+            if (IsNetworkMovementTest)
+            {
+                for (int i = 0; i < Characters.Length; i++)
+                    foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(i == network.LocalSlot);
+                if (!Mirror.NetworkServer.active)
+                    foreach (var root in gameObject.scene.GetRootGameObjects())
+                        foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.SetRunning(false);
+                NetworkController = gameObject.AddComponent<EachOneCoin.Networking.NetworkMatchController>();
+                NetworkController.Initialize(this, network, localInput);
+                return;
+            }
             if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
                 System.Array.Exists(System.Environment.GetCommandLineArgs(), arg => arg == "--movement-telemetry"))
             {
@@ -121,7 +142,7 @@ namespace EachOneCoin.Gameplay
 
         private void Update()
         {
-            if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            if (IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
@@ -184,8 +205,25 @@ namespace EachOneCoin.Gameplay
             if (IsPaused || !Rules.TryObstacleContact(id)) return false;
             if (id == 0 && gameAudio != null) gameAudio.PlayObstacleHit();
             ObstacleHit?.Invoke(id);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active) NetworkController.BroadcastDamage(id, true);
             if (Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
             return true;
+        }
+
+        public void NotifyAttackHit(int id)
+        {
+            AttackHit?.Invoke(id);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active) NetworkController.BroadcastDamage(id, false);
+        }
+
+        public void NotifyNetworkDamage(int id, bool obstacle)
+        {
+            if (obstacle)
+            {
+                if (gameAudio != null) gameAudio.PlayObstacleHit();
+                ObstacleHit?.Invoke(id);
+            }
+            else AttackHit?.Invoke(id);
         }
 
         public bool IsHazard(Collider collider)

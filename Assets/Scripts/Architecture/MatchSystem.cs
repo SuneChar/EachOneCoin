@@ -20,6 +20,15 @@ namespace EachOneCoin
 
         private MatchModel CurrentMatch => session?.Match ?? throw new InvalidOperationException("No active match session is available.");
 
+        public void ConfigureParticipants(byte mask)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Waiting) throw new InvalidOperationException("Participants must be configured before starting.");
+            int validMask = (1 << match.Participants.Count) - 1;
+            if ((mask & validMask) == 0 || (mask & ~validMask) != 0) throw new ArgumentOutOfRangeException(nameof(mask));
+            for (int i = 0; i < match.Participants.Count; i++) match.Participants[i].IsParticipating = (mask & (1 << i)) != 0;
+        }
+
         public bool StartMatch()
         {
             var match = CurrentMatch;
@@ -36,7 +45,7 @@ namespace EachOneCoin
             match.RemainingTime = Math.Max(0f, match.RemainingTime - elapsed);
             if (match.RemainingTime > 0f) return;
             foreach (var participant in match.Participants)
-                if (participant.Status == ParticipantStatus.Active || participant.Status == ParticipantStatus.Respawning)
+                if (participant.IsParticipating && (participant.Status == ParticipantStatus.Active || participant.Status == ParticipantStatus.Respawning))
                     participant.Status = ParticipantStatus.Lost;
             match.Status = MatchStatus.Finished;
         }
@@ -72,11 +81,16 @@ namespace EachOneCoin
         }
 
         public void TickStamina(float deltaTime, bool active, bool moving, bool sprintHeld, float drainPerSecond, float recoveryPerSecond)
+            => TickStamina(0, deltaTime, active, moving, sprintHeld, drainPerSecond, recoveryPerSecond);
+
+        public void TickStamina(int participantId, float deltaTime, bool active, bool moving, bool sprintHeld, float drainPerSecond, float recoveryPerSecond)
         {
             if (float.IsNaN(deltaTime) || float.IsInfinity(deltaTime) || deltaTime < 0f) throw new ArgumentOutOfRangeException(nameof(deltaTime));
             if (float.IsNaN(drainPerSecond) || float.IsInfinity(drainPerSecond) || drainPerSecond < 0f) throw new ArgumentOutOfRangeException(nameof(drainPerSecond));
             if (float.IsNaN(recoveryPerSecond) || float.IsInfinity(recoveryPerSecond) || recoveryPerSecond < 0f) throw new ArgumentOutOfRangeException(nameof(recoveryPerSecond));
-            var stamina = session?.Stamina ?? throw new InvalidOperationException("No active match session is available.");
+            var match = CurrentMatch;
+            if (participantId < 0 || participantId >= match.Participants.Count) throw new ArgumentOutOfRangeException(nameof(participantId));
+            var stamina = session.StaminaAt(participantId);
             if (!sprintHeld) stamina.ExhaustedUntilRelease = false;
             stamina.IsSprinting = active && moving && sprintHeld && !stamina.ExhaustedUntilRelease && stamina.Current > 0f;
             if (!active) return;
@@ -143,7 +157,7 @@ namespace EachOneCoin
         public bool TryRespawn(int participantId)
         {
             var match = CurrentMatch;
-            if (match.Status != MatchStatus.Playing || participantId < 0 || participantId >= match.Participants.Count) return false;
+            if (match.Status != MatchStatus.Playing || participantId < 0 || participantId >= match.Participants.Count || !match.Participants[participantId].IsParticipating) return false;
             var participant = match.Participants[participantId];
             if (participant.Status != ParticipantStatus.Respawning) return false;
             participant.Health = participant.MaxHealth;
@@ -151,12 +165,23 @@ namespace EachOneCoin
             return true;
         }
 
-        private static bool IsActive(MatchModel match, int id) => match.Status == MatchStatus.Playing && id >= 0 && id < match.Participants.Count && match.Participants[id].Status == ParticipantStatus.Active;
+        public bool Forfeit(int participantId)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Playing || participantId < 0 || participantId >= match.Participants.Count) return false;
+            var participant = match.Participants[participantId];
+            if (!participant.IsParticipating || (participant.Status != ParticipantStatus.Active && participant.Status != ParticipantStatus.Respawning)) return false;
+            participant.Status = ParticipantStatus.Lost;
+            FinishIfNoParticipantsRemain(match);
+            return true;
+        }
+
+        private static bool IsActive(MatchModel match, int id) => match.Status == MatchStatus.Playing && id >= 0 && id < match.Participants.Count && match.Participants[id].IsParticipating && match.Participants[id].Status == ParticipantStatus.Active;
 
         private static void FinishIfNoParticipantsRemain(MatchModel match)
         {
             foreach (var participant in match.Participants)
-                if (participant.Status == ParticipantStatus.Active || participant.Status == ParticipantStatus.Respawning) return;
+                if (participant.IsParticipating && (participant.Status == ParticipantStatus.Active || participant.Status == ParticipantStatus.Respawning)) return;
             match.Status = MatchStatus.Finished;
         }
     }

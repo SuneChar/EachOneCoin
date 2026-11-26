@@ -35,11 +35,13 @@ namespace EachOneCoin.Gameplay
         private AttackVisual attackVisual;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
+        public void StopNetworkInput() { movementVelocity = Vector3.zero; }
         public float RegionSpeedMultiplier
         {
             get
             {
                 if (match == null || match.Model == null || match.Grid == null) return 1f;
+                if (match.IsNetworkMovementTest && !Mirror.NetworkServer.active) return 1f;
                 var owner = match.Model.Grid.OwnerAt(match.Grid.WorldToCell(transform.position));
                 return !owner.HasValue ? 1f : owner.Value == Id ? match.OwnRegionSpeedMultiplier : match.EnemyRegionSpeedMultiplier;
             }
@@ -151,7 +153,7 @@ namespace EachOneCoin.Gameplay
             {
                 MoveOnPlane(delta / steps);
                 ReportCell();
-                match.Coins.TryCollect(this);
+                if (!match.IsNetworkMovementTest || Mirror.NetworkServer.active) match.Coins.TryCollect(this);
                 if (match.Model.Participants[Id].Status != ParticipantStatus.Active || knockbackTime > 0f) break;
             }
             if ((transform.position - before).sqrMagnitude > 0.000001f)
@@ -160,6 +162,29 @@ namespace EachOneCoin.Gameplay
                 if (Id == 0 && footstepTimer <= 0f) { match.PlayFootstep(); footstepTimer = 0.35f; }
             }
             else footstepTimer = 0f;
+        }
+
+        public void ApplyNetworkPosition(Vector3 position)
+        {
+            Vector3 delta = position - transform.position;
+            delta.y = 0f;
+            if (delta.sqrMagnitude > 0.000001f)
+            {
+                if (arrow != null) arrow.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
+                if (Mathf.Abs(delta.x) > 0.0001f) desiredFacing = delta.x < 0f ? -1 : 1;
+                UpdateFacing(Time.deltaTime);
+                if (match != null && match.IsNetworkMovementTest && !Mirror.NetworkServer.active)
+                {
+                    var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+                    if (network != null && Id == network.LocalSlot)
+                    {
+                        footstepTimer -= Time.deltaTime;
+                        if (footstepTimer <= 0f) { match.PlayFootstep(); footstepTimer = 0.35f; }
+                    }
+                }
+            }
+            else footstepTimer = 0f;
+            transform.position = position;
         }
 
         public void StartAttackKnockback(Vector3 displacement, float duration)
@@ -216,10 +241,15 @@ namespace EachOneCoin.Gameplay
 
         private void ReportCell()
         {
+            if (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsRunning)) return;
             var cell = match.Grid.WorldToCell(transform.position);
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
-            if (match.Rules.TryPaint(Id, cell)) match.Grid.Refresh(match.Model.Grid);
+            if (match.Rules.TryPaint(Id, cell))
+            {
+                match.Grid.Refresh(match.Model.Grid);
+                if (match.IsNetworkMovementTest) match.NetworkController.BroadcastGridChange(cell, Id);
+            }
         }
 
         private void UpdateFacing(float deltaTime)
@@ -250,7 +280,7 @@ namespace EachOneCoin.Gameplay
 
         private void TryHazard(Collider other)
         {
-            if (match == null || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
+            if (match == null || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
             Vector3 center = transform.TransformPoint(controller.center);
             Vector3 direction = center - other.ClosestPoint(center);
             touching.Add(other);
@@ -297,7 +327,7 @@ namespace EachOneCoin.Gameplay
                 knockbackTime -= stepTime;
                 MoveOnPlane(knockback);
                 ReportCell();
-                match.Coins.TryCollect(this);
+                if (!match.IsNetworkMovementTest || Mirror.NetworkServer.active) match.Coins.TryCollect(this);
             }
             if (controller == null || !controller.enabled || touching.Count == 0) return;
             var center = transform.TransformPoint(controller.center);

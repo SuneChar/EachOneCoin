@@ -76,6 +76,45 @@ namespace EachOneCoin
             unchecked { Revision++; }
         }
 
+        // Replica data is validated completely before any cell is changed. 0 = empty, 1..4 = owner + 1.
+        public bool ApplyReplicaSnapshot(byte[] values)
+        {
+            if (values == null || values.Length != Width * Height) return false;
+            for (int x = 0; x < Width; x++) for (int y = 0; y < Height; y++)
+                if (!ValidReplicaOwner(new GridPosition(x, y), values[x * Height + y])) return false;
+            bool changed = false;
+            for (int x = 0; x < Width; x++) for (int y = 0; y < Height; y++)
+            {
+                byte encoded = values[x * Height + y];
+                int? owner = encoded == 0 ? (int?)null : encoded - 1;
+                if (owners[x, y] == owner) continue;
+                owners[x, y] = owner;
+                changed = true;
+            }
+            if (changed) unchecked { Revision++; }
+            return true;
+        }
+
+        public bool ApplyReplicaOwner(GridPosition position, byte encoded)
+        {
+            if (!ValidReplicaOwner(position, encoded)) return false;
+            int? owner = encoded == 0 ? (int?)null : encoded - 1;
+            if (owners[position.X, position.Y] != owner)
+            {
+                owners[position.X, position.Y] = owner;
+                unchecked { Revision++; }
+            }
+            return true;
+        }
+
+        private bool ValidReplicaOwner(GridPosition position, byte encoded)
+        {
+            if (!Contains(position) || encoded > spawns.Count || (blocked[position.X, position.Y] && encoded != 0)) return false;
+            foreach (var spawn in spawns)
+                if (spawn.Value.Equals(position)) return encoded == spawn.Key + 1;
+            return true;
+        }
+
         public bool IsConnected(int participantId, GridPosition target)
         {
             if (!Contains(target) || blocked[target.X, target.Y] || owners[target.X, target.Y] != participantId) return false;

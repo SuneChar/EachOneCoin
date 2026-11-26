@@ -20,6 +20,8 @@ public class BootMenu : MonoBehaviour
     private bool showPrompts;
     private bool settingsOpen;
     private bool quitOpen;
+    private bool lanRoomOpen;
+    [SerializeField] private LanRoomUI lanRoom;
 
     private void Awake()
     {
@@ -28,6 +30,7 @@ public class BootMenu : MonoBehaviour
         inputDevice = GetComponent<InputDeviceTracker>();
         usingGamepad = inputDevice.UsingGamepad;
         inputDevice.DeviceChanged += OnDeviceChanged;
+        lanRoom.Initialize(this);
         Refresh();
     }
 
@@ -35,22 +38,22 @@ public class BootMenu : MonoBehaviour
     private void OnDeviceChanged(bool gamepad) { usingGamepad = gamepad; Refresh(); }
     private void Refresh()
     {
-        startPanel.SetActive(!settingsOpen && !quitOpen);
+        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen);
         settingsPanel.SetActive(settingsOpen);
         quitConfirmPanel.SetActive(quitOpen);
         if (EventSystem.current != null)
         {
             EventSystem.current.sendNavigationEvents = usingGamepad;
             EventSystem.current.SetSelectedGameObject(null);
-            var active = quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
-            var first = active.GetComponentInChildren<Selectable>();
+            var active = lanRoomOpen ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
+            var first = active != null ? active.GetComponentInChildren<Selectable>() : null;
             if (usingGamepad && first != null) EventSystem.current.SetSelectedGameObject(first.gameObject);
         }
         if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, false, settingsOpen || quitOpen);
     }
     private void LateUpdate()
     {
-        if (!usingGamepad || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != null) return;
+        if (lanRoomOpen || !usingGamepad || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != null) return;
         var first = (quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel).GetComponentInChildren<Selectable>();
         if (first != null && first.IsInteractable()) EventSystem.current.SetSelectedGameObject(first.gameObject);
     }
@@ -58,10 +61,12 @@ public class BootMenu : MonoBehaviour
     {
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || Input.GetKeyDown(KeyCode.JoystickButton1))
         {
-            if (quitOpen) CancelQuit();
+            if (lanRoomOpen) lanRoom.Close();
+            else if (quitOpen) CancelQuit();
             else if (settingsOpen) CloseSettings();
         }
     }
+    public void SetLanRoomOpen(bool open) { lanRoomOpen = open; Refresh(); }
     public void StartGame() { SceneManager.LoadScene("ArenaScene"); }
     public void OpenSettings()
     {

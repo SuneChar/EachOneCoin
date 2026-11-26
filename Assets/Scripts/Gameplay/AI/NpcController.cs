@@ -92,7 +92,8 @@ namespace EachOneCoin.Gameplay
             bool found = false;
             for (int i = 0; i < match.Characters.Length; i++)
             {
-                if (i == id || match.Model.Participants[i].Status != ParticipantStatus.Active) continue;
+                if (i == id || !match.Model.Participants[i].IsParticipating || match.Model.Participants[i].Status != ParticipantStatus.Active ||
+                    (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(i))) continue;
                 Vector3 delta = match.Characters[i].transform.position - origin;
                 delta.y = 0f;
                 if (delta.sqrMagnitude > nearestSquared) continue;

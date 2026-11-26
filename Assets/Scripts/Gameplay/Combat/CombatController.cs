@@ -24,32 +24,38 @@ namespace EachOneCoin.Gameplay
         {
             for (int i = 0; i < match.Characters.Length; i++)
             {
+                if (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(i)) continue;
                 cooldowns[i] = Mathf.Max(0f, cooldowns[i] - deltaTime);
                 if (match.Model.Participants[i].Status != ParticipantStatus.Respawning) continue;
-                respawns[i] -= deltaTime;
-                if (respawns[i] > 0f || !match.Rules.TryRespawn(i)) continue;
+                respawns[i] = Mathf.Max(0f, respawns[i] - deltaTime);
+                if (respawns[i] > 0f || (match.IsNetworkMovementTest && !match.NetworkController.CanRespawn(i)) || !match.Rules.TryRespawn(i)) continue;
                 match.Characters[i].SetActiveState(true);
                 match.Characters[i].Teleport(match.Grid.CellToWorld(match.Spawns[i]));
             }
         }
 
-        public void Attack(int attacker, Vector3 aimDirection)
+        public void Attack(int attacker, Vector3 aimDirection) => TryAttack(attacker, aimDirection);
+
+        public bool TryAttack(int attacker, Vector3 aimDirection)
         {
-            if (match.Model.Status != MatchStatus.Playing || attacker < 0 || attacker >= match.Characters.Length || match.Model.Participants[attacker].Status != ParticipantStatus.Active || cooldowns[attacker] > 0f) return;
+            if (match.IsNetworkMovementTest && !Mirror.NetworkServer.active) return false;
+            if (match.Model.Status != MatchStatus.Playing || attacker < 0 || attacker >= match.Characters.Length || match.Model.Participants[attacker].Status != ParticipantStatus.Active || cooldowns[attacker] > 0f || (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(attacker))) return false;
             aimDirection.y = 0f;
-            if (aimDirection.sqrMagnitude < 0.000001f) return;
+            if (aimDirection.sqrMagnitude < 0.000001f) return false;
             aimDirection.Normalize();
             cooldowns[attacker] = Mathf.Max(0.1f, attackCooldown);
             var attackerCharacter = match.Characters[attacker];
             attackerCharacter.PlayAttack(aimDirection, AttackRange, AttackAngle);
+            if (match.IsNetworkMovementTest) match.NetworkController.BroadcastAttack(attacker, aimDirection);
             Vector3 origin = attackerCharacter.transform.position;
             for (int target = 0; target < match.Characters.Length; target++)
             {
-                if (target == attacker || match.Model.Participants[target].Status != ParticipantStatus.Active) continue;
+                if (target == attacker || match.Model.Participants[target].Status != ParticipantStatus.Active || (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(target))) continue;
                 Vector3 direction = match.Characters[target].transform.position - origin;
                 direction.y = 0f;
                 if (!IsWithinAttack(direction, aimDirection, AttackRange, AttackAngle)) continue;
                 if (!match.Rules.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) continue;
+                match.NotifyAttackHit(target);
                 if (match.Model.Participants[target].Status != ParticipantStatus.Respawning)
                 {
                     if (direction.sqrMagnitude < 0.000001f) direction = aimDirection;
@@ -62,6 +68,7 @@ namespace EachOneCoin.Gameplay
                 match.Characters[target].SetActiveState(false);
                 match.Npcs.ResetPath(target);
             }
+            return true;
         }
 
         public static bool IsWithinAttack(Vector3 offset, Vector3 direction, float range, float angle)

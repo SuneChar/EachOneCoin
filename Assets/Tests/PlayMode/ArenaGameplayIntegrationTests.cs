@@ -324,6 +324,33 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator CoinSchedule_ReplicaRestoresWarningAndRejectsInvalidState()
+        {
+            var statusType = Type.GetType("EachOneCoin.Networking.MineStatusMessage, Assembly-CSharp", true);
+            object Status(int mine, ushort[] xs, ushort[] ys)
+            {
+                var value = Activator.CreateInstance(statusType);
+                statusType.GetField("elapsed").SetValue(value, 3.5d);
+                statusType.GetField("nextEvent").SetValue(value, 0);
+                statusType.GetField("warningMine").SetValue(value, mine);
+                statusType.GetField("warningX").SetValue(value, xs);
+                statusType.GetField("warningY").SetValue(value, ys);
+                return value;
+            }
+            var empty = Status(-1, Array.Empty<ushort>(), Array.Empty<ushort>());
+            var warning = Status(2, new ushort[] { 4, 6 }, new ushort[] { 5, 5 });
+            Assert.That((bool)Call(coins, "ApplyReplicaSchedule", warning), Is.True);
+            Assert.That(WarningMarkers().Count(), Is.EqualTo(2));
+            Assert.That((bool)Call(coins, "ApplyReplicaSchedule", Status(4, new ushort[] { 2 }, new ushort[] { 2 })), Is.False);
+            Assert.That(WarningMarkers().Count(), Is.EqualTo(2), "Invalid snapshots must not modify the current warning.");
+            Assert.That((bool)Call(coins, "ApplyReplicaSchedule", empty), Is.True);
+            yield return null;
+            Assert.That(WarningMarkers().Count(), Is.Zero);
+            Assert.That((bool)Call(coins, "ApplyReplicaSchedule", warning), Is.True);
+            Assert.That(WarningMarkers().Count(), Is.EqualTo(2), "A reconnect snapshot must restore the active warning.");
+        }
+
+        [UnityTest]
         public IEnumerator MineCoin_MagnetCollectsInSameCellAndWithinRadiusButNotBeyond()
         {
             var character = Character(0);
@@ -491,6 +518,26 @@ namespace EachOneCoin.Tests
             Assert.That((float)Get(npc, "RegionSpeedMultiplier"), Is.EqualTo(1.2f).Within(0.001f));
             Assert.That(rules.TryPaint(0, cell), Is.True);
             Assert.That((float)Get(npc, "RegionSpeedMultiplier"), Is.EqualTo(0.8f).Within(0.001f));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator CoinReplica_SameCellEntriesHaveDistinctIdsAndRemoveIndependently()
+        {
+            var position = new GridPosition(2, 2);
+            Call(coins, "Drop", position, 2);
+            var entries = (Array)Call(coins, "CaptureReplicaEntries");
+            Assert.That(entries.Length, Is.EqualTo(2));
+            var first = entries.GetValue(0);
+            var second = entries.GetValue(1);
+            var entryType = first.GetType();
+            Assert.That(entryType.GetField("id").GetValue(first), Is.Not.EqualTo(entryType.GetField("id").GetValue(second)));
+            Assert.That(entryType.GetField("x").GetValue(first), Is.EqualTo(entryType.GetField("x").GetValue(second)));
+            Assert.That(entryType.GetField("y").GetValue(first), Is.EqualTo(entryType.GetField("y").GetValue(second)));
+            Assert.That((bool)Call(coins, "ApplyReplicaChange", (byte)1, first), Is.True);
+            var remaining = (Array)Call(coins, "CaptureReplicaEntries");
+            Assert.That(remaining.Length, Is.EqualTo(1));
+            Assert.That(entryType.GetField("id").GetValue(remaining.GetValue(0)), Is.EqualTo(entryType.GetField("id").GetValue(second)));
             yield return null;
         }
 

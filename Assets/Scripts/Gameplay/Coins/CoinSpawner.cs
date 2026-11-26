@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using EachOneCoin.Networking;
+using Mirror;
 using UnityEngine;
 
 namespace EachOneCoin.Gameplay
@@ -14,7 +16,8 @@ namespace EachOneCoin.Gameplay
         // A coin in the character's own cell always counts as within reach.
         [SerializeField, Min(0.1f)] private float coinPickupRadius = 0.8f;
         private enum CoinKind { Mine, Dropped }
-        private sealed class Slot { public GridPosition Position; public CoinKind Kind; public GameObject Coin; }
+        private sealed class Slot { public uint Id; public GridPosition Position; public CoinKind Kind; public GameObject Coin; }
+        private uint nextId;
         private sealed class CoinEvent { public int Index; public int MineIndex; public int[] MineOrder; public GridPosition[] Cells; public GameObject[] Markers; }
         private readonly List<Slot> slots = new List<Slot>();
         private readonly List<CoinEvent> pending = new List<CoinEvent>();
@@ -113,12 +116,14 @@ namespace EachOneCoin.Gameplay
                     var warned = PrepareEvent(nextWarning, true);
                     if (warned != null) pending.Add(warned);
                     nextWarning++;
+                    PublishSchedule();
                     continue;
                 }
                 if (nextSpawn < CoinSpawnSchedule.EventCount && elapsed >= CoinSpawnSchedule.EventTime(nextSpawn))
                 {
                     SpawnEvent(nextSpawn);
                     nextSpawn++;
+                    PublishSchedule();
                 }
             }
             if (elapsed >= duration) ClearWarnings();
@@ -169,6 +174,7 @@ namespace EachOneCoin.Gameplay
 
         public void TryCollect(ArenaCharacter character)
         {
+            if (match.IsNetworkMovementTest && !NetworkServer.active) return;
             var position = character.transform.position;
             float pickupRadius = Mathf.Max(0f, coinPickupRadius);
             float pickupRadiusSquared = pickupRadius * pickupRadius;
@@ -183,6 +189,7 @@ namespace EachOneCoin.Gameplay
                 Destroy(slot.Coin);
                 slots.RemoveAt(i);
                 match.CoinCollected(character.Id);
+                PublishChange(1, slot);
             }
         }
 
@@ -450,7 +457,9 @@ namespace EachOneCoin.Gameplay
             mineRenderers[mine].SetPropertyBlock(mineBlock);
         }
 
-        private void Spawn(GridPosition position, CoinKind kind)
+        private void Spawn(GridPosition position, CoinKind kind) => SpawnCore(position, kind, ++nextId, false);
+
+        private void SpawnCore(GridPosition position, CoinKind kind, uint id, bool replica)
         {
             var coin = coinModel != null ? Instantiate(coinModel, coinRoot) : GameObject.CreatePrimitive(PrimitiveType.Sphere);
             coin.name = kind == CoinKind.Mine ? "Mine Coin" : "Dropped Coin";
@@ -459,8 +468,100 @@ namespace EachOneCoin.Gameplay
             if (coinModel == null) coin.transform.localScale = Vector3.one * 0.35f;
             foreach (var collider in coin.GetComponentsInChildren<Collider>()) collider.enabled = false;
             GroundShadow.Create(coin, 0.55f);
-            slots.Add(new Slot { Position = position, Kind = kind, Coin = coin });
+            var slot = new Slot { Id = id, Position = position, Kind = kind, Coin = coin };
+            slots.Add(slot);
+            if (!replica) PublishChange(0, slot);
         }
+
+        private CoinEntry Entry(Slot slot) => new CoinEntry { id = slot.Id, kind = (byte)slot.Kind, x = (ushort)slot.Position.X, y = (ushort)slot.Position.Y };
+
+        private void PublishChange(byte operation, Slot slot)
+        {
+            if (match != null && match.IsNetworkMovementTest && NetworkServer.active && match.NetworkController != null)
+                match.NetworkController.BroadcastCoinChange(operation, Entry(slot));
+        }
+
+        private void PublishSchedule()
+        {
+            if (match != null && match.IsNetworkMovementTest && NetworkServer.active && match.NetworkController != null)
+                match.NetworkController.SendMineStatus();
+        }
+
+        public CoinEntry[] CaptureReplicaEntries()
+        {
+            var entries = new CoinEntry[slots.Count];
+            for (int i = 0; i < slots.Count; i++) entries[i] = Entry(slots[i]);
+            return entries;
+        }
+
+        private static bool ValidEntry(CoinEntry entry) => entry.id != 0 && entry.kind <= (byte)CoinKind.Dropped && entry.x < ArenaGridView.Size && entry.y < ArenaGridView.Size;
+
+        public bool ApplyReplicaSnapshot(CoinEntry[] entries)
+        {
+            if (entries == null) return false;
+            var ids = new HashSet<uint>();
+            foreach (var entry in entries) if (!ValidEntry(entry) || !ids.Add(entry.id)) return false;
+            foreach (var slot in slots) if (slot.Coin != null) Destroy(slot.Coin);
+            slots.Clear();
+            foreach (var entry in entries) SpawnCore(new GridPosition(entry.x, entry.y), (CoinKind)entry.kind, entry.id, true);
+            return true;
+        }
+
+        public bool ApplyReplicaChange(byte operation, CoinEntry entry)
+        {
+            if (operation > 1 || !ValidEntry(entry)) return false;
+            int index = slots.FindIndex(slot => slot.Id == entry.id);
+            if (operation == 0)
+            {
+                if (index >= 0) return false;
+                SpawnCore(new GridPosition(entry.x, entry.y), (CoinKind)entry.kind, entry.id, true);
+            }
+            else
+            {
+                if (index < 0 || slots[index].Kind != (CoinKind)entry.kind || !slots[index].Position.Equals(new GridPosition(entry.x, entry.y))) return false;
+                if (slots[index].Coin != null) Destroy(slots[index].Coin);
+                slots.RemoveAt(index);
+            }
+            return true;
+        }
+
+        public MineStatusMessage CaptureSchedule()
+        {
+            var status = new MineStatusMessage { elapsed = elapsed, nextEvent = nextSpawn, warningMine = -1, warningX = Array.Empty<ushort>(), warningY = Array.Empty<ushort>() };
+            if (pending.Count == 0) return status;
+            var warning = pending[0];
+            status.warningMine = warning.MineIndex;
+            status.warningX = new ushort[warning.Cells.Length];
+            status.warningY = new ushort[warning.Cells.Length];
+            for (int i = 0; i < warning.Cells.Length; i++) { status.warningX[i] = (ushort)warning.Cells[i].X; status.warningY[i] = (ushort)warning.Cells[i].Y; }
+            return status;
+        }
+
+        public bool ApplyReplicaSchedule(MineStatusMessage status)
+        {
+            if (double.IsNaN(status.elapsed) || double.IsInfinity(status.elapsed) || status.elapsed < 0d || status.elapsed > duration + 0.01d ||
+                status.nextEvent < 0 || status.nextEvent > CoinSpawnSchedule.EventCount || status.warningMine < -1 || status.warningMine >= minePoints.Length ||
+                status.warningX == null || status.warningY == null || status.warningX.Length != status.warningY.Length ||
+                (status.warningMine < 0 ? status.warningX.Length != 0 : status.warningX.Length == 0 || status.warningX.Length > CoinSpawnSchedule.CoinsPerEvent || status.nextEvent == CoinSpawnSchedule.EventCount)) return false;
+            for (int i = 0; i < status.warningX.Length; i++) if (status.warningX[i] >= ArenaGridView.Size || status.warningY[i] >= ArenaGridView.Size) return false;
+            bool same = pending.Count == 1 && status.warningMine >= 0 && pending[0].Index == status.nextEvent && pending[0].MineIndex == status.warningMine && pending[0].Cells.Length == status.warningX.Length;
+            if (same) for (int i = 0; i < status.warningX.Length; i++) if (!pending[0].Cells[i].Equals(new GridPosition(status.warningX[i], status.warningY[i]))) { same = false; break; }
+            if (!same)
+            {
+                ClearWarnings();
+                if (status.warningMine >= 0)
+                {
+                    var warning = new CoinEvent { Index = status.nextEvent, MineIndex = status.warningMine, Cells = new GridPosition[status.warningX.Length], Markers = new GameObject[status.warningX.Length] };
+                    for (int i = 0; i < warning.Cells.Length; i++) { warning.Cells[i] = new GridPosition(status.warningX[i], status.warningY[i]); warning.Markers[i] = CreateWarningMarker(warning.Cells[i]); }
+                    pending.Add(warning);
+                }
+            }
+            elapsed = status.elapsed;
+            nextSpawn = status.nextEvent;
+            return true;
+        }
+
+        public void ClearReplicaWarnings() => ClearWarnings();
 
         private void OnDestroy()
         {

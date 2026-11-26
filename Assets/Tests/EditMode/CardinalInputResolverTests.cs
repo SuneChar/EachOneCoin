@@ -19,6 +19,7 @@ namespace EachOneCoin.Tests
         public void ReleasingLastDirection_FallsBackToStillHeldDirection()
         {
             var resolver = new CardinalInputResolver();
+            Assert.That(resolver.Update(false, false, true, false, 0f, 1f, Threshold), Is.EqualTo(Vector3.forward));
             Assert.That(resolver.Update(false, true, true, false, 1f, 1f, Threshold), Is.EqualTo(Vector3.right));
             Assert.That(resolver.Update(false, false, true, false, 0f, 1f, Threshold), Is.EqualTo(Vector3.forward));
         }
