@@ -124,8 +124,9 @@ namespace EachOneCoin.Gameplay
             {
                 for (int i = 0; i < Characters.Length; i++)
                     foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(i == network.LocalSlot);
-                foreach (var root in gameObject.scene.GetRootGameObjects())
-                    foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.enabled = false;
+                if (!Mirror.NetworkServer.active)
+                    foreach (var root in gameObject.scene.GetRootGameObjects())
+                        foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.SetRunning(false);
                 NetworkController = gameObject.AddComponent<EachOneCoin.Networking.NetworkMatchController>();
                 NetworkController.Initialize(this, network, localInput);
                 return;

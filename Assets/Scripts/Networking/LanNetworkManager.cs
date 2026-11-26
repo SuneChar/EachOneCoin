@@ -314,6 +314,11 @@ namespace EachOneCoin.Networking
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.ReceiveGridChange(message);
             });
+            NetworkClient.RegisterHandler<ObstacleStateMessage>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.ReceiveObstacleState(message);
+            });
             NetworkClient.RegisterHandler<MovementSnapshot>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
@@ -421,6 +426,7 @@ namespace EachOneCoin.Networking
                 controller.SendMatchState(conn);
                 controller.SendMineStatus(conn);
                 controller.SendMovementState(conn);
+                controller.SendObstacleState(conn);
                 conn.Send(new ResumeComplete());
                 room.CommitReclaim(slot);
                 reconnecting.Remove(conn.connectionId); movementReady.Add(conn.connectionId);
@@ -450,6 +456,7 @@ namespace EachOneCoin.Networking
                     if (reconnecting.Contains(conn.connectionId) && room.IsReclaimExpired(slot, Time.realtimeSinceStartupAsDouble)) { RejectResume(conn); continue; }
                     controller.SendGridSnapshot(conn); controller.SendCoinSnapshot(conn); controller.SendCombatState(conn); controller.SendMatchState(conn);
                     conn.Send(new MovementBegin { occupied = mask, fillNpcs = MatchFillNpcs });
+                    controller.SendObstacleState(conn);
                     if (reconnecting.Remove(conn.connectionId)) { room.CommitReclaim(slot); conn.Send(new ResumeComplete()); }
                 }
             }

@@ -21,7 +21,7 @@ public class BootMenu : MonoBehaviour
     private bool settingsOpen;
     private bool quitOpen;
     private bool lanRoomOpen;
-    private LanRoomUI lanRoom;
+    [SerializeField] private LanRoomUI lanRoom;
 
     private void Awake()
     {
@@ -30,8 +30,7 @@ public class BootMenu : MonoBehaviour
         inputDevice = GetComponent<InputDeviceTracker>();
         usingGamepad = inputDevice.UsingGamepad;
         inputDevice.DeviceChanged += OnDeviceChanged;
-        lanRoom = gameObject.AddComponent<LanRoomUI>();
-        lanRoom.Initialize(this, startPanel);
+        lanRoom.Initialize(this);
         Refresh();
     }
 

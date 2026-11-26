@@ -15,6 +15,7 @@ namespace EachOneCoin.Networking
     public struct CombatStateMessage : NetworkMessage
     {
         public uint sequence;
+        public double serverTime;
         public CombatParticipant p0, p1, p2, p3;
         public CombatParticipant Participant(int slot) => slot == 0 ? p0 : slot == 1 ? p1 : slot == 2 ? p2 : p3;
     }

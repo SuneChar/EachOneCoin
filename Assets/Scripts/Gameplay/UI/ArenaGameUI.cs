@@ -37,8 +37,8 @@ namespace EachOneCoin.Gameplay
         private readonly bool[] lastMineScattered = new bool[5];
         private readonly int[] lastMineProgress = { -1, -1, -1, -1, -1 };
         private float lastStamina = -1f;
-        private TMP_Text networkCoinText;
-        private float nextNetworkInfo;
+        private bool networkMenuOpen;
+        public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
 
         private void Awake()
         {
@@ -98,64 +98,7 @@ namespace EachOneCoin.Gameplay
             if (match == null || match.Model == null) return;
             if (match.IsNetworkMovementTest)
             {
-                if (hudPanel != null) hudPanel.SetActive(false);
-                if (pausePanel != null) pausePanel.SetActive(false);
-                if (settingsPanel != null) settingsPanel.SetActive(false);
-                if (resultPanel != null) resultPanel.SetActive(false);
-                if (promptImages != null) promptImages.gameObject.SetActive(false);
-                if (attackPromptText != null && match.NetworkController != null)
-                {
-                    var manager = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
-                    bool canAct = manager != null && match.NetworkController.CurrentMatchStatus == MatchStatus.Playing &&
-                        match.NetworkController.StatusAt(manager.LocalSlot) == ParticipantStatus.Active;
-                    attackPromptText.gameObject.SetActive(showPrompts && canAct);
-                }
-                if (networkCoinText == null && coinText != null)
-                {
-                    networkCoinText = Instantiate(coinText, transform);
-                    networkCoinText.name = "Network Coin Score";
-                    networkCoinText.gameObject.SetActive(true);
-                    var rect = networkCoinText.rectTransform;
-                    rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
-                    rect.pivot = new Vector2(1f, 1f);
-                    rect.anchoredPosition = new Vector2(-30f, -25f);
-                    rect.sizeDelta = new Vector2(480f, 360f);
-                }
-                var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
-                if (networkCoinText != null && network != null && match.NetworkController != null && Time.unscaledTime >= nextNetworkInfo)
-                {
-                    nextNetworkInfo = Time.unscaledTime + 0.25f;
-                    int slot = network.LocalSlot;
-                    string text = network.ClientResuming ? $"正在恢复对局（约 {Mathf.CeilToInt(network.ClientResumeSeconds)} 秒）\n" : string.Empty;
-                    text += $"剩余：{Mathf.CeilToInt(match.NetworkController.RemainingTime)}秒  金币：{match.NetworkController.ScoreAt(slot)} / 10";
-                    text += $"\n血量：{match.NetworkController.HealthAt(slot)} / {match.NetworkController.MaxHealthAt(slot)}";
-                    text += $"\n体力：{Mathf.CeilToInt(match.NetworkController.StaminaAt(slot))} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
-                    var combatStatus = match.NetworkController.StatusAt(slot);
-                    bool finished = match.NetworkController.CurrentMatchStatus == MatchStatus.Finished;
-                    if (combatStatus == ParticipantStatus.Respawning) text += "\n复活中";
-                    else if (combatStatus == ParticipantStatus.Won) text += finished ? "\n你已获胜" : "\n你已获胜，其他玩家继续";
-                    else if (combatStatus == ParticipantStatus.Lost) text += finished ? "\n你已失败" : "\n你已失败，其他玩家继续";
-                    if (finished)
-                    {
-                        text += "\n对局结束";
-                        for (int i = 0; i < 4; i++) if (match.NetworkController.IsParticipant(i))
-                            text += $"\n席位{i + 1}：{StatusText(match.NetworkController.StatusAt(i))}  {match.NetworkController.ScoreAt(i)}枚";
-                    }
-                    else
-                    {
-                        double elapsed = match.NetworkController.CoinTestElapsed;
-                        if (elapsed >= 55d) text += "\n本局随机刷新结束";
-                        else
-                        {
-                            double next = elapsed < 5d ? 5d : 5d + 10d * (System.Math.Floor((elapsed - 5d) / 10d) + 1d);
-                            text += $"\n下次随机刷新：{Mathf.CeilToInt((float)(next - elapsed))}秒";
-                        }
-                        for (int i = 0; i < match.Model.Mines.Count; i++)
-                            if (match.NetworkController.MineConnectedAt(i, slot))
-                                text += $"\n{match.Coins.MineName(i)}金矿：{match.NetworkController.MineProgressAt(i, slot):F1} / 5秒";
-                    }
-                    networkCoinText.text = text;
-                }
+                UpdateNetworkUI();
                 return;
             }
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1)))
@@ -259,6 +202,65 @@ namespace EachOneCoin.Gameplay
             firstRefresh = false;
         }
 
+        private void UpdateNetworkUI()
+        {
+            var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+            var state = match.NetworkController;
+            if (network == null || state == null || network.LocalSlot < 0 || network.LocalSlot >= 4) return;
+            if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || (NetworkMenuOpen && Input.GetKeyDown(KeyCode.JoystickButton1)))
+            {
+                if (settingsOpen) CloseSettings();
+                else if (networkMenuOpen) Resume();
+                else Pause();
+            }
+            int slot = network.LocalSlot;
+            int time = Mathf.CeilToInt(state.RemainingTime);
+            if (time != lastTime)
+            {
+                if (lastTime > time && time > 0 && time <= 10 && gameAudio != null) gameAudio.PlayCountdown();
+                lastTime = time;
+                timeText.text = time.ToString();
+            }
+            int coins = state.ScoreAt(slot), health = state.HealthAt(slot), maxHealth = state.MaxHealthAt(slot);
+            if (!firstRefresh && !Mirror.NetworkServer.active && !network.ClientResuming && coins > lastCoins[slot] && gameAudio != null) gameAudio.PlayCoin();
+            lastCoins[slot] = coins;
+            coinText.text = $"金币：{coins} / {match.Model.CoinsToWin}";
+            healthText.text = $"生命：{health} / {maxHealth}";
+            var healthRect = healthFill.rectTransform;
+            healthRect.anchorMax = new Vector2(Mathf.Clamp01((float)health / match.InitialHealth), healthRect.anchorMax.y);
+            float stamina = state.StaminaAt(slot);
+            if (staminaFill != null) { var rect = staminaFill.rectTransform; rect.anchorMax = new Vector2(Mathf.Clamp01(stamina / match.StaminaAt(slot).Maximum), rect.anchorMax.y); }
+            if (staminaText != null) staminaText.text = $"体力：{Mathf.CeilToInt(stamina)} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
+            var participants = new System.Text.StringBuilder();
+            for (int i = 0; i < 4; i++) if (state.IsParticipant(i))
+            {
+                var color = ColorUtility.ToHtmlStringRGB(match.Grid.PlayerColor(i));
+                participants.Append($"<color=#{color}>●</color> {(i == slot ? "你" : "席位 " + (i + 1))}  {state.ScoreAt(i)}/{match.Model.CoinsToWin}  {StatusText(state.StatusAt(i))}\n");
+            }
+            participantText.text = participants.ToString();
+            var info = new System.Text.StringBuilder(network.ClientResuming ? "正在恢复对局\n" : "矿 ");
+            for (int i = 0; i < match.Model.Mines.Count; i++)
+            {
+                if (i > 0) info.Append("  ");
+                info.Append(match.Coins.MineName(i)[0]).Append(':');
+                if (match.Model.Mines[i].Scattered) info.Append("已产出");
+                else if (state.MineConnectedAt(i, slot)) info.Append(Mathf.FloorToInt(state.MineProgressAt(i, slot))).Append("/5");
+                else info.Append("--");
+            }
+            var status = state.StatusAt(slot);
+            if (status != ParticipantStatus.Active) info.Append("\n").Append(StatusText(status)).Append(state.CurrentMatchStatus == MatchStatus.Playing ? "，其他玩家继续" : "");
+            feedbackText.text = info.ToString();
+            if (!resultShown && state.CurrentMatchStatus == MatchStatus.Finished)
+            {
+                resultShown = true; networkMenuOpen = false; settingsOpen = false;
+                resultText.text = status == ParticipantStatus.Won ? "游戏胜利" : "游戏结束";
+                resultCoinsText.text = $"金币：{coins} / {match.Model.CoinsToWin}";
+                if (gameAudio != null) { if (status == ParticipantStatus.Won) gameAudio.PlayWin(); else gameAudio.PlayLose(); }
+                RefreshPanels();
+            }
+            firstRefresh = false;
+        }
+
         private static string StatusText(ParticipantStatus status)
         {
             switch (status)
@@ -273,7 +275,7 @@ namespace EachOneCoin.Gameplay
         private void LateUpdate()
         {
             if (!usingGamepad || EventSystem.current == null || EventSystem.current.currentSelectedGameObject != null) return;
-            var panel = settingsOpen ? settingsPanel : match != null && match.IsPaused ? pausePanel : resultShown ? resultPanel : null;
+            var panel = settingsOpen ? settingsPanel : match != null && (match.IsPaused || networkMenuOpen) ? pausePanel : resultShown ? resultPanel : null;
             if (panel == null || !panel.activeInHierarchy) return;
             var first = panel.GetComponentInChildren<Selectable>();
             if (first != null && first.IsInteractable()) EventSystem.current.SetSelectedGameObject(first.gameObject);
@@ -281,7 +283,12 @@ namespace EachOneCoin.Gameplay
 
         private void RefreshPanels()
         {
-            bool paused = match != null && match.IsPaused;
+            bool paused = match != null && (match.IsPaused || networkMenuOpen);
+            bool network = match != null && match.IsNetworkMovementTest;
+            var pauseRestart = pausePanel.transform.Find("RestartButton");
+            var resultRestart = resultPanel.transform.Find("RestartButton");
+            if (pauseRestart != null) pauseRestart.gameObject.SetActive(!network);
+            if (resultRestart != null) resultRestart.gameObject.SetActive(!network);
             hudPanel.SetActive(!resultShown);
             pausePanel.SetActive(paused && !settingsOpen);
             settingsPanel.SetActive(settingsOpen);
@@ -299,11 +306,11 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        public void Pause() { if (match == null || resultShown) return; match.Pause(); RefreshPanels(); }
-        public void Resume() { if (match == null) return; settingsOpen = false; match.Resume(); RefreshPanels(); }
+        public void Pause() { if (match == null || resultShown) return; if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
+        public void Resume() { if (match == null) return; settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
         public void OpenSettings()
         {
-            if (match == null || !match.IsPaused) return;
+            if (match == null || (!match.IsPaused && !networkMenuOpen)) return;
             settingsOpen = true;
             volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
             UpdateVolumeLabel(gameAudio.Volume);
@@ -319,7 +326,7 @@ namespace EachOneCoin.Gameplay
             PlayerPrefs.Save();
             RefreshPanels();
         }
-        public void Restart() { if (match != null) match.Resume(); if (gameAudio != null) gameAudio.PlayRestart(); SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
-        public void MainMenu() { if (match != null) match.Resume(); SceneManager.LoadScene("BootScene"); }
+        public void Restart() { if (match != null && match.IsNetworkMovementTest) { MainMenu(); return; } if (match != null) match.Resume(); if (gameAudio != null) gameAudio.PlayRestart(); SceneManager.LoadScene(SceneManager.GetActiveScene().name); }
+        public void MainMenu() { if (match != null && match.IsNetworkMovementTest) { var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager; if (network != null) { network.ExitMovementTest(); return; } } if (match != null) match.Resume(); SceneManager.LoadScene("BootScene"); }
     }
 }

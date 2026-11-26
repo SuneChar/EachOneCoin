@@ -173,7 +173,17 @@ namespace EachOneCoin.Gameplay
                 if (arrow != null) arrow.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
                 if (Mathf.Abs(delta.x) > 0.0001f) desiredFacing = delta.x < 0f ? -1 : 1;
                 UpdateFacing(Time.deltaTime);
+                if (match != null && match.IsNetworkMovementTest && !Mirror.NetworkServer.active)
+                {
+                    var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+                    if (network != null && Id == network.LocalSlot)
+                    {
+                        footstepTimer -= Time.deltaTime;
+                        if (footstepTimer <= 0f) { match.PlayFootstep(); footstepTimer = 0.35f; }
+                    }
+                }
             }
+            else footstepTimer = 0f;
             transform.position = position;
         }
 

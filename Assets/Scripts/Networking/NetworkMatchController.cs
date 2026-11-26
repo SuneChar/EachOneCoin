@@ -10,11 +10,19 @@ namespace EachOneCoin.Networking
         private MatchCoordinator match;
         private LanNetworkManager network;
         private LocalPlayerInput localInput;
+        private ArenaGameUI gameUI;
+        private LinearPatrolObstacle[] patrolObstacles;
+        private TimedSpikeTrap[] spikeTraps;
+        private uint obstacleSequence, lastObstacleSequence;
+        private bool hasObstacleState;
+        private float nextObstacleState;
         private readonly Vector3[] inputs = new Vector3[RoomState.Capacity];
         private readonly float[] inputTimes = new float[RoomState.Capacity];
         private readonly bool[] sprintInputs = new bool[RoomState.Capacity];
         private readonly uint[] lastAttackSequence = new uint[RoomState.Capacity];
         private readonly CombatParticipant[] replicaCombat = new CombatParticipant[RoomState.Capacity];
+        private readonly double[] respawnCutoff = new double[RoomState.Capacity];
+        private readonly bool[] respawnPending = new bool[RoomState.Capacity];
         private uint combatSequence, lastCombatSequence, nextAttackSequence;
         private bool hasCombatState, aiming, aimUsesGamepad;
         private Vector3 aimDirection = Vector3.forward;
@@ -72,6 +80,16 @@ namespace EachOneCoin.Networking
         public void Initialize(MatchCoordinator coordinator, LanNetworkManager manager, LocalPlayerInput input)
         {
             match = coordinator; network = manager; localInput = input;
+            gameUI = FindObjectOfType<ArenaGameUI>();
+            var patrols = new List<LinearPatrolObstacle>();
+            var spikes = new List<TimedSpikeTrap>();
+            foreach (var root in gameObject.scene.GetRootGameObjects())
+            {
+                patrols.AddRange(root.GetComponentsInChildren<LinearPatrolObstacle>(true));
+                spikes.AddRange(root.GetComponentsInChildren<TimedSpikeTrap>(true));
+            }
+            patrolObstacles = patrols.ToArray();
+            spikeTraps = spikes.ToArray();
         }
 
         public void Begin(byte occupied, bool fillNpcs)
@@ -96,6 +114,35 @@ namespace EachOneCoin.Networking
             foreach (var connection in NetworkServer.connections.Values)
                 if (network.IsGameplayReady(connection)) connection.Send(message);
         }
+
+        public void SendObstacleState(NetworkConnectionToClient connection = null)
+        {
+            if (!NetworkServer.active || !started) return;
+            var positions = new Vector3[patrolObstacles.Length];
+            var spikes = new SpikeObstacleState[spikeTraps.Length];
+            for (int i = 0; i < positions.Length; i++) positions[i] = patrolObstacles[i].NetworkPosition;
+            for (int i = 0; i < spikes.Length; i++)
+                spikes[i] = new SpikeObstacleState { active = spikeTraps[i].IsActive, remainingFraction = spikeTraps[i].RemainingFraction, spikeHeight = spikeTraps[i].NetworkSpikeHeight };
+            var message = new ObstacleStateMessage { sequence = ++obstacleSequence, patrolPositions = positions, spikes = spikes };
+            if (connection == null) SendToReadyClients(message); else connection.Send(message);
+        }
+
+        public void ReceiveObstacleState(ObstacleStateMessage message)
+        {
+            if (NetworkServer.active || match == null || !started || (hasObstacleState && message.sequence <= lastObstacleSequence) ||
+                message.patrolPositions == null || message.patrolPositions.Length != patrolObstacles.Length ||
+                message.spikes == null || message.spikes.Length != spikeTraps.Length) return;
+            foreach (var p in message.patrolPositions)
+                if (!Finite(p.x) || !Finite(p.y) || !Finite(p.z)) return;
+            foreach (var spike in message.spikes)
+                if (!Finite(spike.remainingFraction) || spike.remainingFraction < 0f || spike.remainingFraction > 1f || !Finite(spike.spikeHeight)) return;
+            for (int i = 0; i < patrolObstacles.Length; i++) patrolObstacles[i].ApplyNetworkPosition(message.patrolPositions[i]);
+            for (int i = 0; i < spikeTraps.Length; i++) spikeTraps[i].ApplyNetworkState(message.spikes[i].active, message.spikes[i].remainingFraction, message.spikes[i].spikeHeight);
+            hasObstacleState = true;
+            lastObstacleSequence = message.sequence;
+        }
+
+        private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         public void SendMatchState(NetworkConnectionToClient connection = null)
         {
@@ -311,14 +358,15 @@ namespace EachOneCoin.Networking
         public void SendCombatState(NetworkConnectionToClient connection = null)
         {
             if (!NetworkServer.active || match == null) return;
-            var message = new CombatStateMessage { sequence = ++combatSequence, p0 = CaptureCombatParticipant(0),
+            var message = new CombatStateMessage { sequence = ++combatSequence, serverTime = NetworkTime.localTime, p0 = CaptureCombatParticipant(0),
                 p1 = CaptureCombatParticipant(1), p2 = CaptureCombatParticipant(2), p3 = CaptureCombatParticipant(3) };
             if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
         public void ReceiveCombatState(CombatStateMessage message)
         {
-            if (NetworkServer.active || match == null || (hasCombatState && message.sequence <= lastCombatSequence)) return;
+            if (NetworkServer.active || match == null || (hasCombatState && message.sequence <= lastCombatSequence) ||
+                double.IsNaN(message.serverTime) || double.IsInfinity(message.serverTime) || message.serverTime < 0d) return;
             for (int i = 0; i < RoomState.Capacity; i++)
             {
                 var p = message.Participant(i);
@@ -333,7 +381,12 @@ namespace EachOneCoin.Networking
                 bool respawned = hasCombatState && replicaCombat[i].status != (byte)ParticipantStatus.Active && p.status == (byte)ParticipantStatus.Active;
                 replicaCombat[i] = p;
                 if (!started) continue;
-                if (respawned) { snapshots.Clear(); hasSnapshot = false; playbackStarted = false; match.Characters[i].ApplyNetworkPosition(p.position); }
+                if (respawned)
+                {
+                    respawnCutoff[i] = message.serverTime;
+                    respawnPending[i] = true;
+                    match.Characters[i].ApplyNetworkPosition(p.position);
+                }
                 match.Characters[i].SetActiveState((visible & (1 << i)) != 0 && StatusAt(i) == ParticipantStatus.Active);
             }
             hasCombatState = true; lastCombatSequence = message.sequence;
@@ -397,16 +450,21 @@ namespace EachOneCoin.Networking
         private void Update()
         {
             if (network == null || match == null) return;
-            if (Input.GetKeyDown(KeyCode.Escape)) { network.ExitMovementTest(); return; }
             if (!started) return;
+            bool menuOpen = gameUI != null && gameUI.NetworkMenuOpen;
             if (!network.ClientResuming && CurrentMatchStatus == MatchStatus.Playing && StatusAt(network.LocalSlot) == ParticipantStatus.Active && NetworkClient.isConnected && Time.unscaledTime >= nextInput)
             {
                 nextInput = Time.unscaledTime + 0.05f;
-                Vector3 direction = localInput.Movement;
-                NetworkClient.Send(new MovementInput { direction = new Vector2(direction.x, direction.z), sprint = localInput.SprintHeld });
+                Vector3 direction = menuOpen ? Vector3.zero : localInput.Movement;
+                NetworkClient.Send(new MovementInput { direction = new Vector2(direction.x, direction.z), sprint = !menuOpen && localInput.SprintHeld });
             }
             if (!NetworkServer.active && CurrentMatchStatus == MatchStatus.Finished) { if (hasSnapshot) UpdatePlayback(); return; }
-            if (!network.ClientResuming) UpdateLocalAim();
+            if (!network.ClientResuming && !menuOpen) UpdateLocalAim();
+            else if (aiming)
+            {
+                match.Characters[network.LocalSlot].SetAttackAim(false, aimDirection, 0f, 0f);
+                aiming = false;
+            }
             match.Coins.Tick(Time.deltaTime);
             if (NetworkServer.active)
             {
@@ -449,6 +507,7 @@ namespace EachOneCoin.Networking
                     if (finished) { SendCombatState(); finalStateSent = true; }
                 }
                 if (finished) return;
+                if (Time.unscaledTime >= nextObstacleState) { nextObstacleState = Time.unscaledTime + 0.1f; SendObstacleState(); }
                 if (Time.unscaledTime >= nextCombatState) { nextCombatState = Time.unscaledTime + 0.1f; SendCombatState(); }
                 if (Time.unscaledTime >= nextMineStatus) { nextMineStatus = Time.unscaledTime + 0.25f; SendMineStatus(); }
                 if (Time.unscaledTime >= nextSnapshot)
@@ -499,6 +558,17 @@ namespace EachOneCoin.Networking
                 bool active = (mask & (1 << i)) != 0 && StatusAt(i) == ParticipantStatus.Active;
                 match.Characters[i].SetActiveState(active);
                 if (!active) continue;
+                if (respawnPending[i])
+                {
+                    if (from.serverTime < respawnCutoff[i])
+                    {
+                        double sampleTime = from.serverTime + (to.serverTime - from.serverTime) * fraction;
+                        if (to.serverTime >= respawnCutoff[i] && sampleTime >= respawnCutoff[i])
+                            match.Characters[i].ApplyNetworkPosition(to.Position(i));
+                        continue;
+                    }
+                    respawnPending[i] = false;
+                }
                 bool both = (from.visible & to.visible & (1 << i)) != 0;
                 Vector3 position = both ? Vector3.Lerp(from.Position(i), to.Position(i), fraction) :
                     ((from.visible & (1 << i)) != 0 ? from.Position(i) : to.Position(i));
@@ -506,10 +576,5 @@ namespace EachOneCoin.Networking
             }
         }
 
-        private void OnGUI()
-        {
-            GUI.Box(new Rect(10, 10, 360, 65), started ? "LAN match - press Esc to leave" : "Waiting for all players to load...");
-            if (GUI.Button(new Rect(20, 40, 160, 25), "Exit (Esc)")) network.ExitMovementTest();
-        }
     }
 }
