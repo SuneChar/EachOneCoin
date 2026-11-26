@@ -17,6 +17,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private HealthHeartsView healthHeartsView;
         [SerializeField] private Image staminaFill;
         [SerializeField] private TMP_Text staminaText;
+        [SerializeField] private ArcStaminaBarView arcStaminaBarView;
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
         [SerializeField] private ControlPromptImages promptImages;
@@ -37,12 +38,15 @@ namespace EachOneCoin.Gameplay
         private bool lastUpcomingConnected;
         private int lastUpcomingMine = int.MaxValue;
         private int lastUpcomingSeconds = -1;
-        private float lastStamina = -1f;
         private bool networkMenuOpen;
         private bool heartsInitialized;
         private bool legacyHealthHidden;
+        private bool staminaBarInitialized;
+        private bool legacyStaminaHidden;
         private bool leftHudAdjusted;
         private bool networkHealthSynced;
+        private bool networkStaminaSynced;
+        private Camera cachedMainCamera;
         public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
 
         private void Awake()
@@ -61,6 +65,8 @@ namespace EachOneCoin.Gameplay
             CreateHitFrame();
             HideLegacyHealthUI();
             legacyHealthHidden = true;
+            HideLegacyStaminaUI();
+            legacyStaminaHidden = true;
             var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
             var selectable = pauseButton != null ? pauseButton.GetComponent<Selectable>() : null;
             if (selectable != null)
@@ -143,17 +149,19 @@ namespace EachOneCoin.Gameplay
                 else Pause();
             }
             var model = match.Model;
-            if (match.Stamina != null && match.Stamina.Current != lastStamina)
-            {
-                lastStamina = match.Stamina.Current;
-                if (staminaFill != null)
-                {
-                    var rect = staminaFill.rectTransform;
-                    rect.anchorMax = new Vector2(Mathf.Clamp01(lastStamina / match.Stamina.Maximum), rect.anchorMax.y);
-                }
-                if (staminaText != null) staminaText.text = $"体力：{Mathf.CeilToInt(lastStamina)} / {Mathf.CeilToInt(match.Stamina.Maximum)}";
-            }
             EnsureHealthHearts(match.InitialHealth);
+            EnsureArcStaminaBar();
+            if (arcStaminaBarView != null && match.Stamina != null)
+            {
+                Transform localTarget = match.Characters != null && match.Characters.Length > 0 && match.Characters[0] != null
+                    ? match.Characters[0].transform
+                    : null;
+                arcStaminaBarView.SetTarget(localTarget);
+                bool canShowStamina = !match.IsPaused && model.Status == MatchStatus.Playing && model.Participants[0].Status == ParticipantStatus.Active;
+                arcStaminaBarView.SetGameplayVisible(canShowStamina);
+                arcStaminaBarView.SetStamina(match.Stamina.Current, match.Stamina.Maximum, match.Stamina.IsExhausted, false, firstRefresh);
+                if (!match.IsPaused) arcStaminaBarView.TickVisual(Time.deltaTime, Time.unscaledTime);
+            }
             if (!match.IsPaused)
             {
                 if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
@@ -270,9 +278,30 @@ namespace EachOneCoin.Gameplay
                     healthHeartsView.SetHealth(health, maxHealth, !isInitialSync && !network.ClientResuming);
             }
             if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
-            float stamina = state.StaminaAt(slot);
-            if (staminaFill != null) { var rect = staminaFill.rectTransform; rect.anchorMax = new Vector2(Mathf.Clamp01(stamina / match.StaminaAt(slot).Maximum), rect.anchorMax.y); }
-            if (staminaText != null) staminaText.text = $"体力：{Mathf.CeilToInt(stamina)} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
+            EnsureArcStaminaBar();
+            if (arcStaminaBarView != null)
+            {
+                Transform localTarget = match.Characters != null && slot < match.Characters.Length && match.Characters[slot] != null
+                    ? match.Characters[slot].transform
+                    : null;
+                arcStaminaBarView.SetTarget(localTarget);
+                bool canShowStamina = !NetworkMenuOpen && !network.ClientResuming && !state.IsSpectating &&
+                                      state.CurrentMatchStatus == MatchStatus.Playing &&
+                                      state.StatusAt(slot) == ParticipantStatus.Active;
+                arcStaminaBarView.SetGameplayVisible(canShowStamina);
+                if (!waitingFirstReplica)
+                {
+                    float stamina = state.StaminaAt(slot);
+                    float maxStamina = match.StaminaAt(slot).Maximum;
+                    bool exhausted = Mirror.NetworkServer.active
+                        ? match.StaminaAt(slot).IsExhausted
+                        : stamina <= 0.01f;
+                    bool immediateSync = !networkStaminaSynced || network.ClientResuming;
+                    networkStaminaSynced = true;
+                    arcStaminaBarView.SetStamina(stamina, maxStamina, exhausted, !Mirror.NetworkServer.active, immediateSync);
+                }
+                arcStaminaBarView.TickVisual(Time.deltaTime, Time.unscaledTime);
+            }
             var participants = new System.Text.StringBuilder();
             for (int i = 0; i < 4; i++) if (state.IsParticipant(i))
             {
@@ -434,9 +463,60 @@ namespace EachOneCoin.Gameplay
             if (healthText != null) healthText.gameObject.SetActive(false);
         }
 
+        private void EnsureArcStaminaBar()
+        {
+            if (!legacyStaminaHidden)
+            {
+                legacyStaminaHidden = true;
+                HideLegacyStaminaUI();
+            }
+            if (staminaBarInitialized && arcStaminaBarView != null) return;
+            if (arcStaminaBarView == null && hudPanel != null)
+            {
+                var container = new GameObject("ArcStaminaBar", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                arcStaminaBarView = container.AddComponent<ArcStaminaBarView>();
+            }
+            if (arcStaminaBarView != null)
+            {
+                arcStaminaBarView.Initialize();
+                staminaBarInitialized = true;
+            }
+        }
+
+        private void HideLegacyStaminaUI()
+        {
+            Transform legacyRoot = null;
+            if (staminaFill != null && staminaFill.transform.parent != null &&
+                (hudPanel == null || staminaFill.transform.parent.gameObject != hudPanel) &&
+                staminaFill.transform.parent.name.IndexOf("Stamina", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                legacyRoot = staminaFill.transform.parent;
+            }
+            if (legacyRoot != null)
+            {
+                legacyRoot.gameObject.SetActive(false);
+                return;
+            }
+            if (staminaFill != null) staminaFill.gameObject.SetActive(false);
+            if (staminaText != null) staminaText.gameObject.SetActive(false);
+        }
+
+        private Camera ResolveActiveCamera()
+        {
+            if (cachedMainCamera != null && cachedMainCamera.isActiveAndEnabled) return cachedMainCamera;
+            cachedMainCamera = Camera.main;
+            return cachedMainCamera;
+        }
+
         private void LateUpdate()
         {
             GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
+            if (arcStaminaBarView != null)
+            {
+                arcStaminaBarView.UpdateScreenPosition(ResolveActiveCamera());
+            }
         }
 
         private GameObject CurrentNavigationPanel()

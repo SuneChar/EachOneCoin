@@ -7,6 +7,7 @@ namespace EachOneCoin
         public float Maximum { get; }
         public float Current { get; internal set; }
         public bool IsSprinting { get; internal set; }
+        public bool IsExhausted => ExhaustedUntilRelease;
         internal bool ExhaustedUntilRelease { get; set; }
 
         public StaminaModel(float maximum)
