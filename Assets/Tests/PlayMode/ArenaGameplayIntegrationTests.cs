@@ -281,17 +281,54 @@ namespace EachOneCoin.Tests
             Call(coins, "AdvanceMatch", 3.6f);
             Assert.That(MineCoinCells().Length, Is.Zero, "Coins must not appear before the scheduled event.");
             Assert.That(WarningMarkers().Count(), Is.EqualTo(2), "Both coins of an event are announced in advance.");
+            var warnedCells = WarningMarkers().Select(m => (GridPosition)Call(grid, "WorldToCell", m.position)).ToArray();
             int warnedMine = LastMineIndex();
             Assert.That(warnedMine, Is.InRange(0, 3));
             Assert.That(WarningMarkers().All(m => Manhattan((GridPosition)Call(grid, "WorldToCell", m.position), model.Mines[warnedMine]) <= 5), Is.True);
             Call(coins, "AdvanceMatch", 1.4f);
             var cells = MineCoinCells();
             Assert.That(cells.Length, Is.EqualTo(2));
+            Assert.That(cells, Is.EquivalentTo(warnedCells), "Coins must appear in the announced cells.");
             Assert.That(cells[0], Is.Not.EqualTo(cells[1]));
             Assert.That(Manhattan(cells[0], cells[1]), Is.GreaterThanOrEqualTo(2), "Coins of one event must not be neighbours.");
             Assert.That(cells.All(c => Manhattan(c, model.Mines[warnedMine]) >= 2), Is.True, "Coins must stay off the cells next to the mine.");
             yield return null;
             Assert.That(WarningMarkers().Count(), Is.Zero, "Warnings clear once the coins spawn.");
+        }
+
+        [UnityTest]
+        public IEnumerator MineSchedule_PlayerAndNpcEnteringWarnings_DoesNotMoveEitherCoin()
+        {
+            Call(coins, "AdvanceMatch", 3.6f);
+            var warnedCells = WarningMarkers().Select(m => (GridPosition)Call(grid, "WorldToCell", m.position)).ToArray();
+            Assert.That(warnedCells.Length, Is.EqualTo(2));
+            Call(Character(0), "Teleport", CellToWorld(warnedCells[0]));
+            Call(Character(1), "Teleport", CellToWorld(warnedCells[1]));
+            Physics.SyncTransforms();
+            Assert.That((bool)Call(match, "IsObstructed", warnedCells[0]), Is.True, "The player must occupy the first warned cell.");
+            Assert.That((bool)Call(match, "IsObstructed", warnedCells[1]), Is.True, "The NPC must occupy the second warned cell.");
+            Call(coins, "AdvanceMatch", 1.4f);
+            Assert.That(MineCoinCells(), Is.EquivalentTo(warnedCells));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator MineSchedule_ObstacleEnteringWarning_DoesNotMoveEitherCoin()
+        {
+            Call(coins, "AdvanceMatch", 3.6f);
+            var warnedCells = WarningMarkers().Select(m => (GridPosition)Call(grid, "WorldToCell", m.position)).ToArray();
+            Assert.That(warnedCells.Length, Is.EqualTo(2));
+            var obstacle = new GameObject("Test coin warning obstruction", typeof(BoxCollider));
+            try
+            {
+                obstacle.transform.position = CellToWorld(warnedCells[0]) + Vector3.up * 0.5f;
+                Physics.SyncTransforms();
+                Assert.That((bool)Call(match, "IsObstructed", warnedCells[0]), Is.True, "The obstacle must occupy the warned cell.");
+                Call(coins, "AdvanceMatch", 1.4f);
+                Assert.That(MineCoinCells(), Is.EquivalentTo(warnedCells));
+            }
+            finally { UnityEngine.Object.Destroy(obstacle); }
+            yield return null;
         }
 
         [UnityTest]

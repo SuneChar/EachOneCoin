@@ -18,7 +18,7 @@ namespace EachOneCoin.Gameplay
         private enum CoinKind { Mine, Dropped }
         private sealed class Slot { public uint Id; public GridPosition Position; public CoinKind Kind; public GameObject Coin; }
         private uint nextId;
-        private sealed class CoinEvent { public int Index; public int MineIndex; public int[] MineOrder; public GridPosition[] Cells; public GameObject[] Markers; }
+        private sealed class CoinEvent { public int Index; public int MineIndex; public GridPosition[] Cells; public GameObject[] Markers; }
         private readonly List<Slot> slots = new List<Slot>();
         private readonly List<CoinEvent> pending = new List<CoinEvent>();
         private readonly List<GridPosition> candidates = new List<GridPosition>();
@@ -216,31 +216,9 @@ namespace EachOneCoin.Gameplay
             var coinEvent = TakePending(index);
             if (coinEvent == null) coinEvent = PrepareEvent(index, false);
             if (coinEvent == null) return;
-            int expected = coinEvent.Cells.Length;
-            int spawned = 0;
-            for (int i = 0; i < expected; i++)
-            {
-                if (!TryResolveCell(coinEvent, coinEvent.Cells[i], out var cell)) continue;
-                Spawn(cell, CoinKind.Mine);
-                spawned++;
-            }
+            // Once announced, a cell is fixed even if a character or obstacle moves onto it.
+            for (int i = 0; i < coinEvent.Cells.Length; i++) Spawn(coinEvent.Cells[i], CoinKind.Mine);
             DestroyMarkers(coinEvent);
-            if (spawned < expected)
-                Debug.LogWarning($"Mine coin event {index + 1} spawned {spawned} of {expected} coins.");
-        }
-
-        // Keeps the warned cell while it is still free, otherwise falls back to another mine that can host a coin.
-        private bool TryResolveCell(CoinEvent coinEvent, GridPosition cell, out GridPosition resolved)
-        {
-            if (IsSafe(cell)) { resolved = cell; return true; }
-            foreach (var mine in coinEvent.MineOrder)
-            {
-                if (PickCells(mine, picked) == 0) continue;
-                resolved = picked[0];
-                return true;
-            }
-            resolved = default;
-            return false;
         }
 
         private CoinEvent PrepareEvent(int index, bool withMarkers)
@@ -264,7 +242,7 @@ namespace EachOneCoin.Gameplay
                 return null;
             }
             lastMineIndex = chosenMine;
-            var coinEvent = new CoinEvent { Index = index, MineIndex = chosenMine, MineOrder = order, Cells = chosenCells };
+            var coinEvent = new CoinEvent { Index = index, MineIndex = chosenMine, Cells = chosenCells };
             if (!withMarkers) return coinEvent;
             coinEvent.Markers = new GameObject[chosenCells.Length];
             for (int i = 0; i < chosenCells.Length; i++) coinEvent.Markers[i] = CreateWarningMarker(chosenCells[i]);
