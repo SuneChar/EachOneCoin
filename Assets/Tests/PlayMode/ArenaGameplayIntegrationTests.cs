@@ -581,6 +581,65 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator Npc_OffCenterWaypointCommitsToAxisAndMakesProgress()
+        {
+            var spawn = model.Participants[1].Spawn;
+            int dx = spawn.X < 10 ? 1 : -1;
+            var npc = Character(1);
+            var waypoint = new GridPosition(spawn.X + dx, spawn.Y);
+            var target = new GridPosition(spawn.X + dx * 3, spawn.Y);
+            Assert.That((bool)Call(match, "IsBlocked", waypoint), Is.False);
+            Assert.That((bool)Call(match, "IsBlocked", target), Is.False);
+            Call(npc, "Teleport", CellToWorld(spawn) + new Vector3(dx * 0.8f, 0f, 0.2f));
+            Call(coins, "Drop", target, 1);
+            Physics.SyncTransforms();
+            Call(npcs, "ResetPath", 1);
+            var paths = (System.Collections.IList[])npcs.GetType().GetField("paths", Private).GetValue(npcs);
+            ((GridPosition[])npcs.GetType().GetField("pathOrigins", Private).GetValue(npcs))[1] = spawn;
+            for (int step = 1; step <= 3; step++) paths[1].Add(new GridPosition(spawn.X + dx * step, spawn.Y));
+            var indices = (int[])npcs.GetType().GetField("pathIndices", Private).GetValue(npcs);
+            int lastAxis = 0, changes = 0;
+            for (int frame = 0; frame < 150 && indices[1] == 0; frame++)
+            {
+                Call(npcs, "Tick", 1, 0.01f);
+                var velocity = (Vector3)Get(npc, "MovementVelocity");
+                int axis = Mathf.Abs(velocity.x) > 0.001f ? 1 : Mathf.Abs(velocity.z) > 0.001f ? 2 : 0;
+                if (axis != 0 && lastAxis != 0 && axis != lastAxis) changes++;
+                if (axis != 0) lastAxis = axis;
+            }
+            Assert.That(indices[1], Is.GreaterThan(0), "NPC did not reach the off-center waypoint.");
+            Assert.That(changes, Is.LessThanOrEqualTo(1), "NPC oscillated between movement axes near the waypoint.");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_NoProgressAgainstColliderTriggersRetry()
+        {
+            var spawn = model.Participants[1].Spawn;
+            int dx = spawn.X < 10 ? 1 : -1;
+            var npc = Character(1);
+            Call(npc, "Teleport", CellToWorld(spawn));
+            var target = new GridPosition(spawn.X + dx * 3, spawn.Y);
+            Call(coins, "Drop", target, 1);
+            var wall = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                wall.transform.position = CellToWorld(spawn) + new Vector3(dx * 0.7f, 0.5f, 0f);
+                wall.transform.localScale = new Vector3(0.3f, 1f, 1f);
+                Physics.SyncTransforms();
+                Call(npcs, "ResetPath", 1);
+                var paths = (System.Collections.IList[])npcs.GetType().GetField("paths", Private).GetValue(npcs);
+                ((GridPosition[])npcs.GetType().GetField("pathOrigins", Private).GetValue(npcs))[1] = spawn;
+                for (int step = 1; step <= 3; step++) paths[1].Add(new GridPosition(spawn.X + dx * step, spawn.Y));
+                var retries = (float[])npcs.GetType().GetField("retries", Private).GetValue(npcs);
+                for (int frame = 0; frame < 200 && retries[1] <= 0f; frame++) Call(npcs, "Tick", 1, 0.01f);
+                Assert.That(retries[1], Is.GreaterThan(0f), "NPC did not retry after failing to make progress.");
+            }
+            finally { UnityEngine.Object.Destroy(wall); }
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Npc_OpenAreaExplorationPrefersMultipleCells()
         {
             var npc = Character(1);

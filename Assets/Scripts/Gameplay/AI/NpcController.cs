@@ -20,6 +20,11 @@ namespace EachOneCoin.Gameplay
         private readonly bool[] returningPaths = new bool[4];
         private readonly float[] retries = new float[4];
         private readonly float[] blockedSeconds = new float[4];
+        private readonly float[] progressDistance = { -1f, -1f, -1f, -1f };
+        // 0 follows the path axis; 1/2 commits to correcting X/Z until aligned.
+        private readonly int[] alignmentAxis = new int[4];
+        private const float AlignmentExit = 0.1f;
+        private const float ProgressEpsilon = 0.02f;
         private const float ArrivalRadius = 0.15f;
         private const float BlockedTimeout = 0.75f;
         private static readonly int[] Dx = { 1, -1, 0, 0 };
@@ -50,7 +55,8 @@ namespace EachOneCoin.Gameplay
                 default: return "NPC";
             }
         }
-        public void ResetPath(int id) { paths[id].Clear(); pathIndices[id] = 0; retries[id] = 0f; blockedSeconds[id] = 0f; explorationPaths[id] = false; CancelWindup(id); }
+        private void ResetWaypointTracking(int id) { blockedSeconds[id] = 0f; progressDistance[id] = -1f; alignmentAxis[id] = 0; }
+        public void ResetPath(int id) { paths[id].Clear(); pathIndices[id] = 0; retries[id] = 0f; ResetWaypointTracking(id); explorationPaths[id] = false; CancelWindup(id); }
         public bool IsWindingUp(int id) => windup[id] > 0f;
         public Vector3 WindupDirection(int id) => windupDirection[id];
         internal bool HasWaypoint(int id) => pathIndices[id] < paths[id].Count;
@@ -98,6 +104,7 @@ namespace EachOneCoin.Gameplay
                 }
                 returningPaths[id] = returning;
                 pathIndices[id] = 0;
+                ResetWaypointTracking(id);
             }
 
             if (HasWaypoint(id) && match.IsBlocked(path[pathIndices[id]]))
@@ -110,11 +117,13 @@ namespace EachOneCoin.Gameplay
             Vector3 offset = target - character.transform.position;
             Vector3 previous = match.Grid.CellToWorld(pathIndices[id] > 0 ? path[pathIndices[id] - 1] : pathOrigins[id]);
             Vector3 segment = target - previous;
-            bool passed = segment.sqrMagnitude > 0.01f && Vector3.Dot(character.transform.position - target, segment) >= 0f;
+            segment.y = 0f;
+            float lateral = Mathf.Abs(segment.x) > 0.5f ? Mathf.Abs(offset.z) : Mathf.Abs(offset.x);
+            bool passed = segment.sqrMagnitude > 0.01f && lateral <= ArrivalRadius && Vector3.Dot(character.transform.position - target, segment) >= 0f;
             if (offset.sqrMagnitude <= ArrivalRadius * ArrivalRadius || passed)
             {
                 pathIndices[id]++;
-                blockedSeconds[id] = 0f;
+                ResetWaypointTracking(id);
                 if (!HasWaypoint(id))
                 {
                     // Exploration is continuous: pick the next goal now rather than inserting a stop frame.
@@ -147,21 +156,31 @@ namespace EachOneCoin.Gameplay
                 needsBraking = Vector3.Dot(incoming.normalized, outgoing.normalized) < 0.99f;
             }
             if (needsBraking) speed = Mathf.Min(speed, Mathf.Sqrt(2f * match.MovementDeceleration * Mathf.Max(0f, offset.magnitude - ArrivalRadius * 0.5f)) / character.RegionSpeedMultiplier);
-            Vector3 desired = offset.normalized * speed;
-            // Do not switch axes just to correct a harmless residual offset near a waypoint.
-            // AdvanceCardinal clears the old axis immediately, which otherwise looks like a stop.
             Vector3 segmentStart = match.Grid.CellToWorld(pathIndices[id] > 0 ? path[pathIndices[id] - 1] : pathOrigins[id]);
             Vector3 travel = target - segmentStart;
-            if (Mathf.Abs(travel.x) > 0.5f && Mathf.Abs(offset.z) <= ArrivalRadius)
-                desired = new Vector3(Mathf.Sign(offset.x) * speed, 0f, 0f);
-            else if (Mathf.Abs(travel.z) > 0.5f && Mathf.Abs(offset.x) <= ArrivalRadius)
-                desired = new Vector3(0f, 0f, Mathf.Sign(offset.z) * speed);
-            Vector3 before = character.transform.position;
+            int mainAxis = Mathf.Abs(travel.x) > 0.5f ? 1 : Mathf.Abs(travel.z) > 0.5f ? 2 : 0;
+            int correction = alignmentAxis[id];
+            if (correction != 0 && Mathf.Abs(correction == 1 ? offset.x : offset.z) <= AlignmentExit) correction = 0;
+            if (correction == 0)
+            {
+                if (mainAxis == 1 && Mathf.Abs(offset.z) > ArrivalRadius) correction = 2;
+                else if (mainAxis == 2 && Mathf.Abs(offset.x) > ArrivalRadius) correction = 1;
+                else if (mainAxis == 0) correction = Mathf.Abs(offset.x) >= Mathf.Abs(offset.z) ? 1 : 2;
+            }
+            alignmentAxis[id] = correction;
+            int axis = correction != 0 ? correction : mainAxis;
+            Vector3 desired = axis == 1 ? new Vector3(Mathf.Sign(offset.x) * speed, 0f, 0f) : new Vector3(0f, 0f, Mathf.Sign(offset.z) * speed);
+            float beforeDistance = Mathf.Abs(offset.x) + Mathf.Abs(offset.z);
+            if (progressDistance[id] < 0f) progressDistance[id] = beforeDistance;
             character.MoveWithVelocity(desired, deltaTime);
-            float moved = (character.transform.position - before).magnitude;
-            if (desired.sqrMagnitude > 0.04f && moved < 0.01f * deltaTime)
-                blockedSeconds[id] += deltaTime;
-            else blockedSeconds[id] = 0f;
+            Vector3 remaining = target - character.transform.position;
+            float remainingDistance = Mathf.Abs(remaining.x) + Mathf.Abs(remaining.z);
+            if (remainingDistance <= progressDistance[id] - ProgressEpsilon)
+            {
+                progressDistance[id] = remainingDistance;
+                blockedSeconds[id] = 0f;
+            }
+            else if (desired.sqrMagnitude > 0.04f) blockedSeconds[id] += Mathf.Max(0f, deltaTime);
             if (blockedSeconds[id] >= BlockedTimeout)
             {
                 match.Telemetry?.NpcEvent(id, "blocked_retry"); ResetPath(id); retries[id] = 0.25f;
