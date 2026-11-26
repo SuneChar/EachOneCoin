@@ -43,6 +43,7 @@ namespace EachOneCoin.Networking
         private double playbackTime;
         private bool playbackStarted;
         private byte humans;
+        private byte connectedHumans;
         private byte visible;
         private bool started;
         private bool hasSnapshot;
@@ -53,6 +54,7 @@ namespace EachOneCoin.Networking
         private bool gridResyncPending;
         public bool IsRunning => started;
         public bool IsSlotActive(int slot) => slot >= 0 && slot < RoomState.Capacity && (visible & (1 << slot)) != 0;
+        public bool CanRespawn(int slot) => slot >= 0 && slot < RoomState.Capacity && ((humans & (1 << slot)) == 0 || (connectedHumans & (1 << slot)) != 0);
         private uint coinVersion;
         private bool hasCoinSnapshot;
         private bool coinResyncPending;
@@ -77,6 +79,8 @@ namespace EachOneCoin.Networking
             if (started || match == null) return;
             started = true; humans = occupied;
             visible = fillNpcs ? (byte)15 : occupied;
+            connectedHumans = NetworkServer.active ? (byte)0 : occupied;
+            if (NetworkServer.active) for (int i = 0; i < RoomState.Capacity; i++) if ((occupied & (1 << i)) != 0 && network.IsSeatConnected(i)) connectedHumans |= (byte)(1 << i);
             match.Rules.ConfigureParticipants(visible);
             match.Rules.StartMatch();
             for (int i = 0; i < RoomState.Capacity; i++)
@@ -85,6 +89,12 @@ namespace EachOneCoin.Networking
                 match.Characters[i].SetActiveState(active);
                 inputTimes[i] = float.NegativeInfinity;
             }
+        }
+
+        private void SendToReadyClients<T>(T message) where T : struct, NetworkMessage
+        {
+            foreach (var connection in NetworkServer.connections.Values)
+                if (network.IsGameplayReady(connection)) connection.Send(message);
         }
 
         public void SendMatchState(NetworkConnectionToClient connection = null)
@@ -97,7 +107,7 @@ namespace EachOneCoin.Networking
                 participantMask = mask, remaining = match.Model.RemainingTime,
                 status0 = (byte)players[0].Status, status1 = (byte)players[1].Status, status2 = (byte)players[2].Status, status3 = (byte)players[3].Status,
                 score0 = players[0].Coins, score1 = players[1].Coins, score2 = players[2].Coins, score3 = players[3].Coins };
-            if (connection == null) NetworkServer.SendToAll(message); else connection.Send(message);
+            if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
         public void ReceiveMatchState(MatchStateMessage message)
@@ -110,6 +120,7 @@ namespace EachOneCoin.Networking
                     (hasMatchState && (replicaMatchState.StatusAt(i) == (byte)ParticipantStatus.Won || replicaMatchState.StatusAt(i) == (byte)ParticipantStatus.Lost) && message.StatusAt(i) != replicaMatchState.StatusAt(i))) return;
             if (hasMatchState && replicaMatchState.matchStatus == (byte)MatchStatus.Finished && message.matchStatus != (byte)MatchStatus.Finished) return;
             replicaMatchState = message; hasMatchState = true;
+            if (message.matchStatus == (byte)MatchStatus.Finished && network != null) network.ClearRecoverySession();
             if (!started) return;
             for (int i = 0; i < RoomState.Capacity; i++)
                 if (StatusAt(i) == ParticipantStatus.Won || StatusAt(i) == ParticipantStatus.Lost) match.Characters[i].SetActiveState(false);
@@ -126,7 +137,7 @@ namespace EachOneCoin.Networking
                 owners[x * grid.Height + y] = owner.HasValue ? (byte)(owner.Value + 1) : (byte)0;
             }
             var snapshot = new GridSnapshotMessage { version = gridVersion, owners = owners };
-            if (connection == null) NetworkServer.SendToAll(snapshot);
+            if (connection == null) SendToReadyClients(snapshot);
             else connection.Send(snapshot);
         }
 
@@ -134,7 +145,7 @@ namespace EachOneCoin.Networking
         {
             if (!NetworkServer.active || !started) return;
             unchecked { gridVersion++; }
-            NetworkServer.SendToAll(new GridChangeMessage { version = gridVersion, x = (ushort)position.X, y = (ushort)position.Y, owner = (byte)(owner + 1) });
+            SendToReadyClients(new GridChangeMessage { version = gridVersion, x = (ushort)position.X, y = (ushort)position.Y, owner = (byte)(owner + 1) });
         }
 
         public void ReceiveGridSnapshot(GridSnapshotMessage message)
@@ -173,7 +184,7 @@ namespace EachOneCoin.Networking
             var message = new CoinSnapshotMessage { version = coinVersion, entries = match.Coins.CaptureReplicaEntries(),
                 scatteredMines = match.Coins.ScatteredMineMask(), score0 = scores[0].Coins, score1 = scores[1].Coins,
                 score2 = scores[2].Coins, score3 = scores[3].Coins };
-            if (connection == null) NetworkServer.SendToAll(message); else connection.Send(message);
+            if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
         public void BroadcastCoinChange(byte operation, CoinEntry entry, byte mineMask)
@@ -181,7 +192,7 @@ namespace EachOneCoin.Networking
             if (!NetworkServer.active || !started) return;
             unchecked { coinVersion++; }
             var scores = match.Model.Participants;
-            NetworkServer.SendToAll(new CoinChangeMessage { version = coinVersion, operation = operation, entry = entry,
+            SendToReadyClients(new CoinChangeMessage { version = coinVersion, operation = operation, entry = entry,
                 scatteredMines = mineMask, score0 = scores[0].Coins, score1 = scores[1].Coins, score2 = scores[2].Coins, score3 = scores[3].Coins });
         }
 
@@ -213,7 +224,7 @@ namespace EachOneCoin.Networking
             coinResyncPending = true; NetworkClient.Send(new CoinSnapshotRequest());
         }
 
-        private void SendMineStatus()
+        public void SendMineStatus(NetworkConnectionToClient connection = null)
         {
             var progress = new float[20]; var elapsed = new double[5]; uint connected = 0;
             for (int i = 0; i < 5; i++)
@@ -225,7 +236,8 @@ namespace EachOneCoin.Networking
                     if (match.Coins.IsConnectedToMine(i, j)) connected |= 1u << (i * 4 + j);
                 }
             }
-            NetworkServer.SendToAll(new MineStatusMessage { progress = progress, elapsed = elapsed, testElapsed = match.Coins.ElapsedSeconds, connectedMask = connected, scatteredMines = match.Coins.ScatteredMineMask() });
+            var message = new MineStatusMessage { progress = progress, elapsed = elapsed, testElapsed = match.Coins.ElapsedSeconds, connectedMask = connected, scatteredMines = match.Coins.ScatteredMineMask() };
+            if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
         public void ReceiveMineStatus(MineStatusMessage message)
@@ -269,7 +281,7 @@ namespace EachOneCoin.Networking
 
         public void ReceiveAttack(int slot, AttackRequest request)
         {
-            if (!NetworkServer.active || !started || !IsSlotActive(slot) || (humans & (1 << slot)) == 0 || request.sequence <= lastAttackSequence[slot]) return;
+            if (!NetworkServer.active || !started || !IsSlotActive(slot) || (humans & (1 << slot)) == 0 || (connectedHumans & (1 << slot)) == 0 || request.sequence <= lastAttackSequence[slot]) return;
             lastAttackSequence[slot] = request.sequence;
             var d = request.direction;
             if (float.IsNaN(d.x) || float.IsInfinity(d.x) || float.IsNaN(d.y) || float.IsInfinity(d.y) || float.IsNaN(d.z) || float.IsInfinity(d.z)) return;
@@ -280,7 +292,7 @@ namespace EachOneCoin.Networking
 
         public void BroadcastAttack(int slot, Vector3 direction)
         {
-            if (NetworkServer.active) NetworkServer.SendToAll(new AttackEvent { slot = (byte)slot, direction = direction });
+            if (NetworkServer.active) SendToReadyClients(new AttackEvent { slot = (byte)slot, direction = direction });
         }
 
         public void ReceiveAttackEvent(AttackEvent message)
@@ -301,7 +313,7 @@ namespace EachOneCoin.Networking
             if (!NetworkServer.active || match == null) return;
             var message = new CombatStateMessage { sequence = ++combatSequence, p0 = CaptureCombatParticipant(0),
                 p1 = CaptureCombatParticipant(1), p2 = CaptureCombatParticipant(2), p3 = CaptureCombatParticipant(3) };
-            if (connection == null) NetworkServer.SendToAll(message); else connection.Send(message);
+            if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
         public void ReceiveCombatState(CombatStateMessage message)
@@ -329,17 +341,34 @@ namespace EachOneCoin.Networking
 
         public void ReceiveInput(int slot, Vector2 direction, bool sprint)
         {
-            if (!started || slot < 0 || slot >= RoomState.Capacity || (humans & (1 << slot)) == 0) return;
+            if (!started || slot < 0 || slot >= RoomState.Capacity || (humans & (1 << slot)) == 0 || (connectedHumans & (1 << slot)) == 0) return;
             if (float.IsNaN(direction.x) || float.IsInfinity(direction.x) || float.IsNaN(direction.y) || float.IsInfinity(direction.y)) return;
             inputs[slot] = Vector3.ClampMagnitude(new Vector3(direction.x, 0f, direction.y), 1f);
             sprintInputs[slot] = sprint;
             inputTimes[slot] = Time.unscaledTime;
         }
 
+        public void SuspendPlayer(int slot)
+        {
+            if (slot < 0 || slot >= RoomState.Capacity || !started || (humans & (1 << slot)) == 0) return;
+            connectedHumans = (byte)(connectedHumans & ~(1 << slot));
+            inputs[slot] = Vector3.zero; sprintInputs[slot] = false; inputTimes[slot] = float.NegativeInfinity;
+            match.Characters[slot].StopNetworkInput();
+        }
+
+        public void RestorePlayer(int slot)
+        {
+            if (slot < 0 || slot >= RoomState.Capacity || !started || (humans & (1 << slot)) == 0) return;
+            connectedHumans |= (byte)(1 << slot);
+            inputs[slot] = Vector3.zero; sprintInputs[slot] = false; inputTimes[slot] = float.NegativeInfinity;
+            lastAttackSequence[slot] = 0;
+        }
+
         public void RemovePlayer(int slot)
         {
             if (slot < 0 || slot >= RoomState.Capacity || !started) return;
             humans = (byte)(humans & ~(1 << slot));
+            connectedHumans = (byte)(connectedHumans & ~(1 << slot));
             visible = (byte)(visible & ~(1 << slot));
             inputs[slot] = Vector3.zero;
             sprintInputs[slot] = false;
@@ -370,14 +399,14 @@ namespace EachOneCoin.Networking
             if (network == null || match == null) return;
             if (Input.GetKeyDown(KeyCode.Escape)) { network.ExitMovementTest(); return; }
             if (!started) return;
-            if (CurrentMatchStatus == MatchStatus.Playing && StatusAt(network.LocalSlot) == ParticipantStatus.Active && NetworkClient.isConnected && Time.unscaledTime >= nextInput)
+            if (!network.ClientResuming && CurrentMatchStatus == MatchStatus.Playing && StatusAt(network.LocalSlot) == ParticipantStatus.Active && NetworkClient.isConnected && Time.unscaledTime >= nextInput)
             {
                 nextInput = Time.unscaledTime + 0.05f;
                 Vector3 direction = localInput.Movement;
                 NetworkClient.Send(new MovementInput { direction = new Vector2(direction.x, direction.z), sprint = localInput.SprintHeld });
             }
             if (!NetworkServer.active && CurrentMatchStatus == MatchStatus.Finished) { if (hasSnapshot) UpdatePlayback(); return; }
-            UpdateLocalAim();
+            if (!network.ClientResuming) UpdateLocalAim();
             match.Coins.Tick(Time.deltaTime);
             if (NetworkServer.active)
             {
@@ -425,12 +454,19 @@ namespace EachOneCoin.Networking
                 if (Time.unscaledTime >= nextSnapshot)
                 {
                     nextSnapshot = Time.unscaledTime + 0.05f;
-                    NetworkServer.SendToAll(new MovementSnapshot { visible = visible, serverTime = NetworkTime.localTime,
-                        p0 = match.Characters[0].transform.position, p1 = match.Characters[1].transform.position,
-                        p2 = match.Characters[2].transform.position, p3 = match.Characters[3].transform.position });
+                    SendMovementState();
                 }
             }
             else if (hasSnapshot) UpdatePlayback();
+        }
+
+        public void SendMovementState(NetworkConnectionToClient connection = null)
+        {
+            if (!NetworkServer.active || !started) return;
+            var message = new MovementSnapshot { visible = visible, serverTime = NetworkTime.localTime,
+                p0 = match.Characters[0].transform.position, p1 = match.Characters[1].transform.position,
+                p2 = match.Characters[2].transform.position, p3 = match.Characters[3].transform.position };
+            if (connection == null) SendToReadyClients(message); else connection.Send(message);
         }
 
         private void UpdatePlayback()

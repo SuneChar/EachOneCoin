@@ -27,8 +27,8 @@ namespace EachOneCoin.Gameplay
                 if (match.IsNetworkMovementTest && !match.NetworkController.IsSlotActive(i)) continue;
                 cooldowns[i] = Mathf.Max(0f, cooldowns[i] - deltaTime);
                 if (match.Model.Participants[i].Status != ParticipantStatus.Respawning) continue;
-                respawns[i] -= deltaTime;
-                if (respawns[i] > 0f || !match.Rules.TryRespawn(i)) continue;
+                respawns[i] = Mathf.Max(0f, respawns[i] - deltaTime);
+                if (respawns[i] > 0f || (match.IsNetworkMovementTest && !match.NetworkController.CanRespawn(i)) || !match.Rules.TryRespawn(i)) continue;
                 match.Characters[i].SetActiveState(true);
                 match.Characters[i].Teleport(match.Grid.CellToWorld(match.Spawns[i]));
             }

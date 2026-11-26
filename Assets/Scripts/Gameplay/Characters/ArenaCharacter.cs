@@ -35,6 +35,7 @@ namespace EachOneCoin.Gameplay
         private AttackVisual attackVisual;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
+        public void StopNetworkInput() { movementVelocity = Vector3.zero; }
         public float RegionSpeedMultiplier
         {
             get

@@ -16,6 +16,7 @@ public sealed class LanRoomUI : MonoBehaviour
     private Button joinButton;
     private Button fillButton;
     private Button startButton;
+    private Button reconnectButton;
     private TMP_Text fillLabel;
     private InputField address;
 
@@ -37,8 +38,9 @@ public sealed class LanRoomUI : MonoBehaviour
             networkObject.SetActive(false);
             var transport = networkObject.AddComponent<KcpTransport>();
             network = networkObject.AddComponent<LanNetworkManager>();
+            network.authenticator = networkObject.AddComponent<LanReconnectAuthenticator>();
             network.transport = transport;
-            network.maxConnections = RoomState.Capacity;
+            network.maxConnections = RoomState.Capacity * 2;
             network.autoCreatePlayer = false;
             network.dontDestroyOnLoad = true;
             networkObject.SetActive(true);
@@ -59,9 +61,11 @@ public sealed class LanRoomUI : MonoBehaviour
         fillLabel = fillButton.GetComponentInChildren<TMP_Text>();
         startButton = Button(template, "开始移动测试", -160, -250, () => network.StartMovementTest());
         Button(template, "退出 / 返回", 160, -250, Close);
+        reconnectButton = Button(template, "恢复上局", 0, -330, () => network.Reconnect());
         Label(textTemplate, "房主 IP：", -150, -60, 150, 45, 22);
         address = CreateAddressField(panel.transform);
         panel.SetActive(false);
+        if (network.HasRecoverySession && !NetworkClient.active && !NetworkServer.active) Open();
     }
 
     private TMP_Text Label(TMP_Text template, string value, float x, float y, float width, float height, float size)
@@ -122,6 +126,7 @@ public sealed class LanRoomUI : MonoBehaviour
         status.text = network.Status;
         bool active = NetworkClient.active || NetworkServer.active;
         hostButton.interactable = !active; joinButton.interactable = !active; address.interactable = !active;
+        reconnectButton.interactable = !active && network.HasRecoverySession;
         fillButton.interactable = NetworkServer.active && network.HasSnapshot && !network.MatchStarted;
         startButton.interactable = NetworkServer.active && network.HasSnapshot && !network.MatchStarted;
         fillLabel.text = network.HasSnapshot && network.Snapshot.fillNpcs ? "空位补 NPC：开" : "空位补 NPC：关";

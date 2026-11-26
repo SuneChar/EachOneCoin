@@ -126,7 +126,8 @@ namespace EachOneCoin.Gameplay
                 {
                     nextNetworkInfo = Time.unscaledTime + 0.25f;
                     int slot = network.LocalSlot;
-                    string text = $"剩余：{Mathf.CeilToInt(match.NetworkController.RemainingTime)}秒  金币：{match.NetworkController.ScoreAt(slot)} / 10";
+                    string text = network.ClientResuming ? $"正在恢复对局（约 {Mathf.CeilToInt(network.ClientResumeSeconds)} 秒）\n" : string.Empty;
+                    text += $"剩余：{Mathf.CeilToInt(match.NetworkController.RemainingTime)}秒  金币：{match.NetworkController.ScoreAt(slot)} / 10";
                     text += $"\n血量：{match.NetworkController.HealthAt(slot)} / {match.NetworkController.MaxHealthAt(slot)}";
                     text += $"\n体力：{Mathf.CeilToInt(match.NetworkController.StaminaAt(slot))} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
                     var combatStatus = match.NetworkController.StatusAt(slot);
