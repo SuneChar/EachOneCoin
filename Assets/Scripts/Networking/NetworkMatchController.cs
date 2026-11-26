@@ -489,21 +489,24 @@ namespace EachOneCoin.Networking
                 for (int i = 0; i < RoomState.Capacity && match.Model.Status == MatchStatus.Playing; i++)
                 {
                     if ((visible & (1 << i)) == 0) continue;
-                    Vector3 direction;
-                    if ((humans & (1 << i)) != 0)
-                        direction = Time.unscaledTime - inputTimes[i] <= 0.3f ? inputs[i] : Vector3.zero;
+                    bool human = (humans & (1 << i)) != 0;
+                    bool active = match.Model.Participants[i].Status == ParticipantStatus.Active;
+                    if (human)
+                    {
+                        bool inputFresh = Time.unscaledTime - inputTimes[i] <= 0.3f;
+                        Vector3 direction = inputFresh ? inputs[i] : Vector3.zero;
+                        match.Rules.TickStamina(i, dt, active && !match.Characters[i].IsKnockedBack,
+                            direction.sqrMagnitude > 0f, inputFresh && sprintInputs[i],
+                            match.SprintStaminaPerSecond, match.StaminaRecoveryPerSecond);
+                        float speed = match.MoveSpeed * (match.StaminaAt(i).IsSprinting ? match.SprintSpeedMultiplier : 1f);
+                        match.Characters[i].MoveWithVelocity(direction * speed, dt);
+                    }
                     else
                     {
-                        int phase = (Mathf.FloorToInt(Time.unscaledTime / 2f) + i) % 4;
-                        direction = phase == 0 ? Vector3.right : phase == 1 ? Vector3.forward : phase == 2 ? Vector3.left : Vector3.back;
+                        match.Rules.TickStamina(i, dt, active && !match.Characters[i].IsKnockedBack,
+                            false, false, match.SprintStaminaPerSecond, match.StaminaRecoveryPerSecond);
+                        match.Npcs.Tick(i, dt);
                     }
-                    bool inputFresh = Time.unscaledTime - inputTimes[i] <= 0.3f;
-                    bool active = match.Model.Participants[i].Status == ParticipantStatus.Active;
-                    match.Rules.TickStamina(i, dt, active && !match.Characters[i].IsKnockedBack,
-                        direction.sqrMagnitude > 0f, (humans & (1 << i)) != 0 && inputFresh && sprintInputs[i],
-                        match.SprintStaminaPerSecond, match.StaminaRecoveryPerSecond);
-                    float speed = match.MoveSpeed * (match.StaminaAt(i).IsSprinting ? match.SprintSpeedMultiplier : 1f);
-                    match.Characters[i].MoveWithVelocity(direction * speed, dt);
                     match.Characters[i].TickAttackKnockback(dt);
                 }
                 match.Coins.AdvanceMatch(dt);
