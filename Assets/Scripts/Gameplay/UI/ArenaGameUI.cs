@@ -103,6 +103,13 @@ namespace EachOneCoin.Gameplay
                 if (settingsPanel != null) settingsPanel.SetActive(false);
                 if (resultPanel != null) resultPanel.SetActive(false);
                 if (promptImages != null) promptImages.gameObject.SetActive(false);
+                if (attackPromptText != null && match.NetworkController != null)
+                {
+                    var manager = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+                    bool canAct = manager != null && match.NetworkController.CurrentMatchStatus == MatchStatus.Playing &&
+                        match.NetworkController.StatusAt(manager.LocalSlot) == ParticipantStatus.Active;
+                    attackPromptText.gameObject.SetActive(showPrompts && canAct);
+                }
                 if (networkCoinText == null && coinText != null)
                 {
                     networkCoinText = Instantiate(coinText, transform);
@@ -112,30 +119,40 @@ namespace EachOneCoin.Gameplay
                     rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
                     rect.pivot = new Vector2(1f, 1f);
                     rect.anchoredPosition = new Vector2(-30f, -25f);
-                    rect.sizeDelta = new Vector2(400f, 230f);
+                    rect.sizeDelta = new Vector2(480f, 360f);
                 }
                 var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
                 if (networkCoinText != null && network != null && match.NetworkController != null && Time.unscaledTime >= nextNetworkInfo)
                 {
                     nextNetworkInfo = Time.unscaledTime + 0.25f;
                     int slot = network.LocalSlot;
-                    string text = $"金币：{match.NetworkController.ScoreAt(slot)}（测试）";
+                    string text = $"剩余：{Mathf.CeilToInt(match.NetworkController.RemainingTime)}秒  金币：{match.NetworkController.ScoreAt(slot)} / 10";
                     text += $"\n血量：{match.NetworkController.HealthAt(slot)} / {match.NetworkController.MaxHealthAt(slot)}";
                     text += $"\n体力：{Mathf.CeilToInt(match.NetworkController.StaminaAt(slot))} / {Mathf.CeilToInt(match.StaminaAt(slot).Maximum)}";
                     var combatStatus = match.NetworkController.StatusAt(slot);
+                    bool finished = match.NetworkController.CurrentMatchStatus == MatchStatus.Finished;
                     if (combatStatus == ParticipantStatus.Respawning) text += "\n复活中";
-                    else if (combatStatus == ParticipantStatus.Lost) text += "\n已淘汰";
-                    double elapsed = match.NetworkController.CoinTestElapsed;
-                    if (elapsed >= 60d) text += "\n金币测试周期结束";
-                    else if (elapsed >= 55d) text += "\n本局随机刷新结束";
+                    else if (combatStatus == ParticipantStatus.Won) text += finished ? "\n你已获胜" : "\n你已获胜，其他玩家继续";
+                    else if (combatStatus == ParticipantStatus.Lost) text += finished ? "\n你已失败" : "\n你已失败，其他玩家继续";
+                    if (finished)
+                    {
+                        text += "\n对局结束";
+                        for (int i = 0; i < 4; i++) if (match.NetworkController.IsParticipant(i))
+                            text += $"\n席位{i + 1}：{StatusText(match.NetworkController.StatusAt(i))}  {match.NetworkController.ScoreAt(i)}枚";
+                    }
                     else
                     {
-                        double next = elapsed < 5d ? 5d : 5d + 10d * (System.Math.Floor((elapsed - 5d) / 10d) + 1d);
-                        text += $"\n下次随机刷新：{Mathf.CeilToInt((float)(next - elapsed))}秒";
+                        double elapsed = match.NetworkController.CoinTestElapsed;
+                        if (elapsed >= 55d) text += "\n本局随机刷新结束";
+                        else
+                        {
+                            double next = elapsed < 5d ? 5d : 5d + 10d * (System.Math.Floor((elapsed - 5d) / 10d) + 1d);
+                            text += $"\n下次随机刷新：{Mathf.CeilToInt((float)(next - elapsed))}秒";
+                        }
+                        for (int i = 0; i < match.Model.Mines.Count; i++)
+                            if (match.NetworkController.MineConnectedAt(i, slot))
+                                text += $"\n{match.Coins.MineName(i)}金矿：{match.NetworkController.MineProgressAt(i, slot):F1} / 5秒";
                     }
-                    for (int i = 0; i < match.Model.Mines.Count; i++)
-                        if (match.NetworkController.MineConnectedAt(i, slot))
-                            text += $"\n{match.Coins.MineName(i)}金矿：{match.NetworkController.MineProgressAt(i, slot):F1} / 5秒";
                     networkCoinText.text = text;
                 }
                 return;

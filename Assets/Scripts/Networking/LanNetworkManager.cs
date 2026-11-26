@@ -120,6 +120,11 @@ namespace EachOneCoin.Networking
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.Begin(message.occupied, message.fillNpcs);
             });
+            NetworkClient.RegisterHandler<MatchStateMessage>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null) controller.ReceiveMatchState(message);
+            });
             NetworkClient.RegisterHandler<CombatStateMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
@@ -242,7 +247,7 @@ namespace EachOneCoin.Networking
             for (int i = 0; i < RoomState.Capacity; i++) if (room.IsOccupied(i)) mask |= (byte)(1 << i);
             MatchOccupied = mask; MatchFillNpcs = room.FillEmptyWithNpcs; MovementRunning = true;
             var controller = FindObjectOfType<NetworkMatchController>();
-            if (controller != null) { controller.Begin(mask, MatchFillNpcs); controller.SendGridSnapshot(); controller.SendCoinSnapshot(); controller.SendCombatState(); }
+            if (controller != null) { controller.Begin(mask, MatchFillNpcs); controller.SendGridSnapshot(); controller.SendCoinSnapshot(); controller.SendCombatState(); controller.SendMatchState(); }
             NetworkServer.SendToAll(new MovementBegin { occupied = mask, fillNpcs = MatchFillNpcs });
         }
 

@@ -99,8 +99,8 @@ namespace EachOneCoin.Gameplay
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
             session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
             matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
-            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), IsNetworkMovementTest ? int.MaxValue : 10);
-            Rules.StartMatch();
+            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina));
+            if (!IsNetworkMovementTest) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
                 foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.BindArena(this);

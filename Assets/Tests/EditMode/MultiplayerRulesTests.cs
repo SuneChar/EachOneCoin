@@ -147,6 +147,59 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void ActiveSlots_IgnoreEmptySeatsAndFinishWhenAllParticipantsWin()
+        {
+            var match = CreateMatch(target: 1);
+            rules.ConfigureParticipants(0b0011);
+            rules.StartMatch();
+            Assert.That(match.Participants[2].IsParticipating, Is.False);
+            Assert.That(rules.TryCollectRandomCoin(2), Is.False);
+            Assert.That(rules.TryCollectRandomCoin(0), Is.True);
+            Assert.That(match.Status, Is.EqualTo(MatchStatus.Playing));
+            Assert.That(rules.TryCollectRandomCoin(1), Is.True);
+            Assert.That(match.Status, Is.EqualTo(MatchStatus.Finished));
+            Assert.That(match.Participants[0].Status, Is.EqualTo(ParticipantStatus.Won));
+            Assert.That(match.Participants[1].Status, Is.EqualTo(ParticipantStatus.Won));
+        }
+
+        [Test]
+        public void ActiveSlots_TimeoutPreservesWinnerAndDoesNotMarkEmptySeatLost()
+        {
+            var match = CreateMatch(target: 1);
+            rules.ConfigureParticipants(0b0011);
+            rules.StartMatch();
+            rules.TryCollectRandomCoin(0);
+            rules.TryDamage(1, 3, 0, out _);
+            rules.AdvanceTime(60f);
+            Assert.That(match.Status, Is.EqualTo(MatchStatus.Finished));
+            Assert.That(match.Participants[0].Status, Is.EqualTo(ParticipantStatus.Won));
+            Assert.That(match.Participants[1].Status, Is.EqualTo(ParticipantStatus.Lost));
+            Assert.That(match.Participants[2].Status, Is.EqualTo(ParticipantStatus.Active));
+            Assert.That(match.Participants[2].IsParticipating, Is.False);
+        }
+
+        [Test]
+        public void ActiveSlots_ForfeitLastRemainingParticipantFinishesMatch()
+        {
+            var match = CreateMatch(target: 1);
+            rules.ConfigureParticipants(0b0011);
+            rules.StartMatch();
+            rules.TryCollectRandomCoin(0);
+            Assert.That(rules.Forfeit(1), Is.True);
+            Assert.That(match.Participants[1].Status, Is.EqualTo(ParticipantStatus.Lost));
+            Assert.That(match.Status, Is.EqualTo(MatchStatus.Finished));
+        }
+
+        [Test]
+        public void ActiveSlots_RejectEmptyMaskAndConfigurationAfterStart()
+        {
+            CreateMatch();
+            Assert.Throws<ArgumentOutOfRangeException>(() => rules.ConfigureParticipants(0));
+            rules.StartMatch();
+            Assert.Throws<InvalidOperationException>(() => rules.ConfigureParticipants(1));
+        }
+
+        [Test]
         public void Damage_DropsAtMostHeldCoinsAndRespawnsAtReducedMaximum()
         {
             var match = CreateMatch();
