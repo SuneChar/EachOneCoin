@@ -23,7 +23,7 @@ namespace EachOneCoin.Gameplay
         public void Tick(int id, float deltaTime)
         {
             if (match.Model.Participants[id].Status != ParticipantStatus.Active) return;
-            match.Combat.Attack(id);
+            AttackNearby(id);
             var character = match.Characters[id];
             if (character.IsKnockedBack) { ResetPath(id); return; }
             retries[id] = Mathf.Max(0f, retries[id] - deltaTime);
@@ -82,6 +82,27 @@ namespace EachOneCoin.Gameplay
             {
                 match.Telemetry?.NpcEvent(id, "blocked_retry"); ResetPath(id); retries[id] = 0.25f;
             }
+        }
+
+        private void AttackNearby(int id)
+        {
+            Vector3 origin = match.Characters[id].transform.position;
+            Vector3 direction = Vector3.zero;
+            float nearestSquared = match.Combat.AttackRange * match.Combat.AttackRange;
+            bool found = false;
+            for (int i = 0; i < match.Characters.Length; i++)
+            {
+                if (i == id || match.Model.Participants[i].Status != ParticipantStatus.Active) continue;
+                Vector3 delta = match.Characters[i].transform.position - origin;
+                delta.y = 0f;
+                if (delta.sqrMagnitude > nearestSquared) continue;
+                nearestSquared = delta.sqrMagnitude;
+                direction = delta;
+                found = true;
+            }
+            if (!found) return;
+            if (direction.sqrMagnitude < 0.000001f) direction = Vector3.forward;
+            match.Combat.Attack(id, direction);
         }
 
         private bool FindPath(int id, bool returning, List<GridPosition> path)

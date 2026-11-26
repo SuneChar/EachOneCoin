@@ -44,6 +44,9 @@ namespace EachOneCoin.Gameplay
         private float timeScaleBeforePause = 1f;
         private MatchSessionModel session;
         private MatchSystem matchSystem;
+        private bool aiming;
+        private bool aimUsesGamepad;
+        private Vector3 aimDirection = Vector3.forward;
         public MatchSystem Rules
         {
             get
@@ -58,6 +61,7 @@ namespace EachOneCoin.Gameplay
         public void Pause()
         {
             if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            CancelAim();
             timeScaleBeforePause = Time.timeScale;
             IsPaused = true;
             Time.timeScale = 0f;
@@ -114,8 +118,6 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
-            Rules.AdvanceTime(Time.deltaTime);
-            if (Model.Status != MatchStatus.Playing) { RefreshStates(); return; }
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
@@ -126,19 +128,48 @@ namespace EachOneCoin.Gameplay
             {
                 float speed = moveSpeed * (Stamina.IsSprinting ? Mathf.Max(1f, sprintSpeedMultiplier) : 1f);
                 Characters[0].MoveWithVelocity(movement * speed, Time.deltaTime);
-                if (localInput.AttackPressed) combat.Attack(0);
+                if (Model.Participants[0].Status == ParticipantStatus.Active) UpdateAim();
+                else CancelAim();
             }
             for (int i = 1; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) npcs.Tick(i, Time.deltaTime);
+            for (int i = 0; i < Characters.Length && Model.Status == MatchStatus.Playing; i++) Characters[i].TickAttackKnockback(Time.deltaTime);
+            Rules.AdvanceTime(Time.deltaTime);
             RefreshStates();
         }
 
         private void RefreshStates()
         {
+            if (Model.Participants[0].Status != ParticipantStatus.Active) CancelAim();
             for (int i = 0; i < Characters.Length; i++)
             {
                 var status = Model.Participants[i].Status;
                 if (status == ParticipantStatus.Won || status == ParticipantStatus.Lost) Characters[i].SetActiveState(false);
             }
+        }
+
+        private void UpdateAim()
+        {
+            if (!aiming && (localInput.KeyboardAttackDown || localInput.GamepadAttackDown))
+            {
+                aimUsesGamepad = !localInput.KeyboardAttackDown && localInput.GamepadAttackDown;
+                aiming = true;
+            }
+            if (!aiming) return;
+            if (localInput.TryAimDirection(aimUsesGamepad, Characters[0].transform.position, Camera.main, out Vector3 direction)) aimDirection = direction;
+            if (!localInput.AttackHeld(aimUsesGamepad))
+            {
+                CancelAim();
+                combat.Attack(0, aimDirection);
+                return;
+            }
+            Characters[0].SetAttackAim(true, aimDirection, combat.AttackRange, combat.AttackAngle);
+        }
+
+        private void CancelAim()
+        {
+            aiming = false;
+            if (Characters != null && Characters.Length > 0 && Characters[0] != null)
+                Characters[0].SetAttackAim(false, aimDirection, 0f, 0f);
         }
 
         public void CoinCollected(int id) { if (id == 0 && gameAudio != null) gameAudio.PlayCoin(); }

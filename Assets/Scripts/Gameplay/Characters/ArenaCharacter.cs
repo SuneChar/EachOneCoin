@@ -24,15 +24,18 @@ namespace EachOneCoin.Gameplay
         private float obstacleProtection;
         private Vector3 pendingKnockback;
         private float knockbackTime;
+        private Vector3 attackKnockbackRemaining;
+        private float attackKnockbackTime;
         private Vector3 lastMovement;
         private Vector3 movementVelocity;
         private SpriteRenderer[] sprites;
         private Color[] spriteColors;
         private bool flashing;
         private GroundShadow groundShadow;
+        private AttackVisual attackVisual;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
-        public bool IsKnockedBack => knockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
+        public bool IsKnockedBack => knockbackTime > 0f || attackKnockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
         public int LastTeleportFrame { get; private set; } = -1;
         private int lastKnockbackFrame = -1;
 
@@ -53,6 +56,8 @@ namespace EachOneCoin.Gameplay
                 spriteColors[i] = sprites[i].color;
             }
             groundShadow = GroundShadow.Create(gameObject, 0.85f);
+            attackVisual = gameObject.AddComponent<AttackVisual>();
+            attackVisual.Initialize(coordinator, visual);
             if (characterSprite != null && characterSprite.transform.Find("Outline Outer") == null)
             {
                 CreateOutline(characterSprite, "Outline Outer", new Color(0.07f, 0.08f, 0.1f), 1.22f, -2);
@@ -80,10 +85,21 @@ namespace EachOneCoin.Gameplay
             if (visuallyActive == active) return;
             visuallyActive = active;
             if (groundShadow != null) groundShadow.SetVisible(active);
-            if (!active) { movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
+            if (!active && attackVisual != null) attackVisual.Clear();
+            if (!active) { movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
             if (controller != null) controller.enabled = active;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
+        }
+
+        public void SetAttackAim(bool visible, Vector3 direction, float range, float angle)
+        {
+            if (attackVisual != null) attackVisual.SetAim(visible, direction, range, angle);
+        }
+
+        public void PlayAttack(Vector3 direction, float range, float angle)
+        {
+            if (attackVisual != null) attackVisual.Play(direction, range, angle);
         }
 
         public void Teleport(Vector3 position)
@@ -96,7 +112,7 @@ namespace EachOneCoin.Gameplay
             controller.enabled = true;
             touching.Clear(); hasCell = false;
             movementVelocity = Vector3.zero;
-            pendingKnockback = Vector3.zero; knockbackTime = 0f; obstacleProtection = 0f; SetFlash(false);
+            pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false);
             ReportCell();
         }
 
@@ -113,7 +129,7 @@ namespace EachOneCoin.Gameplay
 
         public void Move(Vector3 delta)
         {
-            if (!controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active || knockbackTime > 0f) return;
+            if (!controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active || IsKnockedBack) return;
             delta.y = 0f;
             if (delta.sqrMagnitude > 0.000001f) lastMovement = delta;
             if (arrow != null && delta.sqrMagnitude > 0.000001f) arrow.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
@@ -136,14 +152,56 @@ namespace EachOneCoin.Gameplay
             else footstepTimer = 0f;
         }
 
-        private void MoveOnPlane(Vector3 delta)
+        public void StartAttackKnockback(Vector3 displacement, float duration)
+        {
+            if (controller == null || !controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
+            displacement.y = 0f;
+            if (displacement.sqrMagnitude < 0.000001f || duration <= 0f) return;
+            movementVelocity = Vector3.zero;
+            pendingKnockback = Vector3.zero;
+            knockbackTime = 0f;
+            attackKnockbackRemaining = displacement;
+            attackKnockbackTime = duration;
+        }
+
+        public void TickAttackKnockback(float deltaTime)
+        {
+            if (attackKnockbackTime <= 0f || deltaTime <= 0f || !controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
+            lastKnockbackFrame = Time.frameCount;
+            float stepTime = Mathf.Min(deltaTime, attackKnockbackTime);
+            Vector3 movement = attackKnockbackRemaining * (stepTime / attackKnockbackTime);
+            attackKnockbackRemaining -= movement;
+            attackKnockbackTime -= stepTime;
+            int steps = Mathf.Max(1, Mathf.CeilToInt(movement.magnitude / 0.2f));
+            Vector3 step = movement / steps;
+            bool blocked = false;
+            for (int i = 0; i < steps; i++)
+            {
+                Vector3 before = transform.position;
+                CollisionFlags flags = MoveOnPlane(step);
+                if (match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
+                if (knockbackTime > 0f || (flags & CollisionFlags.Sides) != 0 || Vector3.Dot(transform.position - before, step.normalized) < step.magnitude * 0.5f)
+                {
+                    blocked = true;
+                    break;
+                }
+            }
+            if (!blocked && attackKnockbackTime > 0f) return;
+            attackKnockbackTime = 0f;
+            attackKnockbackRemaining = Vector3.zero;
+            ReportCell();
+            match.Coins.TryCollect(this);
+        }
+
+        private CollisionFlags MoveOnPlane(Vector3 delta)
         {
             Vector3 before = transform.position;
-            controller.Move(delta);
+            CollisionFlags flags = controller.Move(delta);
             Vector3 after = transform.position;
             // Reject a step that collision resolution lifted off the arena plane.
             if (Mathf.Abs(after.y - before.y) > 0.001f) transform.position = before;
             else if (after.y != before.y) transform.position = new Vector3(after.x, before.y, after.z);
+            return flags;
         }
 
         private void ReportCell()

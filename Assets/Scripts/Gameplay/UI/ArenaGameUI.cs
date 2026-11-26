@@ -207,7 +207,7 @@ namespace EachOneCoin.Gameplay
             if (attackPromptText != null)
             {
                 attackPromptText.gameObject.SetActive(showPrompts && !paused && !resultShown);
-                attackPromptText.text = usingGamepad ? "X  攻击" : "空格  攻击";
+                attackPromptText.text = usingGamepad ? "按住 X + 右摇杆瞄准，松开攻击" : "按住空格 + 鼠标瞄准，松开攻击";
             }
         }
 

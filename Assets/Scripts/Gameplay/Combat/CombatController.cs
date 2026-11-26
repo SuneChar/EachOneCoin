@@ -6,12 +6,17 @@ namespace EachOneCoin.Gameplay
     {
         [SerializeField, Min(0.1f)] private float attackCooldown = 0.8f;
         [SerializeField, Min(0.1f)] private float attackRange = 1.1f;
+        [SerializeField, Range(1f, 360f)] private float attackAngle = 100f;
         [SerializeField, Min(1)] private int damage = 1;
         [SerializeField, Min(0)] private int droppedCoins = 1;
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
+        [SerializeField, Min(0.01f)] private float attackKnockbackSeconds = 0.35f;
+        private const float AttackKnockbackDistance = 6f;
         private readonly float[] cooldowns = new float[4];
         private readonly float[] respawns = new float[4];
         private MatchCoordinator match;
+        public float AttackRange => Mathf.Max(0.1f, attackRange);
+        public float AttackAngle => Mathf.Clamp(attackAngle, 1f, 360f);
 
         public void Initialize(MatchCoordinator coordinator) { match = coordinator; }
 
@@ -28,24 +33,44 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        public void Attack(int attacker)
+        public void Attack(int attacker, Vector3 aimDirection)
         {
-            if (match.Model.Status != MatchStatus.Playing || match.Model.Participants[attacker].Status != ParticipantStatus.Active || cooldowns[attacker] > 0f) return;
+            if (match.Model.Status != MatchStatus.Playing || attacker < 0 || attacker >= match.Characters.Length || match.Model.Participants[attacker].Status != ParticipantStatus.Active || cooldowns[attacker] > 0f) return;
+            aimDirection.y = 0f;
+            if (aimDirection.sqrMagnitude < 0.000001f) return;
+            aimDirection.Normalize();
             cooldowns[attacker] = Mathf.Max(0.1f, attackCooldown);
-            int target = -1; float nearest = Mathf.Max(0.1f, attackRange);
-            for (int i = 0; i < match.Characters.Length; i++)
+            var attackerCharacter = match.Characters[attacker];
+            attackerCharacter.PlayAttack(aimDirection, AttackRange, AttackAngle);
+            Vector3 origin = attackerCharacter.transform.position;
+            for (int target = 0; target < match.Characters.Length; target++)
             {
-                if (i == attacker || match.Model.Participants[i].Status != ParticipantStatus.Active) continue;
-                var delta = match.Characters[attacker].transform.position - match.Characters[i].transform.position; delta.y = 0f;
-                float distance = delta.magnitude;
-                if (distance <= nearest) { nearest = distance; target = i; }
+                if (target == attacker || match.Model.Participants[target].Status != ParticipantStatus.Active) continue;
+                Vector3 direction = match.Characters[target].transform.position - origin;
+                direction.y = 0f;
+                if (!IsWithinAttack(direction, aimDirection, AttackRange, AttackAngle)) continue;
+                if (!match.Rules.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) continue;
+                if (match.Model.Participants[target].Status != ParticipantStatus.Respawning)
+                {
+                    if (direction.sqrMagnitude < 0.000001f) direction = aimDirection;
+                    match.Characters[target].StartAttackKnockback(direction.normalized * AttackKnockbackDistance, Mathf.Max(0.01f, attackKnockbackSeconds));
+                    match.Npcs.ResetPath(target);
+                    continue;
+                }
+                match.Coins.Drop(match.Grid.WorldToCell(match.Characters[target].transform.position), dropped);
+                respawns[target] = Mathf.Max(0.1f, respawnSeconds);
+                match.Characters[target].SetActiveState(false);
+                match.Npcs.ResetPath(target);
             }
-            if (target < 0 || !match.Rules.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) return;
-            if (match.Model.Participants[target].Status != ParticipantStatus.Respawning) return;
-            match.Coins.Drop(match.Grid.WorldToCell(match.Characters[target].transform.position), dropped);
-            respawns[target] = Mathf.Max(0.1f, respawnSeconds);
-            match.Characters[target].SetActiveState(false);
-            match.Npcs.ResetPath(target);
+        }
+
+        public static bool IsWithinAttack(Vector3 offset, Vector3 direction, float range, float angle)
+        {
+            offset.y = 0f;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 0.000001f || range < 0f || offset.sqrMagnitude > range * range + 0.000001f) return false;
+            if (offset.sqrMagnitude < 0.000001f || angle >= 360f) return true;
+            return Vector3.Dot(offset.normalized, direction.normalized) >= Mathf.Cos(Mathf.Clamp(angle, 0f, 360f) * 0.5f * Mathf.Deg2Rad) - 0.000001f;
         }
     }
 }

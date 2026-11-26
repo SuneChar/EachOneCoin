@@ -5,7 +5,35 @@ namespace EachOneCoin.Gameplay
     public sealed class LocalPlayerInput : MonoBehaviour
     {
         public Vector3 Movement => new Vector3(Input.GetAxisRaw("Horizontal"), 0f, Input.GetAxisRaw("Vertical")).normalized;
-        public bool AttackPressed => Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.JoystickButton2);
+        public bool KeyboardAttackDown => Input.GetKeyDown(KeyCode.Space);
+        public bool GamepadAttackDown => Input.GetKeyDown(KeyCode.JoystickButton2);
+        public bool AttackHeld(bool gamepad) => Input.GetKey(gamepad ? KeyCode.JoystickButton2 : KeyCode.Space);
+        public Vector2 GamepadAim => new Vector2(Input.GetAxisRaw("GamepadRightHorizontal"), -Input.GetAxisRaw("GamepadRightVertical"));
+
+        public bool TryAimDirection(bool gamepad, Vector3 origin, Camera camera, out Vector3 direction)
+        {
+            direction = Vector3.zero;
+            if (camera == null) return false;
+            if (gamepad)
+            {
+                Vector2 stick = GamepadAim;
+                if (stick.sqrMagnitude < 0.0625f) return false;
+                Vector3 forward = Vector3.ProjectOnPlane(camera.transform.forward, Vector3.up).normalized;
+                Vector3 right = Vector3.ProjectOnPlane(camera.transform.right, Vector3.up).normalized;
+                direction = right * stick.x + forward * stick.y;
+            }
+            else
+            {
+                Ray ray = camera.ScreenPointToRay(Input.mousePosition);
+                var plane = new Plane(Vector3.up, origin);
+                if (!plane.Raycast(ray, out float distance)) return false;
+                direction = ray.GetPoint(distance) - origin;
+                direction.y = 0f;
+            }
+            if (direction.sqrMagnitude < 0.0001f) return false;
+            direction.Normalize();
+            return true;
+        }
         public bool SprintHeld => Input.GetKey(KeyCode.LeftShift);
     }
 }

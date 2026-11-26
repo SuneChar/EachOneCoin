@@ -134,6 +134,117 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator Aim_PauseCancelsAndHidesIndicator()
+        {
+            var character = Character(0);
+            Call(character, "SetAttackAim", true, Vector3.forward, 1.1f, 100f);
+            match.GetType().GetField("aiming", Private).SetValue(match, true);
+            var visual = character.GetType().GetField("attackVisual", Private).GetValue(character);
+            var aim = (Transform)visual.GetType().GetField("aim", Private).GetValue(visual);
+            Assert.That(aim.gameObject.activeSelf, Is.True);
+            Call(match, "Pause");
+            try
+            {
+                Assert.That(match.GetType().GetField("aiming", Private).GetValue(match), Is.EqualTo(false));
+                Assert.That(aim.gameObject.activeSelf, Is.False);
+            }
+            finally { Call(match, "Resume"); }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Attack_SectorHitsAllTargetsInsideButNotBehind()
+        {
+            var origin = CellToWorld(new GridPosition(10, 2));
+            Call(Character(0), "Teleport", origin);
+            Call(Character(1), "Teleport", origin + Quaternion.Euler(0f, 30f, 0f) * Vector3.right * 0.9f);
+            Call(Character(2), "Teleport", origin + Quaternion.Euler(0f, -30f, 0f) * Vector3.right * 0.9f);
+            Call(Character(3), "Teleport", origin + Vector3.left * 0.9f);
+            Physics.SyncTransforms();
+            Call(combat, "Attack", 0, Vector3.right);
+            Assert.That(model.Participants[1].Health, Is.EqualTo(2));
+            Assert.That(model.Participants[2].Health, Is.EqualTo(2));
+            Assert.That(model.Participants[3].Health, Is.EqualTo(3));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Attack_SectorBoundaryMatchesRangeAndAngle()
+        {
+            var method = combat.GetType().GetMethod("IsWithinAttack");
+            Vector3 direction = Vector3.forward;
+            Assert.That(method.Invoke(null, new object[] { Quaternion.Euler(0, 50f, 0) * direction * 1.1f, direction, 1.1f, 100f }), Is.EqualTo(true));
+            Assert.That(method.Invoke(null, new object[] { Quaternion.Euler(0, 51f, 0) * direction, direction, 1.1f, 100f }), Is.EqualTo(false));
+            Assert.That(method.Invoke(null, new object[] { direction * 1.11f, direction, 1.1f, 100f }), Is.EqualTo(false));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Attack_KnocksTargetSixCellsWithoutPaintingThePath()
+        {
+            var attacker = Character(0);
+            var target = Character(1);
+            Call(attacker, "Teleport", CellToWorld(new GridPosition(2, 2)));
+            Call(target, "Teleport", CellToWorld(new GridPosition(3, 2)));
+            Physics.SyncTransforms();
+            var start = target.transform.position;
+            var intermediate = new GridPosition(5, 2);
+            var ownerBefore = model.Grid.OwnerAt(intermediate);
+            Call(combat, "Attack", 0, Vector3.right);
+            Assert.That(model.Participants[1].Health, Is.EqualTo(2));
+            Call(target, "TickAttackKnockback", 0.18f);
+            Assert.That(model.Grid.OwnerAt(intermediate), Is.EqualTo(ownerBefore));
+            Call(target, "TickAttackKnockback", 1f);
+            Assert.That(target.transform.position.x - start.x, Is.EqualTo(6f).Within(0.05f));
+            Assert.That(model.Grid.OwnerAt(intermediate), Is.EqualTo(ownerBefore));
+            Assert.That(model.Grid.OwnerAt(new GridPosition(9, 2)), Is.EqualTo(1));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Attack_WallStopsKnockbackAndPaintsLandingCell()
+        {
+            var attacker = Character(0);
+            var target = Character(1);
+            Call(attacker, "Teleport", CellToWorld(new GridPosition(2, 2)));
+            Call(target, "Teleport", CellToWorld(new GridPosition(3, 2)));
+            var wall = new GameObject("Test knockback wall", typeof(BoxCollider));
+            wall.transform.position = CellToWorld(new GridPosition(6, 2)) + Vector3.up * 0.5f;
+            wall.transform.localScale = new Vector3(0.2f, 1f, 2f);
+            try
+            {
+                Physics.SyncTransforms();
+                var start = target.transform.position;
+                Call(combat, "Attack", 0, Vector3.right);
+                Call(target, "TickAttackKnockback", 1f);
+                Assert.That(target.transform.position.x - start.x, Is.GreaterThan(0.1f).And.LessThan(3f));
+                var landing = (GridPosition)Call(grid, "WorldToCell", target.transform.position);
+                Assert.That(model.Grid.OwnerAt(landing), Is.EqualTo(1));
+                Assert.That(Get(target, "IsKnockedBack"), Is.EqualTo(true));
+            }
+            finally { UnityEngine.Object.Destroy(wall); }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TimeoutFrame_CollectsWinningCoinBeforeSettlement()
+        {
+            var spawn = model.Participants[0].Spawn;
+            for (int i = 0; i < model.CoinsToWin - 1; i++) Assert.That(rules.TryCollectCoin(0, spawn), Is.True);
+            var next = new GridPosition(spawn.X + 1, spawn.Y);
+            Assert.That((bool)Call(match, "IsBlocked", next), Is.False);
+            Assert.That(rules.TryPaint(0, next), Is.True);
+            Call(Character(0), "Teleport", CellToWorld(next));
+            Call(coins, "Drop", next, 1);
+            typeof(MatchModel).GetProperty("RemainingTime").SetValue(model, 0.000001f);
+            match.GetType().GetMethod("Update", Private).Invoke(match, null);
+            Assert.That(model.Participants[0].Status, Is.EqualTo(ParticipantStatus.Won));
+            Assert.That(model.Status, Is.EqualTo(MatchStatus.Finished));
+            Assert.That(model.Participants[1].Status, Is.EqualTo(ParticipantStatus.Lost));
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Attack_DropsCoinAndRespawnsTargetAtOwnSpawn()
         {
             var spawn = model.Participants[1].Spawn;
@@ -144,7 +255,7 @@ namespace EachOneCoin.Tests
             Physics.SyncTransforms();
             for (int i = 0; i < 3; i++)
             {
-                Call(combat, "Attack", 0);
+                Call(combat, "Attack", 0, Vector3.right);
                 if (i < 2) Call(combat, "Tick", 1f);
             }
             Assert.That(model.Participants[1].Status, Is.EqualTo(ParticipantStatus.Respawning));
