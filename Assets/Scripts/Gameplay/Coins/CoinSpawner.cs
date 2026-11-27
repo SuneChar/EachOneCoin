@@ -45,6 +45,7 @@ namespace EachOneCoin.Gameplay
         private bool[,] mineConnected;
         private uint[] connectedRevision;
 
+        public event Action<int, int> MineCoinsSpawned;
         public string MineName(int mineIndex) => MineNames[mineIndex];
 
         public void Initialize(MatchCoordinator coordinator)
@@ -246,6 +247,8 @@ namespace EachOneCoin.Gameplay
             // Once announced, a cell is fixed even if a character or obstacle moves onto it.
             for (int i = 0; i < coinEvent.Cells.Length; i++) Spawn(coinEvent.Cells[i], CoinKind.Mine);
             DestroyMarkers(coinEvent);
+            if (coinEvent.Cells != null && coinEvent.Cells.Length > 0)
+                MineCoinsSpawned?.Invoke(coinEvent.MineIndex, coinEvent.Cells.Length);
         }
 
         private CoinEvent PrepareEvent(int index, bool withMarkers)

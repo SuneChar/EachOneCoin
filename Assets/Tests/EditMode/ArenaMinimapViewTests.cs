@@ -177,5 +177,38 @@ namespace EachOneCoin.Tests
             Assert.That((int)activeCoinsProp.GetValue(view), Is.EqualTo(2));
             Assert.That((int)activeWarningsProp.GetValue(view), Is.EqualTo(0));
         }
+
+        [Test]
+        public void CoinPool_DisplaysAllTwentySixScheduledCoinsWithoutTruncation()
+        {
+            Assert.That(CoinSpawnSchedule.TotalCoins, Is.EqualTo(26));
+
+            var coins = new List<GridPosition>(32);
+            for (int i = 0; i < CoinSpawnSchedule.TotalCoins; i++)
+            {
+                coins.Add(new GridPosition(i % 21, i / 21));
+            }
+
+            Assert.DoesNotThrow(() => applyDynamicMarkersMethod.Invoke(view, new object[] { coins, Array.Empty<GridPosition>(), 0, 0.5f }));
+            Assert.That((int)activeCoinsProp.GetValue(view), Is.EqualTo(26));
+
+            int initialChildCount = root.transform.childCount;
+
+            // Reduce active coins and confirm pooled markers shrink cleanly without allocating new objects.
+            coins.RemoveRange(10, coins.Count - 10);
+            Assert.DoesNotThrow(() => applyDynamicMarkersMethod.Invoke(view, new object[] { coins, Array.Empty<GridPosition>(), 0, 1.0f }));
+            Assert.That((int)activeCoinsProp.GetValue(view), Is.EqualTo(10));
+            Assert.That(root.transform.childCount, Is.EqualTo(initialChildCount));
+
+            // Expand up to the full 32-marker pool (26 scheduled coins + combat drops) and confirm reuse.
+            for (int i = coins.Count; i < 32; i++)
+            {
+                coins.Add(new GridPosition(i % 21, i / 21));
+            }
+
+            Assert.DoesNotThrow(() => applyDynamicMarkersMethod.Invoke(view, new object[] { coins, Array.Empty<GridPosition>(), 0, 1.5f }));
+            Assert.That((int)activeCoinsProp.GetValue(view), Is.EqualTo(32));
+            Assert.That(root.transform.childCount, Is.EqualTo(initialChildCount));
+        }
     }
 }

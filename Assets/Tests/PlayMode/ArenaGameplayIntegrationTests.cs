@@ -894,5 +894,97 @@ namespace EachOneCoin.Tests
             Assert.That(Vector3.Distance(start, character.transform.position), Is.GreaterThan(0.1f), "NPC did not move toward the coin.");
             Assert.That(model.Grid.OwnerAt(next), Is.EqualTo(1), "NPC did not paint the intermediate cell within five seconds.");
         }
+
+        [UnityTest]
+        public IEnumerator StaticObstacle_ContactReducesMaxHealthAndAllowsRetry()
+        {
+            var obstacle = arena.GetRootGameObjects()
+                .SelectMany(r => r.GetComponentsInChildren<Transform>(true))
+                .SingleOrDefault(t => t.name == "Static Obstacle 01");
+            Assert.That(obstacle, Is.Not.Null, "Static Obstacle 01 must exist in ArenaScene.");
+            var lethalObstacleType = Type.GetType("LethalObstacle, Assembly-CSharp", true);
+            Assert.That(obstacle.GetComponent(lethalObstacleType), Is.Not.Null, "Static Obstacle 01 must have LethalObstacle.");
+            var boxCollider = obstacle.GetComponent<BoxCollider>();
+            Assert.That(boxCollider, Is.Not.Null, "Static Obstacle 01 must have BoxCollider.");
+            Assert.That(boxCollider.enabled, Is.True, "Static Obstacle 01 BoxCollider must be enabled.");
+
+            var character = Character(0);
+            int hits = 0;
+            var obstacleHitEvent = match.GetType().GetEvent("ObstacleHit");
+            Assert.That(obstacleHitEvent, Is.Not.Null, "MatchCoordinator must expose ObstacleHit.");
+            Action<int> handler = id => { if (id == 0) hits++; };
+            obstacleHitEvent.AddEventHandler(match, handler);
+            try
+            {
+                var startPosition = obstacle.position + Vector3.left * 1.2f;
+                startPosition.y = 0f;
+                Call(character, "Teleport", startPosition);
+                Physics.SyncTransforms();
+
+                Call(character, "Move", Vector3.right * 1.2f);
+                Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
+                Assert.That(model.Participants[0].Health, Is.EqualTo(2));
+                Assert.That(hits, Is.EqualTo(1));
+                Assert.That(Get(character, "IsKnockedBack"), Is.EqualTo(true));
+
+                float deadline = Time.realtimeSinceStartup + 2f;
+                while ((bool)Get(character, "IsKnockedBack") && Time.realtimeSinceStartup < deadline) yield return null;
+                Assert.That((bool)Get(character, "IsKnockedBack"), Is.False, "Obstacle knockback did not finish within two seconds.");
+
+                var controller = character.GetComponent<CharacterController>();
+                controller.enabled = false;
+                var detachedPosition = obstacle.position + Vector3.left * 1.5f;
+                detachedPosition.y = character.transform.position.y;
+                character.transform.position = detachedPosition;
+                controller.enabled = true;
+                Physics.SyncTransforms();
+                character.GetType().GetMethod("LateUpdate", Private).Invoke(character, null);
+                character.GetType().GetField("obstacleProtection", Private).SetValue(character, 0f);
+
+                Call(character, "Move", Vector3.right * 1.5f);
+                Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(1));
+                Assert.That(model.Participants[0].Health, Is.EqualTo(1));
+                Assert.That(hits, Is.EqualTo(2));
+            }
+            finally { obstacleHitEvent.RemoveEventHandler(match, handler); }
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator MovingObstacle_ContactReducesMaxHealth()
+        {
+            var obstacle = arena.GetRootGameObjects()
+                .SelectMany(r => r.GetComponentsInChildren<Transform>(true))
+                .SingleOrDefault(t => t.name == "Moving Obstacle 01");
+            Assert.That(obstacle, Is.Not.Null, "Moving Obstacle 01 must exist in ArenaScene.");
+            var patrolType = Type.GetType("LinearPatrolObstacle, Assembly-CSharp", true);
+            var lethalObstacleType = Type.GetType("LethalObstacle, Assembly-CSharp", true);
+            Assert.That(obstacle.GetComponent(patrolType), Is.Not.Null, "Moving Obstacle 01 must have LinearPatrolObstacle.");
+            Assert.That(obstacle.GetComponent(lethalObstacleType), Is.Not.Null, "Moving Obstacle 01 must have LethalObstacle.");
+            var boxCollider = obstacle.GetComponent<BoxCollider>();
+            Assert.That(boxCollider, Is.Not.Null, "Moving Obstacle 01 must have BoxCollider.");
+            Assert.That(boxCollider.enabled, Is.True, "Moving Obstacle 01 BoxCollider must be enabled.");
+
+            var character = Character(0);
+            int hits = 0;
+            var obstacleHitEvent = match.GetType().GetEvent("ObstacleHit");
+            Assert.That(obstacleHitEvent, Is.Not.Null, "MatchCoordinator must expose ObstacleHit.");
+            Action<int> handler = id => { if (id == 0) hits++; };
+            obstacleHitEvent.AddEventHandler(match, handler);
+            try
+            {
+                var startPosition = obstacle.position + Vector3.back * 1.2f;
+                startPosition.y = 0f;
+                Call(character, "Teleport", startPosition);
+                Physics.SyncTransforms();
+
+                Call(character, "Move", Vector3.forward * 1.2f);
+                Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
+                Assert.That(model.Participants[0].Health, Is.EqualTo(2));
+                Assert.That(hits, Is.EqualTo(1));
+            }
+            finally { obstacleHitEvent.RemoveEventHandler(match, handler); }
+            yield return null;
+        }
     }
 }

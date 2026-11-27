@@ -102,7 +102,7 @@ namespace EachOneCoin.Gameplay
             if (groundShadow != null) groundShadow.SetVisible(active);
             if (nameplate != null) nameplate.SetVisible(active);
             if (!active && attackVisual != null) attackVisual.Clear();
-            if (!active) { movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
+            if (!active) { touching.Clear(); movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
             if (controller != null) controller.enabled = active;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
@@ -293,9 +293,35 @@ namespace EachOneCoin.Gameplay
         private void OnTriggerStay(Collider other) => TryHazard(other);
         private void OnTriggerExit(Collider other) => touching.Remove(other);
 
+        private static Component ResolveHazardOwner(Collider collider)
+        {
+            if (collider == null) return null;
+            var spike = collider.GetComponentInParent<TimedSpikeTrap>();
+            if (spike != null) return spike;
+            return collider.GetComponentInParent<LethalObstacle>();
+        }
+
+        private bool IsSameHazardTouching(Collider other)
+        {
+            if (touching.Count == 0) return false;
+            Component owner = ResolveHazardOwner(other);
+            if (owner == null) return false;
+            foreach (var existing in touching)
+            {
+                if (existing == null) continue;
+                if (ResolveHazardOwner(existing) == owner) return true;
+            }
+            return false;
+        }
+
         private void TryHazard(Collider other)
         {
             if (match == null || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
+            if (IsSameHazardTouching(other))
+            {
+                touching.Add(other);
+                return;
+            }
             Vector3 center = transform.TransformPoint(controller.center);
             Vector3 direction = center - other.ClosestPoint(center);
             touching.Add(other);
@@ -346,11 +372,12 @@ namespace EachOneCoin.Gameplay
             }
             if (controller == null || !controller.enabled || touching.Count == 0) return;
             var center = transform.TransformPoint(controller.center);
-            float threshold = controller.radius + 0.08f;
+            float threshold = controller.radius + controller.skinWidth + 0.02f;
+            float thresholdSqr = threshold * threshold;
             released.Clear();
             foreach (var other in touching)
-                if (other == null || !other.enabled || (other.ClosestPoint(center) - center).sqrMagnitude > threshold * threshold) released.Add(other);
-            foreach (var other in released) touching.Remove(other);
+                if (other == null || !other.enabled || !other.gameObject.activeInHierarchy || (match != null && !match.IsHazard(other)) || (other.ClosestPoint(center) - center).sqrMagnitude > thresholdSqr) released.Add(other);
+            for (int i = 0; i < released.Count; i++) touching.Remove(released[i]);
         }
     }
 }

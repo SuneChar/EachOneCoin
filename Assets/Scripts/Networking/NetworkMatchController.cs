@@ -356,6 +356,42 @@ namespace EachOneCoin.Networking
             match.Characters[message.slot].PlayAttack(message.direction, match.Combat.AttackRange, match.Combat.AttackAngle);
         }
 
+        public void BroadcastFeedEvent(MatchFeedEvent feedEvent)
+        {
+            if (!NetworkServer.active || !started || network == null) return;
+            var message = new MatchFeedEventMessage
+            {
+                eventType = (byte)feedEvent.Type,
+                primarySlot = feedEvent.PrimarySlot,
+                secondarySlot = feedEvent.SecondarySlot,
+                mineIndex = feedEvent.MineIndex,
+                value = feedEvent.Value,
+                reason = (byte)feedEvent.Reason
+            };
+            SendToReadyClients(message);
+        }
+
+        public void ReceiveFeedEvent(MatchFeedEventMessage message)
+        {
+            if (NetworkServer.active || !started || match == null || network == null || network.ClientResuming) return;
+            if (message.eventType > (byte)MatchFeedEventType.PlayerRespawned ||
+                message.reason > (byte)EliminationReason.Forfeit ||
+                message.primarySlot < -1 || message.primarySlot >= RoomState.Capacity ||
+                message.secondarySlot < -1 || message.secondarySlot >= RoomState.Capacity ||
+                message.mineIndex < -1 || message.mineIndex >= 4 ||
+                message.value < 0) return;
+            var feedEvent = new MatchFeedEvent
+            {
+                Type = (MatchFeedEventType)message.eventType,
+                PrimarySlot = message.primarySlot,
+                SecondarySlot = message.secondarySlot,
+                MineIndex = message.mineIndex,
+                Value = message.value,
+                Reason = (EliminationReason)message.reason
+            };
+            match.RaiseNetworkFeedEvent(feedEvent);
+        }
+
         private CombatParticipant CaptureCombatParticipant(int slot)
         {
             var p = match.Model.Participants[slot];
@@ -445,7 +481,12 @@ namespace EachOneCoin.Networking
             match.Characters[slot].SetActiveState(false);
             if (NetworkServer.active && match.Model.Status == MatchStatus.Playing)
             {
-                match.Rules.Forfeit(slot);
+                if (match.Rules.Forfeit(slot))
+                {
+                    var evt = MatchFeedEvent.CreatePlayerEliminated(slot, EliminationReason.Forfeit);
+                    match.RaiseNetworkFeedEvent(evt);
+                    BroadcastFeedEvent(evt);
+                }
                 SendMatchState();
                 SendCombatState();
             }

@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -9,6 +10,8 @@ namespace EachOneCoin.Gameplay
     [DefaultExecutionOrder(-100)]
     public sealed class ArenaGameUI : MonoBehaviour
     {
+        private static readonly string[] FallbackMineNames = { "南侧", "北侧", "西侧", "东侧" };
+
         [SerializeField] private MatchCoordinator match;
         [SerializeField] private GameAudio gameAudio;
         [SerializeField] private GameObject hudPanel, pausePanel, settingsPanel, resultPanel;
@@ -19,6 +22,12 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private TMP_Text staminaText;
         [SerializeField] private ArcStaminaBarView arcStaminaBarView;
         [SerializeField] private ArenaMinimapView minimapView;
+        [SerializeField] private LocalPlayerPortraitView localPortraitView;
+        [SerializeField] private ParticipantHudStripView participantStripView;
+        [SerializeField] private LocalCoinCounterView localCoinCounterView;
+        [SerializeField] private CenterBannerPromptView centerBannerView;
+        [SerializeField] private MatchClockAndMineView clockAndMineView;
+        [SerializeField] private MatchEventFeedView eventFeedView;
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
         [SerializeField] private ControlPromptImages promptImages;
@@ -26,31 +35,82 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Range(0f, 1f)] private float hitFrameOpacity = 0.65f;
         [SerializeField, Min(1f)] private float hitFrameThickness = 24f;
         private readonly Image[] hitFrame = new Image[4];
+        private readonly ParticipantHudSnapshot[] snapshotBuffer = new ParticipantHudSnapshot[4];
+        private IAvatarAppearanceProvider avatarProvider = new DefaultAvatarAppearanceProvider();
+        private Func<int, string> participantNameResolver;
+        private Func<int, Color> participantColorResolver;
+        private Func<int, string> mineNameResolver;
         private float hitFlashRemaining;
         private InputDeviceTracker inputDevice;
         private bool usingGamepad, showPrompts, settingsOpen, resultShown;
         private int lastTime = -1;
         private readonly int[] lastCoins = { -1, -1, -1, -1 };
+        private readonly int[] lastFinishOrder = { -1, -1, -1, -1 };
         private readonly int[] lastHealth = { -1, -1, -1, -1 };
         private readonly int[] lastMaxHealth = { -1, -1, -1, -1 };
+        private readonly bool[] lastParticipating = new bool[4];
         private readonly ParticipantStatus[] lastStatus = new ParticipantStatus[4];
+        private int lastLocalSlot = -1;
+        private int lastNetworkSyncedHealth = -1;
+        private int lastNetworkSyncedMaxHealth = -1;
         private bool firstRefresh = true;
+        private bool avatarAppearanceDirty;
         private bool lastUpcomingWarning;
-        private bool lastUpcomingConnected;
         private int lastUpcomingMine = int.MaxValue;
-        private int lastUpcomingSeconds = -1;
         private bool networkMenuOpen;
         private bool heartsInitialized;
         private bool legacyHealthHidden;
         private bool staminaBarInitialized;
         private bool legacyStaminaHidden;
+        private bool legacyHudTextsHidden;
         private bool minimapInitialized;
+        private bool localPortraitInitialized;
+        private bool participantStripInitialized;
+        private bool localCoinCounterInitialized;
+        private bool centerBannerInitialized;
+        private bool clockAndMineInitialized;
+        private bool eventFeedInitialized;
+        private bool networkStatusBannerInitialized;
         private bool leftHudAdjusted;
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
+        private GameObject networkStatusBannerRoot;
+        private TMP_Text networkStatusBannerText;
+        private HudProceduralIcons statusBannerIcons;
+        private bool networkStatusStateInitialized;
+        private bool lastBannerResuming;
+        private bool lastBannerSpectating;
+        private int lastBannerSpectateSlot = -2;
+        private ParticipantStatus lastBannerLocalStatus;
+        private MatchStatus lastBannerMatchStatus;
+        private bool lastBannerResultShown;
+        private string lastNetworkStatusMessage = string.Empty;
         private Camera cachedMainCamera;
-        public TMPro.TMP_FontAsset NameplateFont => timeText != null ? timeText.font : null;
+        public TMPro.TMP_FontAsset NameplateFont
+        {
+            get
+            {
+                if (timeText != null && timeText.font != null) return timeText.font;
+                if (coinText != null && coinText.font != null) return coinText.font;
+                if (participantText != null && participantText.font != null) return participantText.font;
+                if (feedbackText != null && feedbackText.font != null) return feedbackText.font;
+                if (attackPromptText != null && attackPromptText.font != null) return attackPromptText.font;
+                if (resultText != null && resultText.font != null) return resultText.font;
+                return null;
+            }
+        }
         public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
+
+        public void SetAvatarAppearanceProvider(IAvatarAppearanceProvider provider)
+        {
+            IAvatarAppearanceProvider next = provider ?? new DefaultAvatarAppearanceProvider();
+            if (ReferenceEquals(avatarProvider, next)) return;
+            if (avatarProvider != null) avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
+            avatarProvider = next;
+            if (isActiveAndEnabled && avatarProvider != null) avatarProvider.AppearanceChanged += OnAvatarAppearanceChanged;
+            if (localPortraitView != null) localPortraitView.SetAppearanceProvider(avatarProvider);
+            avatarAppearanceDirty = true;
+        }
 
         private void Awake()
         {
@@ -70,26 +130,62 @@ namespace EachOneCoin.Gameplay
             legacyHealthHidden = true;
             HideLegacyStaminaUI();
             legacyStaminaHidden = true;
-            var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
-            var selectable = pauseButton != null ? pauseButton.GetComponent<Selectable>() : null;
-            if (selectable != null)
-            {
-                var navigation = selectable.navigation;
-                navigation.mode = Navigation.Mode.None;
-                selectable.navigation = navigation;
-            }
+            HideLegacyHudTexts();
+            legacyHudTextsHidden = true;
+            AdjustPauseButtonLayout();
             RefreshPanels();
         }
 
-        private void OnEnable() { if (match != null) { match.ObstacleHit += OnObstacleHit; match.AttackHit += OnAttackHit; } }
-        private void OnDisable() { if (match != null) { match.ObstacleHit -= OnObstacleHit; match.AttackHit -= OnAttackHit; } }
-        private void OnDestroy() { if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged; }
+        private void OnEnable()
+        {
+            if (match != null)
+            {
+                match.ObstacleHit += OnObstacleHit;
+                match.AttackHit += OnAttackHit;
+                match.FeedEventRaised += OnFeedEventRaised;
+            }
+            if (avatarProvider != null)
+            {
+                avatarProvider.AppearanceChanged += OnAvatarAppearanceChanged;
+            }
+        }
+
+        private void OnDisable()
+        {
+            if (match != null)
+            {
+                match.ObstacleHit -= OnObstacleHit;
+                match.AttackHit -= OnAttackHit;
+                match.FeedEventRaised -= OnFeedEventRaised;
+            }
+            if (avatarProvider != null)
+            {
+                avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged;
+            if (avatarProvider != null) avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
+            if (statusBannerIcons != null)
+            {
+                statusBannerIcons.Dispose();
+                statusBannerIcons = null;
+            }
+        }
+
+        private void OnAvatarAppearanceChanged(int slotId)
+        {
+            avatarAppearanceDirty = true;
+        }
 
         private void OnObstacleHit(int id)
         {
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             UpdateHitFrame();
+            if (localPortraitView != null) localPortraitView.TriggerHitFlash();
         }
 
         private void OnAttackHit(int id)
@@ -97,6 +193,57 @@ namespace EachOneCoin.Gameplay
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             UpdateHitFrame();
+            if (localPortraitView != null) localPortraitView.TriggerHitFlash();
+        }
+
+        private void OnFeedEventRaised(MatchFeedEvent evt)
+        {
+            if (resultShown) return;
+            if (match != null && match.IsNetworkMovementTest)
+            {
+                var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
+                if (network != null && network.ClientResuming) return;
+            }
+
+            EnsureEventFeed();
+            EnsureCenterBanner();
+
+            if (eventFeedView != null)
+            {
+                string formatted = MatchFeedEvent.Format(
+                    evt,
+                    GetParticipantNameResolver(),
+                    GetParticipantColorResolver(),
+                    GetMineNameResolver());
+                Color accentColor = MatchFeedEvent.ResolveAccentColor(evt, GetParticipantColorResolver());
+                eventFeedView.PushFormatted(formatted, accentColor);
+            }
+
+            if (centerBannerView != null)
+            {
+                switch (evt.Type)
+                {
+                    case MatchFeedEventType.CoinSpawned:
+                        centerBannerView.ShowCoinsSpawnedPop(ResolveMineName(evt.MineIndex), evt.Value);
+                        break;
+
+                    case MatchFeedEventType.NearVictory:
+                        int coinsToWin = match != null && match.Model != null ? match.Model.CoinsToWin : 10;
+                        centerBannerView.ShowPlayerNearVictory(
+                            ResolveParticipantName(evt.PrimarySlot),
+                            evt.Value,
+                            coinsToWin,
+                            ResolveParticipantColor(evt.PrimarySlot));
+                        break;
+
+                    case MatchFeedEventType.PlayerWon:
+                        centerBannerView.ShowPlayerFinished(
+                            ResolveParticipantName(evt.PrimarySlot),
+                            evt.Value,
+                            ResolveParticipantColor(evt.PrimarySlot));
+                        break;
+                }
+            }
         }
 
         private bool IsLocalParticipant(int id)
@@ -152,9 +299,7 @@ namespace EachOneCoin.Gameplay
                 else Pause();
             }
             var model = match.Model;
-            EnsureHealthHearts(match.InitialHealth);
-            EnsureArcStaminaBar();
-            EnsureMinimap();
+            EnsureHudViews(false);
             if (minimapView != null && (!match.IsPaused || firstRefresh))
             {
                 byte visibleMask = 0;
@@ -181,79 +326,104 @@ namespace EachOneCoin.Gameplay
             {
                 if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
                 if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
+                TickHudViews(Time.deltaTime);
             }
             if (model.Status == MatchStatus.Finished && !resultShown)
             {
                 resultShown = true;
+                if (centerBannerView != null) centerBannerView.Clear();
                 var local = model.Participants[0];
-                resultText.text = local.Status == ParticipantStatus.Won ? "游戏胜利" : "游戏结束";
-                resultCoinsText.text = $"金币：{local.Coins} / {model.CoinsToWin}";
+                if (resultText != null) resultText.text = local.Status == ParticipantStatus.Won ? "游戏胜利" : "游戏结束";
+                if (resultCoinsText != null) resultCoinsText.text = $"金币：{local.Coins} / {model.CoinsToWin}";
                 if (gameAudio != null) { if (local.Status == ParticipantStatus.Won) gameAudio.PlayWin(); else gameAudio.PlayLose(); }
                 RefreshPanels();
             }
             int time = Mathf.CeilToInt(model.RemainingTime);
             if (time != lastTime)
             {
-                timeText.text = time.ToString();
                 if (lastTime > time && time > 0 && time <= 10 && gameAudio != null) gameAudio.PlayCountdown();
                 lastTime = time;
             }
-            bool changed = firstRefresh;
-            for (int i = 0; i < model.Participants.Count; i++)
+            if (clockAndMineView != null) clockAndMineView.SetTime(time);
+
+            int participantCount = Mathf.Min(snapshotBuffer.Length, model.Participants.Count);
+            bool changed = firstRefresh || avatarAppearanceDirty || lastLocalSlot != 0;
+            for (int i = 0; i < snapshotBuffer.Length; i++)
             {
-                var p = model.Participants[i];
-                if (lastCoins[i] != p.Coins || lastHealth[i] != p.Health || lastMaxHealth[i] != p.MaxHealth || lastStatus[i] != p.Status) changed = true;
-                lastCoins[i] = p.Coins; lastHealth[i] = p.Health; lastMaxHealth[i] = p.MaxHealth; lastStatus[i] = p.Status;
+                bool participating = i < participantCount && model.Participants[i].IsParticipating;
+                int coins = i < participantCount ? model.Participants[i].Coins : 0;
+                int finishOrder = i < participantCount ? model.Participants[i].FinishOrder : 0;
+                int health = i < participantCount ? model.Participants[i].Health : 0;
+                int maxHealth = i < participantCount ? model.Participants[i].MaxHealth : 0;
+                ParticipantStatus status = i < participantCount ? model.Participants[i].Status : ParticipantStatus.Lost;
+
+                if (lastParticipating[i] != participating ||
+                    lastCoins[i] != coins ||
+                    lastFinishOrder[i] != finishOrder ||
+                    lastHealth[i] != health ||
+                    lastMaxHealth[i] != maxHealth ||
+                    lastStatus[i] != status)
+                {
+                    changed = true;
+                }
+
+                lastParticipating[i] = participating;
+                lastCoins[i] = coins;
+                lastFinishOrder[i] = finishOrder;
+                lastHealth[i] = health;
+                lastMaxHealth[i] = maxHealth;
+                lastStatus[i] = status;
             }
+
             if (changed)
             {
-                var p = model.Participants[0];
-                coinText.text = $"金币：{p.Coins} / {model.CoinsToWin}";
-                if (healthHeartsView != null) healthHeartsView.SetHealth(p.Health, p.MaxHealth, !firstRefresh);
-                var text = new System.Text.StringBuilder();
-                for (int i = 0; i < model.Participants.Count; i++)
+                int initialMaxHealth = match.InitialHealth;
+                for (int i = 0; i < snapshotBuffer.Length; i++)
                 {
-                    var player = model.Participants[i];
-                    var color = ColorUtility.ToHtmlStringRGB(match.Grid.PlayerColor(i));
-                    text.Append($"<color=#{color}>●</color> {(i == 0 ? "玩家" : "电脑 " + i)}  {player.Coins}/{model.CoinsToWin}  {StatusText(player.Status)}\n");
-                }
-                participantText.text = text.ToString();
-            }
-            var localPlayer = model.Participants[0];
-            bool mineChanged = changed;
-            int upcomingMine = -1;
-            float upcomingSeconds = 0f;
-            bool upcomingWarning = false;
-            bool hasUpcoming = match.Coins != null && match.Coins.TryDescribeNextEvent(out upcomingMine, out upcomingSeconds, out upcomingWarning);
-            bool upcomingConnected = hasUpcoming && upcomingMine >= 0 && match.Coins.IsMineConnected(upcomingMine, 0);
-            int upcomingCountdown = hasUpcoming ? Mathf.CeilToInt(upcomingSeconds) : -1;
-            if (lastUpcomingMine != upcomingMine || lastUpcomingWarning != upcomingWarning || lastUpcomingSeconds != upcomingCountdown)
-            {
-                mineChanged = true;
-                lastUpcomingMine = upcomingMine; lastUpcomingWarning = upcomingWarning; lastUpcomingSeconds = upcomingCountdown;
-            }
-            if (lastUpcomingConnected != upcomingConnected)
-            {
-                mineChanged = true;
-                lastUpcomingConnected = upcomingConnected;
-            }
-            if (mineChanged)
-            {
-                if (localPlayer.Status != ParticipantStatus.Active) feedbackText.text = StatusText(localPlayer.Status);
-                else
-                {
-                    var text = new System.Text.StringBuilder(hasUpcoming ? "下一批金币：" : "金币已全部产出");
-                    if (hasUpcoming)
+                    if (i < participantCount)
                     {
-                        if (upcomingMine >= 0) text.Append(match.Coins.MineName(upcomingMine)[0]).Append("矿 ").Append(upcomingConnected ? "已连通 " : "未连通 ");
-                        else text.Append("任一矿 ");
-                        text.Append(upcomingCountdown).Append('s');
-                        if (upcomingWarning) text.Append("（预警中）");
+                        var player = model.Participants[i];
+                        Color color = ResolveParticipantColor(i);
+                        snapshotBuffer[i] = new ParticipantHudSnapshot
+                        {
+                            SlotId = i,
+                            DisplayName = ResolveParticipantName(i),
+                            IsParticipating = player.IsParticipating,
+                            IsLocal = i == 0,
+                            Coins = player.Coins,
+                            FinishOrder = player.FinishOrder,
+                            Health = player.Health,
+                            MaxHealth = player.MaxHealth,
+                            InitialMaxHealth = initialMaxHealth,
+                            Status = player.Status,
+                            Color = color,
+                            Appearance = ResolveAvatarAppearance(i, color)
+                        };
                     }
-                    text.Append("\n预警圈出现后 ").Append(CoinSpawnSchedule.WarningSeconds.ToString("0.#")).Append(" 秒生成金币，需涂色连通才能拾取");
-                    feedbackText.text = text.ToString();
+                    else
+                    {
+                        snapshotBuffer[i] = new ParticipantHudSnapshot
+                        {
+                            SlotId = i,
+                            IsParticipating = false
+                        };
+                    }
                 }
+
+                if (participantStripView != null) participantStripView.Refresh(snapshotBuffer);
+                if (participantCount > 0)
+                {
+                    var localSnapshot = snapshotBuffer[0];
+                    if (localPortraitView != null) localPortraitView.SetParticipant(0, localSnapshot.Appearance, localSnapshot.Status);
+                    if (healthHeartsView != null) healthHeartsView.SetHealth(localSnapshot.Health, localSnapshot.MaxHealth, !firstRefresh);
+                    if (localCoinCounterView != null) localCoinCounterView.SetCoins(localSnapshot.Coins, model.CoinsToWin, !firstRefresh);
+                }
+
+                lastLocalSlot = 0;
+                avatarAppearanceDirty = false;
             }
+
+            UpdateMineScheduleAndWarning(0, firstRefresh);
             firstRefresh = false;
         }
 
@@ -268,33 +438,40 @@ namespace EachOneCoin.Gameplay
                 else if (networkMenuOpen) Resume();
                 else Pause();
             }
+
             int slot = network.LocalSlot;
+            EnsureHudViews(true);
+
             int time = Mathf.CeilToInt(state.RemainingTime);
             if (time != lastTime)
             {
                 if (lastTime > time && time > 0 && time <= 10 && gameAudio != null) gameAudio.PlayCountdown();
                 lastTime = time;
-                timeText.text = time.ToString();
             }
-            EnsureHealthHearts(match.InitialHealth);
-            int coins = state.ScoreAt(slot), health = state.HealthAt(slot), maxHealth = state.MaxHealthAt(slot);
-            if (!firstRefresh && !Mirror.NetworkServer.active && !network.ClientResuming && coins > lastCoins[slot] && gameAudio != null) gameAudio.PlayCoin();
-            lastCoins[slot] = coins;
-            coinText.text = $"金币：{coins} / {match.Model.CoinsToWin}";
-            bool waitingFirstReplica = !Mirror.NetworkServer.active && !networkHealthSynced && maxHealth == 0 && state.StatusAt(slot) == ParticipantStatus.Active;
+            if (clockAndMineView != null) clockAndMineView.SetTime(time);
+
+            int localCoins = state.ScoreAt(slot);
+            int localHealth = state.HealthAt(slot);
+            int localMaxHealth = state.MaxHealthAt(slot);
+            ParticipantStatus localStatus = state.StatusAt(slot);
+            if (!firstRefresh && !Mirror.NetworkServer.active && !network.ClientResuming && localCoins > lastCoins[slot] && gameAudio != null)
+                gameAudio.PlayCoin();
+
+            if (localCoinCounterView != null)
+                localCoinCounterView.SetCoins(localCoins, match.Model.CoinsToWin, !firstRefresh && !network.ClientResuming);
+
+            bool waitingFirstReplica = !Mirror.NetworkServer.active && !networkHealthSynced && localMaxHealth == 0 && localStatus == ParticipantStatus.Active;
             if (!waitingFirstReplica)
             {
                 bool isInitialSync = !networkHealthSynced;
-                bool healthChanged = isInitialSync || lastHealth[slot] != health || lastMaxHealth[slot] != maxHealth;
-                lastHealth[slot] = health;
-                lastMaxHealth[slot] = maxHealth;
+                bool healthChanged = isInitialSync || lastNetworkSyncedHealth != localHealth || lastNetworkSyncedMaxHealth != localMaxHealth;
+                lastNetworkSyncedHealth = localHealth;
+                lastNetworkSyncedMaxHealth = localMaxHealth;
                 networkHealthSynced = true;
                 if (healthChanged && healthHeartsView != null)
-                    healthHeartsView.SetHealth(health, maxHealth, !isInitialSync && !network.ClientResuming);
+                    healthHeartsView.SetHealth(localHealth, localMaxHealth, !isInitialSync && !network.ClientResuming);
             }
-            if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
-            EnsureArcStaminaBar();
-            EnsureMinimap();
+
             if (minimapView != null)
             {
                 byte visibleMask = 0;
@@ -304,6 +481,7 @@ namespace EachOneCoin.Gameplay
                 int focusSlot = state.IsSpectating && state.SpectateSlot >= 0 ? state.SpectateSlot : slot;
                 minimapView.Refresh(focusSlot, visibleMask, Time.unscaledTime);
             }
+
             if (arcStaminaBarView != null)
             {
                 Transform localTarget = match.Characters != null && slot < match.Characters.Length && match.Characters[slot] != null
@@ -312,7 +490,7 @@ namespace EachOneCoin.Gameplay
                 arcStaminaBarView.SetTarget(localTarget);
                 bool canShowStamina = !NetworkMenuOpen && !network.ClientResuming && !state.IsSpectating &&
                                       state.CurrentMatchStatus == MatchStatus.Playing &&
-                                      state.StatusAt(slot) == ParticipantStatus.Active;
+                                      localStatus == ParticipantStatus.Active;
                 arcStaminaBarView.SetGameplayVisible(canShowStamina);
                 if (!waitingFirstReplica)
                 {
@@ -327,53 +505,252 @@ namespace EachOneCoin.Gameplay
                 }
                 arcStaminaBarView.TickVisual(Time.deltaTime, Time.unscaledTime);
             }
-            var participants = new System.Text.StringBuilder();
-            for (int i = 0; i < 4; i++) if (state.IsParticipant(i))
+
+            int initialMaxHealth = match.InitialHealth;
+            bool participantsChanged = firstRefresh || avatarAppearanceDirty || lastLocalSlot != slot;
+            for (int i = 0; i < snapshotBuffer.Length; i++)
             {
-                var color = ColorUtility.ToHtmlStringRGB(match.Grid.PlayerColor(i));
-                participants.Append($"<color=#{color}>●</color> {(i == slot ? "你" : "席位 " + (i + 1))}  {state.ScoreAt(i)}/{match.Model.CoinsToWin}  {StatusText(state.StatusAt(i))}\n");
+                bool participating = state.IsParticipant(i);
+                int pCoins = state.ScoreAt(i);
+                int pOrder = state.FinishOrderAt(i);
+                ParticipantStatus pStatus = state.StatusAt(i);
+                int pHealth = state.HealthAt(i);
+                int pMaxHealth = state.MaxHealthAt(i);
+                if (!Mirror.NetworkServer.active && !networkHealthSynced && pMaxHealth == 0 && pStatus == ParticipantStatus.Active)
+                {
+                    pHealth = initialMaxHealth;
+                    pMaxHealth = initialMaxHealth;
+                }
+
+                if (lastParticipating[i] != participating ||
+                    lastCoins[i] != pCoins ||
+                    lastFinishOrder[i] != pOrder ||
+                    lastHealth[i] != pHealth ||
+                    lastMaxHealth[i] != pMaxHealth ||
+                    lastStatus[i] != pStatus)
+                {
+                    participantsChanged = true;
+                }
+
+                lastParticipating[i] = participating;
+                lastCoins[i] = pCoins;
+                lastFinishOrder[i] = pOrder;
+                lastHealth[i] = pHealth;
+                lastMaxHealth[i] = pMaxHealth;
+                lastStatus[i] = pStatus;
             }
-            participantText.text = participants.ToString();
-            var info = new System.Text.StringBuilder();
-            if (network.ClientResuming) info.Append("正在恢复对局\n");
-            bool upcoming = match.Coins.TryDescribeNextEvent(out int mine, out float seconds, out bool warning);
-            if (upcoming)
+
+            if (participantsChanged)
             {
-                info.Append("下一批金币：");
-                if (mine >= 0) info.Append(match.Coins.MineName(mine)[0]).Append("矿 ").Append(match.Coins.IsMineConnected(mine, slot) ? "已连通 " : "未连通 ");
-                else info.Append("任一矿 ");
-                info.Append(Mathf.CeilToInt(seconds)).Append('s');
-                if (warning) info.Append("（预警中）");
+                for (int i = 0; i < snapshotBuffer.Length; i++)
+                {
+                    Color color = ResolveParticipantColor(i);
+                    snapshotBuffer[i] = new ParticipantHudSnapshot
+                    {
+                        SlotId = i,
+                        DisplayName = ResolveParticipantName(i),
+                        IsParticipating = lastParticipating[i],
+                        IsLocal = i == slot,
+                        Coins = lastCoins[i],
+                        FinishOrder = lastFinishOrder[i],
+                        Health = lastHealth[i],
+                        MaxHealth = lastMaxHealth[i],
+                        InitialMaxHealth = initialMaxHealth,
+                        Status = lastStatus[i],
+                        Color = color,
+                        Appearance = ResolveAvatarAppearance(i, color)
+                    };
+                }
+
+                if (participantStripView != null) participantStripView.Refresh(snapshotBuffer);
+                if (localPortraitView != null)
+                    localPortraitView.SetParticipant(slot, snapshotBuffer[slot].Appearance, snapshotBuffer[slot].Status);
+
+                lastLocalSlot = slot;
+                avatarAppearanceDirty = false;
             }
-            else info.Append("金币已全部产出");
-            info.Append("\n预警圈出现后 ").Append(CoinSpawnSchedule.WarningSeconds.ToString("0.#")).Append(" 秒生成金币，需涂色连通才能拾取");
-            var status = state.StatusAt(slot);
-            if (status != ParticipantStatus.Active) info.Append("\n").Append(StatusText(status)).Append(state.CurrentMatchStatus == MatchStatus.Playing ? "，其他玩家继续" : "");
-            if (state.IsSpectating)
-            {
-                int target = state.SpectateSlot;
-                info.Append(target < 0 ? "\n等待其他参与者结束" : "\n观战 " + (state.IsHuman(target) ? "席位 " : "NPC ") + (target + 1) + "（Tab / RB 切换）");
-            }
-            feedbackText.text = info.ToString();
+
+            UpdateMineScheduleAndWarning(slot, firstRefresh || network.ClientResuming);
+
             if (!resultShown && state.CurrentMatchStatus == MatchStatus.Finished)
             {
                 resultShown = true; networkMenuOpen = false; settingsOpen = false;
-                resultText.text = status == ParticipantStatus.Won ? "游戏胜利" : "游戏结束";
-                resultCoinsText.text = BuildNetworkRanking(state, slot);
-                if (gameAudio != null) { if (status == ParticipantStatus.Won) gameAudio.PlayWin(); else gameAudio.PlayLose(); }
+                if (centerBannerView != null) centerBannerView.Clear();
+                if (resultText != null) resultText.text = localStatus == ParticipantStatus.Won ? "游戏胜利" : "游戏结束";
+                if (resultCoinsText != null) resultCoinsText.text = BuildNetworkRanking(state, slot);
+                if (gameAudio != null) { if (localStatus == ParticipantStatus.Won) gameAudio.PlayWin(); else gameAudio.PlayLose(); }
                 RefreshPanels();
             }
+
+            UpdateNetworkStatusBanner(network, state, slot);
+
+            if (!match.IsPaused)
+            {
+                if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
+                TickHudViews(Time.deltaTime);
+            }
+
             if (resultShown && network.LocalReturned)
             {
-                resultText.text = "已返回房间，等待其他玩家";
-                var exit = resultPanel.transform.Find("MainMenuButton");
+                if (resultText != null) resultText.text = "已返回房间，等待其他玩家";
+                var exit = resultPanel != null ? resultPanel.transform.Find("MainMenuButton") : null;
                 if (exit != null) { var label = exit.GetComponentInChildren<TMP_Text>(true); if (label != null) label.text = "退出房间"; }
                 var waiting = new System.Text.StringBuilder();
                 for (int i = 0; i < 4; i++) if ((network.Snapshot.occupiedMask & (1 << i)) != 0)
                     waiting.Append("席位 ").Append(i + 1).Append((network.ReturnedMask & (1 << i)) != 0 ? "：已返回\n" : "：查看结算中\n");
-                resultCoinsText.text = waiting.ToString();
+                if (resultCoinsText != null) resultCoinsText.text = waiting.ToString();
             }
             firstRefresh = false;
+        }
+
+        private void UpdateMineScheduleAndWarning(int localSlot, bool suppressBanner)
+        {
+            int upcomingMine = -1;
+            float upcomingSeconds = 0f;
+            bool upcomingWarning = false;
+            bool hasUpcoming = match != null && match.Coins != null &&
+                match.Coins.TryDescribeNextEvent(out upcomingMine, out upcomingSeconds, out upcomingWarning);
+            bool upcomingConnected = hasUpcoming && upcomingMine >= 0 && localSlot >= 0 &&
+                match.Coins.IsMineConnected(upcomingMine, localSlot);
+            string mineName = hasUpcoming && upcomingMine >= 0 ? ResolveMineName(upcomingMine) : null;
+
+            if (clockAndMineView != null)
+            {
+                clockAndMineView.SetMineSchedule(hasUpcoming, upcomingMine, mineName, upcomingSeconds, upcomingWarning, upcomingConnected);
+            }
+
+            bool mineRevealed = hasUpcoming && upcomingWarning && upcomingMine >= 0 &&
+                (!lastUpcomingWarning || lastUpcomingMine != upcomingMine);
+            if (!suppressBanner && !resultShown && mineRevealed && centerBannerView != null)
+            {
+                centerBannerView.ShowMineWarning(mineName);
+            }
+
+            lastUpcomingWarning = hasUpcoming && upcomingWarning;
+            lastUpcomingMine = hasUpcoming ? upcomingMine : -1;
+        }
+
+        private void UpdateNetworkStatusBanner(
+            EachOneCoin.Networking.LanNetworkManager network,
+            EachOneCoin.Networking.NetworkMatchController state,
+            int localSlot)
+        {
+            if (networkStatusBannerRoot == null || networkStatusBannerText == null) return;
+
+            bool resuming = network.ClientResuming;
+            bool spectating = state.IsSpectating;
+            int spectateSlot = spectating ? state.SpectateSlot : -1;
+            ParticipantStatus localStatus = state.StatusAt(localSlot);
+            MatchStatus matchStatus = state.CurrentMatchStatus;
+
+            if (networkStatusStateInitialized &&
+                lastBannerResuming == resuming &&
+                lastBannerSpectating == spectating &&
+                lastBannerSpectateSlot == spectateSlot &&
+                lastBannerLocalStatus == localStatus &&
+                lastBannerMatchStatus == matchStatus &&
+                lastBannerResultShown == resultShown)
+            {
+                return;
+            }
+
+            networkStatusStateInitialized = true;
+            lastBannerResuming = resuming;
+            lastBannerSpectating = spectating;
+            lastBannerSpectateSlot = spectateSlot;
+            lastBannerLocalStatus = localStatus;
+            lastBannerMatchStatus = matchStatus;
+            lastBannerResultShown = resultShown;
+
+            string message = null;
+            if (!resultShown && matchStatus != MatchStatus.Finished)
+            {
+                if (resuming)
+                {
+                    message = "正在恢复对局";
+                }
+                else if (spectating)
+                {
+                    message = spectateSlot < 0
+                        ? "已淘汰，等待其他参与者结束"
+                        : "已淘汰 · 观战 " + ResolveParticipantName(spectateSlot) + "（Tab / RB 切换）";
+                }
+                else if (matchStatus == MatchStatus.Playing &&
+                         (localStatus == ParticipantStatus.Won || localStatus == ParticipantStatus.Lost))
+                {
+                    message = localStatus == ParticipantStatus.Won
+                        ? "已获胜，其他玩家继续对局"
+                        : "已淘汰，其他玩家继续对局";
+                }
+            }
+
+            bool visible = !string.IsNullOrEmpty(message);
+            if (visible && !string.Equals(lastNetworkStatusMessage, message, StringComparison.Ordinal))
+            {
+                lastNetworkStatusMessage = message;
+                networkStatusBannerText.text = message;
+            }
+            if (networkStatusBannerRoot.activeSelf != visible)
+            {
+                networkStatusBannerRoot.SetActive(visible);
+            }
+        }
+
+        private void TickHudViews(float deltaTime)
+        {
+            if (localPortraitView != null) localPortraitView.Tick(deltaTime);
+            if (participantStripView != null) participantStripView.Tick(deltaTime);
+            if (localCoinCounterView != null) localCoinCounterView.Tick(deltaTime);
+            if (centerBannerView != null) centerBannerView.Tick(deltaTime);
+            if (clockAndMineView != null) clockAndMineView.Tick(deltaTime);
+            if (eventFeedView != null) eventFeedView.Tick(deltaTime);
+        }
+
+        private AvatarAppearanceData ResolveAvatarAppearance(int slot, Color fallbackColor)
+        {
+            if (avatarProvider == null) avatarProvider = new DefaultAvatarAppearanceProvider();
+            return avatarProvider.GetAppearance(slot, fallbackColor);
+        }
+
+        private string ResolveParticipantName(int slot)
+        {
+            if (match != null) return match.GetParticipantDisplayName(slot);
+            return slot >= 0 ? "玩家" + (slot + 1) : "未知玩家";
+        }
+
+        private Color ResolveParticipantColor(int slot)
+        {
+            if (match != null && match.Grid != null && slot >= 0 && slot < 4)
+                return match.Grid.PlayerColor(slot);
+            return Color.white;
+        }
+
+        private string ResolveMineName(int mineIndex)
+        {
+            if (mineIndex >= 0 && mineIndex < FallbackMineNames.Length)
+            {
+                if (match != null && match.Coins != null) return match.Coins.MineName(mineIndex);
+                return FallbackMineNames[mineIndex];
+            }
+            return "矿点";
+        }
+
+        private Func<int, string> GetParticipantNameResolver()
+        {
+            if (participantNameResolver == null) participantNameResolver = ResolveParticipantName;
+            return participantNameResolver;
+        }
+
+        private Func<int, Color> GetParticipantColorResolver()
+        {
+            if (participantColorResolver == null) participantColorResolver = ResolveParticipantColor;
+            return participantColorResolver;
+        }
+
+        private Func<int, string> GetMineNameResolver()
+        {
+            if (mineNameResolver == null) mineNameResolver = ResolveMineName;
+            return mineNameResolver;
         }
 
         private static string BuildNetworkRanking(EachOneCoin.Networking.NetworkMatchController state, int localSlot)
@@ -439,10 +816,70 @@ namespace EachOneCoin.Gameplay
             }
         }
 
+        private void EnsureHudViews(bool includeNetworkBanner)
+        {
+            if (!legacyHudTextsHidden)
+            {
+                legacyHudTextsHidden = true;
+                HideLegacyHudTexts();
+            }
+            int initialHealth = match != null ? match.InitialHealth : 3;
+            EnsureHealthHearts(initialHealth);
+            EnsureArcStaminaBar();
+            EnsureMinimap();
+            EnsureLocalPortrait();
+            EnsureParticipantStrip();
+            EnsureLocalCoinCounter();
+            EnsureClockAndMine();
+            EnsureEventFeed();
+            if (includeNetworkBanner)
+            {
+                EnsureNetworkStatusBanner();
+            }
+            EnsureCenterBanner();
+            if (centerBannerView != null && hudPanel != null && centerBannerView.transform.parent == hudPanel.transform)
+            {
+                int lastIndex = hudPanel.transform.childCount - 1;
+                if (centerBannerView.transform.GetSiblingIndex() != lastIndex)
+                {
+                    centerBannerView.transform.SetAsLastSibling();
+                }
+            }
+        }
+
+        private void HideLegacyHudTexts()
+        {
+            if (timeText != null) timeText.gameObject.SetActive(false);
+            if (coinText != null) coinText.gameObject.SetActive(false);
+            if (participantText != null) participantText.gameObject.SetActive(false);
+            if (feedbackText != null) feedbackText.gameObject.SetActive(false);
+        }
+
+        private void AdjustPauseButtonLayout()
+        {
+            var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
+            if (pauseButton == null) return;
+            var selectable = pauseButton.GetComponent<Selectable>();
+            if (selectable != null)
+            {
+                var navigation = selectable.navigation;
+                navigation.mode = Navigation.Mode.None;
+                selectable.navigation = navigation;
+            }
+            if (pauseButton is RectTransform pauseRect)
+            {
+                pauseRect.anchoredPosition = new Vector2(-376f, -65f);
+            }
+        }
+
         private void AdjustLeftHudBelowHearts()
         {
-            if (leftHudAdjusted || healthHeartsView == null || coinText == null) return;
+            if (leftHudAdjusted || healthHeartsView == null) return;
             leftHudAdjusted = true;
+
+            bool coinVisible = coinText != null && coinText.gameObject.activeSelf;
+            bool feedbackVisible = feedbackText != null && feedbackText.gameObject.activeSelf;
+            if (!coinVisible) return;
 
             var heartsRect = healthHeartsView.transform as RectTransform;
             var coinRect = coinText.rectTransform;
@@ -456,7 +893,7 @@ namespace EachOneCoin.Gameplay
             if (shiftDown <= 1f) return;
 
             coinRect.anchoredPosition -= new Vector2(0f, shiftDown);
-            if (feedbackText != null)
+            if (feedbackVisible)
                 feedbackText.rectTransform.anchoredPosition -= new Vector2(0f, shiftDown);
 
             Transform staminaRoot = null;
@@ -547,6 +984,181 @@ namespace EachOneCoin.Gameplay
                 minimapView.Initialize(match);
                 minimapInitialized = true;
             }
+        }
+
+        private void EnsureLocalPortrait()
+        {
+            if (localPortraitInitialized && localPortraitView != null) return;
+            if (localPortraitView == null && hudPanel != null)
+            {
+                var container = new GameObject("LocalPlayerPortrait", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                localPortraitView = container.AddComponent<LocalPlayerPortraitView>();
+            }
+            if (localPortraitView != null)
+            {
+                if (avatarProvider == null) avatarProvider = new DefaultAvatarAppearanceProvider();
+                localPortraitView.Initialize(avatarProvider, NameplateFont);
+                localPortraitInitialized = true;
+            }
+        }
+
+        private void EnsureParticipantStrip()
+        {
+            if (participantStripInitialized && participantStripView != null) return;
+            float mapSize = minimapView != null ? minimapView.MapSize : 368f;
+            Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
+            Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + mapSize + 8f);
+            if (participantStripView == null && hudPanel != null)
+            {
+                var container = new GameObject("ParticipantHudStrip", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                participantStripView = container.AddComponent<ParticipantHudStripView>();
+            }
+            if (participantStripView != null)
+            {
+                participantStripView.Initialize(4, mapSize, stripOffset, NameplateFont);
+                participantStripInitialized = true;
+            }
+        }
+
+        private void EnsureLocalCoinCounter()
+        {
+            if (localCoinCounterInitialized && localCoinCounterView != null) return;
+            if (localCoinCounterView == null && hudPanel != null)
+            {
+                var container = new GameObject("LocalCoinCounter", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                localCoinCounterView = container.AddComponent<LocalCoinCounterView>();
+            }
+            if (localCoinCounterView != null)
+            {
+                localCoinCounterView.Initialize(NameplateFont);
+                localCoinCounterInitialized = true;
+            }
+        }
+
+        private void EnsureClockAndMine()
+        {
+            if (clockAndMineInitialized && clockAndMineView != null) return;
+            if (clockAndMineView == null && hudPanel != null)
+            {
+                var container = new GameObject("MatchClockAndMine", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                clockAndMineView = container.AddComponent<MatchClockAndMineView>();
+            }
+            if (clockAndMineView != null)
+            {
+                clockAndMineView.Initialize(NameplateFont);
+                clockAndMineInitialized = true;
+            }
+        }
+
+        private void EnsureEventFeed()
+        {
+            if (eventFeedInitialized && eventFeedView != null) return;
+            if (eventFeedView == null && hudPanel != null)
+            {
+                var container = new GameObject("MatchEventFeed", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                eventFeedView = container.AddComponent<MatchEventFeedView>();
+            }
+            if (eventFeedView != null)
+            {
+                eventFeedView.Initialize(NameplateFont);
+                eventFeedInitialized = true;
+            }
+        }
+
+        private void EnsureCenterBanner()
+        {
+            if (centerBannerInitialized && centerBannerView != null) return;
+            if (centerBannerView == null && hudPanel != null)
+            {
+                var container = new GameObject("CenterBannerPrompt", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                centerBannerView = container.AddComponent<CenterBannerPromptView>();
+            }
+            if (centerBannerView != null)
+            {
+                centerBannerView.Initialize(NameplateFont);
+                if (hudPanel != null && centerBannerView.transform.parent == hudPanel.transform)
+                {
+                    centerBannerView.transform.SetAsLastSibling();
+                }
+                centerBannerInitialized = true;
+            }
+        }
+
+        private void EnsureNetworkStatusBanner()
+        {
+            if (networkStatusBannerInitialized && networkStatusBannerRoot != null) return;
+            if (hudPanel == null) return;
+
+            var bannerObj = new GameObject("NetworkStatusBanner", typeof(RectTransform));
+            var rt = (RectTransform)bannerObj.transform;
+            rt.SetParent(hudPanel.transform, false);
+            rt.anchorMin = new Vector2(0.5f, 0f);
+            rt.anchorMax = new Vector2(0.5f, 0f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
+            rt.anchoredPosition = new Vector2(0f, 128f);
+            rt.sizeDelta = new Vector2(560f, 44f);
+
+            if (statusBannerIcons == null) statusBannerIcons = new HudProceduralIcons();
+            Sprite panelSprite = statusBannerIcons.GetRoundedPanelSprite();
+
+            var bgObj = new GameObject("Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
+            var bgRect = (RectTransform)bgObj.transform;
+            bgRect.SetParent(rt, false);
+            bgRect.anchorMin = Vector2.zero;
+            bgRect.anchorMax = Vector2.one;
+            bgRect.offsetMin = Vector2.zero;
+            bgRect.offsetMax = Vector2.zero;
+
+            var bgImage = bgObj.GetComponent<Image>();
+            bgImage.sprite = panelSprite;
+            bgImage.type = panelSprite != null && panelSprite.border != Vector4.zero ? Image.Type.Sliced : Image.Type.Simple;
+            bgImage.color = new Color(0.075f, 0.098f, 0.141f, 0.84f);
+            bgImage.raycastTarget = false;
+
+            var textObj = new GameObject("StatusText", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            var textRect = (RectTransform)textObj.transform;
+            textRect.SetParent(rt, false);
+            textRect.anchorMin = Vector2.zero;
+            textRect.anchorMax = Vector2.one;
+            textRect.offsetMin = new Vector2(18f, 4f);
+            textRect.offsetMax = new Vector2(-18f, -4f);
+
+            var tmp = textObj.GetComponent<TextMeshProUGUI>();
+            TMP_FontAsset font = NameplateFont;
+            if (font != null)
+            {
+                tmp.font = font;
+                if (font.material != null) tmp.fontSharedMaterial = font.material;
+            }
+            tmp.alignment = TextAlignmentOptions.Center;
+            tmp.fontStyle = FontStyles.Normal;
+            tmp.fontWeight = FontWeight.Regular;
+            tmp.fontSize = 20f;
+            tmp.enableAutoSizing = true;
+            tmp.fontSizeMin = 13f;
+            tmp.fontSizeMax = 20f;
+            tmp.enableWordWrapping = false;
+            tmp.overflowMode = TextOverflowModes.Ellipsis;
+            tmp.color = new Color(0.95f, 0.97f, 1f, 1f);
+            tmp.raycastTarget = false;
+            tmp.text = string.Empty;
+
+            bannerObj.SetActive(false);
+            networkStatusBannerRoot = bannerObj;
+            networkStatusBannerText = tmp;
+            networkStatusBannerInitialized = true;
         }
 
         private Camera ResolveActiveCamera()

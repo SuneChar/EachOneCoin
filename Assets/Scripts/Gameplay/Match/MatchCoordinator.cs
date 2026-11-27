@@ -50,9 +50,13 @@ namespace EachOneCoin.Gameplay
         public int InitialHealth => Mathf.Max(1, initialHealth);
         public event System.Action<int> ObstacleHit;
         public event System.Action<int> AttackHit;
+        public event System.Action<MatchFeedEvent> FeedEventRaised;
         public bool IsPaused { get; private set; }
         public bool IsNetworkMovementTest { get; private set; }
         public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
+        private readonly bool[] nearVictoryAnnounced = new bool[4];
+        private readonly string[] participantNames = new string[4];
+        private readonly TMPro.TMP_Text[] nameplateLabels = new TMPro.TMP_Text[4];
         private float timeScaleBeforePause = 1f;
         private MatchSessionModel session;
         private MatchSystem matchSystem;
@@ -93,6 +97,7 @@ namespace EachOneCoin.Gameplay
 
         private void OnDestroy()
         {
+            if (coins != null) coins.MineCoinsSpawned -= OnMineCoinsSpawned;
             Resume();
             if (session != null) session.ClearMatch(Model);
         }
@@ -134,11 +139,24 @@ namespace EachOneCoin.Gameplay
             }
             grid.Refresh(Model.Grid);
             coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
+            for (int i = 0; i < nearVictoryAnnounced.Length; i++) nearVictoryAnnounced[i] = false;
+            for (int i = 0; i < participantNames.Length; i++) participantNames[i] = null;
+            for (int i = 0; i < nameplateLabels.Length; i++) nameplateLabels[i] = null;
+            if (coins != null)
+            {
+                coins.MineCoinsSpawned -= OnMineCoinsSpawned;
+                coins.MineCoinsSpawned += OnMineCoinsSpawned;
+            }
             if (!IsNetworkMovementTest)
             {
                 npcs.AssignPersonalities(14);
-                Characters[0].SetDisplayName("玩家1");
-                for (int i = 1; i < Characters.Length; i++) Characters[i].SetDisplayName(NpcController.PersonalityName(npcs.PersonalityCode(i)));
+                participantNames[0] = "玩家1";
+                Characters[0].SetDisplayName(participantNames[0]);
+                for (int i = 1; i < Characters.Length; i++)
+                {
+                    participantNames[i] = NpcController.PersonalityName(npcs.PersonalityCode(i));
+                    Characters[i].SetDisplayName(participantNames[i]);
+                }
             }
             if (IsNetworkMovementTest)
             {
@@ -225,22 +243,133 @@ namespace EachOneCoin.Gameplay
                 Characters[0].SetAttackAim(false, aimDirection, 0f, 0f);
         }
 
-        public void CoinCollected(int id) { if (id == 0 && gameAudio != null) gameAudio.PlayCoin(); }
+        private bool IsFeedAuthority => !IsNetworkMovementTest || Mirror.NetworkServer.active;
+
+        private void EmitFeedEvent(MatchFeedEvent evt)
+        {
+            FeedEventRaised?.Invoke(evt);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active && NetworkController != null)
+                NetworkController.BroadcastFeedEvent(evt);
+        }
+
+        public void RaiseNetworkFeedEvent(MatchFeedEvent feedEvent)
+        {
+            FeedEventRaised?.Invoke(feedEvent);
+        }
+
+        public string GetParticipantDisplayName(int id)
+        {
+            if (id < 0) return "未知玩家";
+            if (IsNetworkMovementTest)
+            {
+                if (NetworkController != null && id < participantNames.Length)
+                {
+                    if (NetworkController.IsHuman(id)) return "玩家" + (id + 1);
+                    if (Mirror.NetworkServer.active && npcs != null)
+                    {
+                        string serverNpcName = NpcController.PersonalityName(npcs.PersonalityCode(id));
+                        participantNames[id] = serverNpcName;
+                        return serverNpcName;
+                    }
+                    string nameplateName = TryReadCharacterDisplayName(id);
+                    if (!string.IsNullOrEmpty(nameplateName))
+                    {
+                        participantNames[id] = nameplateName;
+                        return nameplateName;
+                    }
+                    if (!string.IsNullOrEmpty(participantNames[id])) return participantNames[id];
+                    return npcs != null ? NpcController.PersonalityName(npcs.PersonalityCode(id)) : "NPC";
+                }
+                string fallbackName = TryReadCharacterDisplayName(id);
+                if (!string.IsNullOrEmpty(fallbackName)) return fallbackName;
+                return "玩家" + (id + 1);
+            }
+
+            if (id == 0) return "玩家1";
+            if (id < participantNames.Length && !string.IsNullOrEmpty(participantNames[id])) return participantNames[id];
+            string characterName = TryReadCharacterDisplayName(id);
+            if (!string.IsNullOrEmpty(characterName)) return characterName;
+            if (npcs != null && id < participantNames.Length) return NpcController.PersonalityName(npcs.PersonalityCode(id));
+            return "电脑 " + id;
+        }
+
+        private string TryReadCharacterDisplayName(int id)
+        {
+            if (Characters == null || id < 0 || id >= Characters.Length || Characters[id] == null) return null;
+            if (id < nameplateLabels.Length && nameplateLabels[id] == null)
+            {
+                var labelTransform = Characters[id].transform.Find("Character Nameplate/Name");
+                if (labelTransform != null) nameplateLabels[id] = labelTransform.GetComponent<TMPro.TMP_Text>();
+            }
+            if (id < nameplateLabels.Length && nameplateLabels[id] != null)
+            {
+                string text = nameplateLabels[id].text;
+                if (!string.IsNullOrEmpty(text)) return text;
+            }
+            return null;
+        }
+
+        private void OnMineCoinsSpawned(int mineIndex, int count)
+        {
+            if (count <= 0 || !IsFeedAuthority) return;
+            EmitFeedEvent(MatchFeedEvent.CreateCoinSpawned(mineIndex, count));
+        }
+
+        public void CoinCollected(int id)
+        {
+            if (id == 0 && gameAudio != null) gameAudio.PlayCoin();
+            if (!IsFeedAuthority) return;
+            EmitFeedEvent(MatchFeedEvent.CreateCoinCollected(id, 1));
+            if (Model == null || id < 0 || id >= Model.Participants.Count) return;
+            var p = Model.Participants[id];
+            if (p.Status == ParticipantStatus.Won)
+            {
+                EmitFeedEvent(MatchFeedEvent.CreatePlayerWon(id, p.FinishOrder));
+            }
+            else if (Model.CoinsToWin >= 3 && p.Coins >= Model.CoinsToWin - 2 && id < nearVictoryAnnounced.Length && !nearVictoryAnnounced[id])
+            {
+                nearVictoryAnnounced[id] = true;
+                EmitFeedEvent(MatchFeedEvent.CreateNearVictory(id, p.Coins));
+            }
+        }
+
         public void PlayFootstep() { if (gameAudio != null) gameAudio.PlayFootstep(); }
+
         public bool HitObstacle(int id)
         {
             if (IsPaused || !Rules.TryObstacleContact(id)) return false;
             if (id == 0 && gameAudio != null) gameAudio.PlayObstacleHit();
             ObstacleHit?.Invoke(id);
-            if (IsNetworkMovementTest && Mirror.NetworkServer.active) NetworkController.BroadcastDamage(id, true);
-            if (Model.Participants[id].Status == ParticipantStatus.Lost) Characters[id].SetActiveState(false);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active && NetworkController != null)
+                NetworkController.BroadcastDamage(id, true);
+            if (Model.Participants[id].Status == ParticipantStatus.Lost)
+            {
+                if (Characters != null && id >= 0 && id < Characters.Length && Characters[id] != null)
+                    Characters[id].SetActiveState(false);
+                if (IsFeedAuthority)
+                    EmitFeedEvent(MatchFeedEvent.CreatePlayerEliminated(id, EliminationReason.Obstacle));
+            }
             return true;
         }
 
         public void NotifyAttackHit(int id)
         {
-            AttackHit?.Invoke(id);
-            if (IsNetworkMovementTest && Mirror.NetworkServer.active) NetworkController.BroadcastDamage(id, false);
+            NotifyAttackHit(-1, id, 0, false);
+        }
+
+        public void NotifyAttackHit(int attackerId, int targetId, int droppedCoins, bool knockedOut)
+        {
+            AttackHit?.Invoke(targetId);
+            if (IsNetworkMovementTest && Mirror.NetworkServer.active && NetworkController != null)
+                NetworkController.BroadcastDamage(targetId, false);
+            if (knockedOut && IsFeedAuthority)
+                EmitFeedEvent(MatchFeedEvent.CreatePlayerKnockedDown(targetId, attackerId, droppedCoins));
+        }
+
+        public void NotifyRespawned(int id)
+        {
+            if (IsFeedAuthority)
+                EmitFeedEvent(MatchFeedEvent.CreatePlayerRespawned(id));
         }
 
         public void NotifyNetworkDamage(int id, bool obstacle)

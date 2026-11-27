@@ -9,7 +9,7 @@ namespace EachOneCoin.Gameplay
     {
         private const int MaxPlayers = 4;
         private const int MaxMines = 4;
-        private const int MaxCoinMarkers = 24;
+        private const int MaxCoinMarkers = 32;
         private const int MaxWarningMarkers = 8;
         private const int GridSize = ArenaGridView.Size;
 
