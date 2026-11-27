@@ -31,6 +31,7 @@ namespace EachOneCoin.Gameplay
                 if (respawns[i] > 0f || (match.IsNetworkMovementTest && !match.NetworkController.CanRespawn(i)) || !match.Rules.TryRespawn(i)) continue;
                 match.Characters[i].SetActiveState(true);
                 match.Characters[i].Teleport(match.Grid.CellToWorld(match.Spawns[i]));
+                match.NotifyRespawned(i);
             }
         }
 
@@ -57,8 +58,9 @@ namespace EachOneCoin.Gameplay
                 direction.y = 0f;
                 if (!IsWithinAttack(direction, aimDirection, AttackRange, AttackAngle)) continue;
                 if (!match.Rules.TryDamage(target, Mathf.Max(1, damage), Mathf.Max(0, droppedCoins), out int dropped)) continue;
-                match.NotifyAttackHit(target);
-                if (match.Model.Participants[target].Status != ParticipantStatus.Respawning)
+                bool knockedOut = match.Model.Participants[target].Status == ParticipantStatus.Respawning;
+                match.NotifyAttackHit(attacker, target, dropped, knockedOut);
+                if (!knockedOut)
                 {
                     if (direction.sqrMagnitude < 0.000001f) direction = aimDirection;
                     match.Characters[target].StartAttackKnockback(direction.normalized * AttackKnockbackDistance, Mathf.Max(0.01f, attackKnockbackSeconds));

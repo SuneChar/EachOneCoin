@@ -307,6 +307,7 @@ namespace EachOneCoin.Networking
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.ReceiveDamageEvent(message);
             });
+            NetworkClient.RegisterHandler<MatchFeedEventMessage>(OnFeedEvent);
             NetworkClient.RegisterHandler<MineStatusMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
@@ -342,6 +343,12 @@ namespace EachOneCoin.Networking
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.ReceiveSnapshot(message);
             });
+        }
+
+        private void OnFeedEvent(MatchFeedEventMessage message)
+        {
+            var controller = FindObjectOfType<NetworkMatchController>();
+            if (controller != null) controller.ReceiveFeedEvent(message);
         }
 
         public override void OnServerConnect(NetworkConnectionToClient conn)

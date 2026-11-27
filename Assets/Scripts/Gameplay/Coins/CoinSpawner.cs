@@ -45,6 +45,7 @@ namespace EachOneCoin.Gameplay
         private bool[,] mineConnected;
         private uint[] connectedRevision;
 
+        public event Action<int, int> MineCoinsSpawned;
         public string MineName(int mineIndex) => MineNames[mineIndex];
 
         public void Initialize(MatchCoordinator coordinator)
@@ -139,6 +140,33 @@ namespace EachOneCoin.Gameplay
             return false;
         }
 
+        public void CopyActiveCoins(List<GridPosition> output)
+        {
+            if (output == null) return;
+            output.Clear();
+            for (int i = 0; i < slots.Count; i++)
+                if (slots[i].Coin != null) output.Add(slots[i].Position);
+        }
+
+        public void CopyWarningCells(List<GridPosition> output)
+        {
+            if (output == null) return;
+            output.Clear();
+            for (int i = 0; i < pending.Count; i++)
+            {
+                var cells = pending[i].Cells;
+                if (cells == null) continue;
+                for (int c = 0; c < cells.Length; c++) output.Add(cells[c]);
+            }
+        }
+
+        public bool IsMineWarning(int mineIndex)
+        {
+            for (int i = 0; i < pending.Count; i++)
+                if (pending[i].MineIndex == mineIndex) return true;
+            return false;
+        }
+
         // Describes the next delivery for the HUD; the mine stays unknown until its warning starts.
         public bool TryDescribeNextEvent(out int mineIndex, out float secondsUntilSpawn, out bool warningActive)
         {
@@ -219,6 +247,8 @@ namespace EachOneCoin.Gameplay
             // Once announced, a cell is fixed even if a character or obstacle moves onto it.
             for (int i = 0; i < coinEvent.Cells.Length; i++) Spawn(coinEvent.Cells[i], CoinKind.Mine);
             DestroyMarkers(coinEvent);
+            if (coinEvent.Cells != null && coinEvent.Cells.Length > 0)
+                MineCoinsSpawned?.Invoke(coinEvent.MineIndex, coinEvent.Cells.Length);
         }
 
         private CoinEvent PrepareEvent(int index, bool withMarkers)
