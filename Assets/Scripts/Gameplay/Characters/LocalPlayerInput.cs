@@ -5,6 +5,9 @@ namespace EachOneCoin.Gameplay
     public sealed class LocalPlayerInput : MonoBehaviour
     {
         private const float AxisThreshold = 0.25f;
+        // The Editor keeps running while another window has focus, so preview input must not be
+        // dropped just because the Game view is not the active window.
+        private static bool InputActive => Application.isFocused || Application.isEditor;
         private CardinalInputResolver direction = new CardinalInputResolver();
         private int sampledFrame = -1;
         private Vector3 sampledMovement;
@@ -52,7 +55,7 @@ namespace EachOneCoin.Gameplay
         {
             get
             {
-                if (!Application.isFocused)
+                if (!InputActive)
                 {
                     if (!focusReset) direction = new CardinalInputResolver();
                     focusReset = true;
@@ -74,12 +77,12 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        public bool KeyboardAttackDown => Application.isFocused && Input.GetKeyDown(KeyCode.Space);
-        public bool GamepadAttackDown => Application.isFocused && GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKeyDown(KeyCode.JoystickButton0);
-        public bool AttackHeld(bool gamepad) => Application.isFocused && (gamepad
+        public bool KeyboardAttackDown => InputActive && Input.GetKeyDown(KeyCode.Space);
+        public bool GamepadAttackDown => InputActive && GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKeyDown(KeyCode.JoystickButton0);
+        public bool AttackHeld(bool gamepad) => InputActive && (gamepad
             ? GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKey(KeyCode.JoystickButton0)
             : Input.GetKey(KeyCode.Space));
-        public Vector2 GamepadAim => Application.isFocused ? new Vector2(Input.GetAxisRaw("GamepadLeftHorizontal"), Input.GetAxisRaw("GamepadLeftVertical")) : Vector2.zero;
+        public Vector2 GamepadAim => InputActive ? new Vector2(Input.GetAxisRaw("GamepadLeftHorizontal"), Input.GetAxisRaw("GamepadLeftVertical")) : Vector2.zero;
 
         public bool TryAimDirection(bool gamepad, Vector3 origin, Camera camera, out Vector3 direction)
         {
@@ -115,7 +118,7 @@ namespace EachOneCoin.Gameplay
             return result.sqrMagnitude > 0.0001f;
         }
 
-        public bool SprintHeld => Application.isFocused && (TouchSprintHeld || Input.GetKey(KeyCode.LeftShift) ||
+        public bool SprintHeld => InputActive && (TouchSprintHeld || Input.GetKey(KeyCode.LeftShift) ||
             (GamepadActionAllowed(ref suppressGamepadSprint, KeyCode.JoystickButton1) && Input.GetKey(KeyCode.JoystickButton1)));
     }
 }
