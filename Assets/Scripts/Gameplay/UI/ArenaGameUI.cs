@@ -47,6 +47,7 @@ namespace EachOneCoin.Gameplay
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
         private Camera cachedMainCamera;
+        public TMPro.TMP_FontAsset NameplateFont => timeText != null ? timeText.font : null;
         public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
 
         private void Awake()
