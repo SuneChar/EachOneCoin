@@ -105,6 +105,29 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator CharacterAnimation_TracksMovementAndPreservesHiddenSprites()
+        {
+            var character = Character(0);
+            var animator = character.GetComponentInChildren<Animator>(true);
+            Assert.That(animator, Is.Not.Null);
+            var hidden = character.transform.Find("Root/PlayerSprite").GetComponent<SpriteRenderer>();
+            Assert.That(hidden.enabled, Is.False);
+            Call(character, "SetActiveState", false);
+            Call(character, "SetActiveState", true);
+            Assert.That(hidden.enabled, Is.False, "Restoring the character must not reveal the old sprite.");
+            yield return null;
+            Call(character, "ApplyNetworkPosition", character.transform.position + Vector3.right * 0.1f);
+            yield return new WaitForEndOfFrame();
+            Assert.That(animator.GetBool("Moving"), Is.True);
+            yield return null;
+            yield return new WaitForEndOfFrame();
+            Assert.That(animator.GetBool("Moving"), Is.False);
+            Call(character, "Teleport", character.transform.position + Vector3.right * 2f);
+            yield return new WaitForEndOfFrame();
+            Assert.That(animator.GetBool("Moving"), Is.False, "Teleporting must not start a running animation.");
+        }
+
+        [UnityTest]
         public IEnumerator GroundShadows_FollowAndRespectOwnerLifetime()
         {
             var character = Character(0);

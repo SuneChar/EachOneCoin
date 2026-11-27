@@ -6,6 +6,8 @@ namespace EachOneCoin.Gameplay
     [RequireComponent(typeof(CharacterController))]
     public sealed class ArenaCharacter : MonoBehaviour
     {
+        [SerializeField] private bool tintCharacterSprite = true;
+        [SerializeField] private bool createCharacterOutline = true;
         private readonly HashSet<Collider> touching = new HashSet<Collider>();
         private readonly List<Collider> released = new List<Collider>();
         private MatchCoordinator match;
@@ -30,6 +32,10 @@ namespace EachOneCoin.Gameplay
         private Vector3 movementVelocity;
         private SpriteRenderer[] sprites;
         private Color[] spriteColors;
+        private bool[] spriteEnabled;
+        private Animator characterAnimator;
+        private Vector3 previousVisualPosition;
+        private static readonly int MovingParameter = Animator.StringToHash("Moving");
         private bool flashing;
         private GroundShadow groundShadow;
         private AttackVisual attackVisual;
@@ -60,22 +66,30 @@ namespace EachOneCoin.Gameplay
             visual = transform.Find("Root");
             if (visual != null) visualScale = visual.localScale;
             sprites = GetComponentsInChildren<SpriteRenderer>(true);
-            spriteColors = new Color[sprites.Length];
+            characterAnimator = visual != null ? visual.GetComponentInChildren<Animator>(true) : null;
+            previousVisualPosition = transform.position;
             SpriteRenderer characterSprite = null;
             for (int i = 0; i < sprites.Length; i++)
             {
-                if (sprites[i].name == "PlayerSprite") { sprites[i].color = color; characterSprite = sprites[i]; }
-                spriteColors[i] = sprites[i].color;
+                if (sprites[i].name == "PlayerSprite") { if (tintCharacterSprite) sprites[i].color = color; characterSprite = sprites[i]; }
             }
             groundShadow = GroundShadow.Create(gameObject, 0.85f);
             attackVisual = gameObject.AddComponent<AttackVisual>();
             attackVisual.Initialize(coordinator, visual);
             nameplate = gameObject.AddComponent<CharacterNameplate>();
-            nameplate.Initialize(coordinator.NameplateFont, controller.height * 0.5f + 1.6f);
-            if (characterSprite != null && characterSprite.transform.Find("Outline Outer") == null)
+            nameplate.Initialize(coordinator.NameplateFont, controller.height * 0.5f + 2.2f);
+            if (createCharacterOutline && characterSprite != null && characterSprite.transform.Find("Outline Outer") == null)
             {
                 CreateOutline(characterSprite, "Outline Outer", new Color(0.07f, 0.08f, 0.1f), 1.22f, -2);
                 CreateOutline(characterSprite, "Outline Inner", Color.white, 1.1f, -1);
+            }
+            sprites = GetComponentsInChildren<SpriteRenderer>(true);
+            spriteColors = new Color[sprites.Length];
+            spriteEnabled = new bool[sprites.Length];
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                spriteColors[i] = sprites[i].color;
+                spriteEnabled[i] = sprites[i].enabled;
             }
         }
 
@@ -103,7 +117,11 @@ namespace EachOneCoin.Gameplay
             if (!active && attackVisual != null) attackVisual.Clear();
             if (!active) { movementVelocity = Vector3.zero; pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false); }
             if (controller != null) controller.enabled = active;
-            foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;
+            if (characterAnimator != null && !active) characterAnimator.SetBool(MovingParameter, false);
+            previousVisualPosition = transform.position;
+            if (sprites != null)
+                for (int i = 0; i < sprites.Length; i++)
+                    if (sprites[i] != null) sprites[i].enabled = active && spriteEnabled[i];
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
         }
 
@@ -129,6 +147,8 @@ namespace EachOneCoin.Gameplay
             // CellToWorld returns ground height; leave room for the controller's skin.
             position.y += controller.height * 0.5f - controller.center.y + controller.skinWidth;
             transform.position = position;
+            previousVisualPosition = transform.position;
+            if (characterAnimator != null) characterAnimator.SetBool(MovingParameter, false);
             controller.enabled = true;
             touching.Clear(); hasCell = false;
             movementVelocity = Vector3.zero;
@@ -320,7 +340,7 @@ namespace EachOneCoin.Gameplay
             {
                 if (sprites[i] == null) continue;
                 Color color = spriteColors[i];
-                if (dim) color = Color.Lerp(color, Color.white, 0.85f);
+                if (dim) { color.r *= 0.4f; color.g *= 0.4f; color.b *= 0.4f; }
                 sprites[i].color = color;
             }
         }
@@ -337,6 +357,16 @@ namespace EachOneCoin.Gameplay
                 MoveOnPlane(knockback);
                 ReportCell();
                 if (!match.IsNetworkMovementTest || Mirror.NetworkServer.active) match.Coins.TryCollect(this);
+            }
+            if (characterAnimator != null)
+            {
+                Vector3 delta = transform.position - previousVisualPosition;
+                delta.y = 0f;
+                float movementThreshold = 0.05f * Time.deltaTime;
+                bool moving = visuallyActive && controller != null && controller.enabled && !IsKnockedBack &&
+                    LastTeleportFrame != Time.frameCount && delta.sqrMagnitude > movementThreshold * movementThreshold && delta.sqrMagnitude < 1f;
+                characterAnimator.SetBool(MovingParameter, moving);
+                previousVisualPosition = transform.position;
             }
             if (controller == null || !controller.enabled || touching.Count == 0) return;
             var center = transform.TransformPoint(controller.center);
