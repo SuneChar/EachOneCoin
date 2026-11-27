@@ -27,6 +27,7 @@ namespace EachOneCoin.Gameplay
         private readonly Image[] hitFrame = new Image[4];
         private float hitFlashRemaining;
         private InputDeviceTracker inputDevice;
+        private TouchGameplayControls touchControls;
         private bool usingGamepad, showPrompts, settingsOpen, resultShown;
         private int lastTime = -1;
         private readonly int[] lastCoins = { -1, -1, -1, -1 };
@@ -53,6 +54,11 @@ namespace EachOneCoin.Gameplay
         private void Awake()
         {
             inputDevice = GetComponent<InputDeviceTracker>();
+            if (Application.platform == RuntimePlatform.Android && match != null && match.LocalInput != null && hudPanel != null)
+            {
+                touchControls = gameObject.AddComponent<TouchGameplayControls>();
+                touchControls.Initialize(match, this, hudPanel.transform, NameplateFont);
+            }
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
             if (feedbackText != null) { feedbackText.enableAutoSizing = true; feedbackText.fontSizeMin = 12f; feedbackText.fontSizeMax = 22f; }
@@ -553,15 +559,15 @@ namespace EachOneCoin.Gameplay
                 GamepadNavigation.Configure(CurrentNavigationPanel());
                 GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
             }
-            if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, !paused && !resultShown, paused || settingsOpen);
+            if (promptImages != null) promptImages.Refresh(showPrompts && Application.platform != RuntimePlatform.Android, usingGamepad, !paused && !resultShown, paused || settingsOpen);
             if (attackPromptText != null)
             {
-                attackPromptText.gameObject.SetActive(showPrompts && !paused && !resultShown);
+                attackPromptText.gameObject.SetActive(showPrompts && !paused && !resultShown && Application.platform != RuntimePlatform.Android);
                 attackPromptText.text = usingGamepad ? "按住 A + 左摇杆瞄准，松开攻击\n按住 B 冲刺" : "按住空格 + 鼠标瞄准，松开攻击\n按住 Shift 冲刺";
             }
         }
 
-        public void Pause() { if (match == null || resultShown) return; if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
+        public void Pause() { if (match == null || resultShown) return; if (touchControls != null) touchControls.Cancel(); if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
         public void Resume() { if (match == null) return; match.SuppressGamepadActionsUntilReleased(); settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
         public void OpenSettings()
         {
