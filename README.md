@@ -24,7 +24,7 @@ EachOneCoin 是一个基于 Unity 的竞技场游戏项目。当前竞技场模�
 - `Assets/Scripts/Gameplay/`：竞技场角色、NPC、对局、金币、战斗和 UI。
 - `Assets/Scripts/Models/`：对局、体力和移动等数据与规则。
 - `Assets/Tests/EditMode/`、`Assets/Tests/PlayMode/`：Unity 自动化测试。
-- `Docs/`：项目方案及移动基线采集说明；历史方案记录的是整理时的状态，不等于当前已实现功能。
+- `Docs/`：项目方案及移动基线采集说明；历史方案记录的是整理时的状态，不等于当前已实现功能。局域网连接故障排查见 [`Docs/局域网联机排查.md`](Docs/局域网联机排查.md)。
 - `AGENTS.md`：项目共享 Agent 协作规范。
 
 ## 测试

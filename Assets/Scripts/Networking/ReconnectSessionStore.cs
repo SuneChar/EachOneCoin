@@ -10,7 +10,7 @@ namespace EachOneCoin.Networking
     // Windows DPAPI protects the session for the current OS account. The data path hash keeps ParrelSync editors separate.
     public static class ReconnectSessionStore
     {
-        [Serializable] public sealed class Session { public string address; public string token; }
+        [Serializable] public sealed class Session { public string address; public string token; public ushort port; }
 
         private static string FilePath
         {
@@ -24,14 +24,14 @@ namespace EachOneCoin.Networking
             }
         }
 
-        public static bool Save(string address, string token) => SaveAt(FilePath, address, token);
+        public static bool Save(string address, string token, ushort port = 7777) => SaveAt(FilePath, address, token, port);
 
-        internal static bool SaveAt(string path, string address, string token)
+        internal static bool SaveAt(string path, string address, string token, ushort port = 7777)
         {
             if (string.IsNullOrWhiteSpace(address) || string.IsNullOrEmpty(token)) return false;
             try
             {
-                var bytes = Encoding.UTF8.GetBytes(JsonUtility.ToJson(new Session { address = address, token = token }));
+                var bytes = Encoding.UTF8.GetBytes(JsonUtility.ToJson(new Session { address = address, token = token, port = port }));
                 var protectedBytes = ProtectBytes(bytes, true);
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 string temp = path + ".tmp";
@@ -91,8 +91,11 @@ namespace EachOneCoin.Networking
                 if (input.Data != IntPtr.Zero) Marshal.FreeHGlobal(input.Data);
                 if (output.Data != IntPtr.Zero) LocalFree(output.Data);
             }
+#elif UNITY_ANDROID && !UNITY_EDITOR
+            using (var crypto = new AndroidJavaClass("com.eachonecoin.security.SessionCrypto"))
+                return crypto.CallStatic<byte[]>("protect", bytes, encrypt);
 #else
-            throw new PlatformNotSupportedException("Reconnect session storage currently supports Windows only.");
+            throw new PlatformNotSupportedException("Reconnect session storage supports Windows and Android only.");
 #endif
         }
 

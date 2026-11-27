@@ -34,6 +34,8 @@ namespace EachOneCoin.Networking
         private bool leaveAcknowledged;
         private bool recoveryStorageAvailable = true;
         private string savedAddress;
+        private ushort savedPort = 7777;
+        private ushort defaultPort = 7777;
         public bool IsReconnectAttempt { get; private set; }
         public string ReconnectToken { get; private set; }
         public bool HasRecoverySession => !string.IsNullOrEmpty(ReconnectToken) && !string.IsNullOrWhiteSpace(savedAddress);
@@ -52,7 +54,8 @@ namespace EachOneCoin.Networking
         public override void Awake()
         {
             base.Awake();
-            if (ReconnectSessionStore.TryLoad(out var saved)) { savedAddress = saved.address; ReconnectToken = saved.token; Status = "发现可尝试恢复的对局"; }
+            if (transport is kcp2k.KcpTransport kcp) defaultPort = kcp.port;
+            if (ReconnectSessionStore.TryLoad(out var saved)) { savedAddress = saved.address; savedPort = saved.port == 0 ? defaultPort : saved.port; ReconnectToken = saved.token; Status = "发现可尝试恢复的对局"; }
         }
         public bool MatchStarted { get; private set; }
         public bool MovementRunning { get; private set; }
@@ -66,14 +69,19 @@ namespace EachOneCoin.Networking
             if (NetworkClient.active || NetworkServer.active) return;
             leaving = false;
             IsReconnectAttempt = false; ClientResuming = false;
+            if (transport is kcp2k.KcpTransport hostTransport) hostTransport.port = defaultPort;
             Status = "正在创建房间…";
             StartHost();
         }
 
-        public void JoinRoom(string address)
+        public void JoinRoom(string address) => JoinRoom(address, defaultPort);
+
+        public void JoinRoom(string address, ushort port)
         {
             if (NetworkClient.active || NetworkServer.active) return;
             if (string.IsNullOrWhiteSpace(address)) { Status = "请输入房主 IP 地址"; return; }
+            if (port == 0) { Status = "无效的端口"; return; }
+            if (transport is kcp2k.KcpTransport clientTransport) clientTransport.port = port;
             leaving = false;
             IsReconnectAttempt = false;
             ClientResuming = false;
@@ -89,6 +97,7 @@ namespace EachOneCoin.Networking
             if (NetworkClient.active || NetworkServer.active || !HasRecoverySession) return;
             leaving = false; IsReconnectAttempt = true; ClientResuming = false;
             networkAddress = savedAddress;
+            if (transport is kcp2k.KcpTransport reconnectTransport) reconnectTransport.port = savedPort;
             Status = "正在恢复原席位…";
             connectDeadline = Time.realtimeSinceStartup + 12f;
             StartClient(); StartCoroutine(CheckTimeout());
@@ -124,8 +133,8 @@ namespace EachOneCoin.Networking
             clientResumeDeadline = Time.realtimeSinceStartup + (resumed && !float.IsNaN(secondsRemaining) && !float.IsInfinity(secondsRemaining) ? Mathf.Clamp(secondsRemaining, 0f, (float)RoomState.ReconnectSeconds) : 0f);
             if (!NetworkServer.active)
             {
-                savedAddress = networkAddress; ReconnectToken = token;
-                recoveryStorageAvailable = ReconnectSessionStore.Save(savedAddress, token);
+                savedAddress = networkAddress; savedPort = transport is kcp2k.KcpTransport clientTransport ? clientTransport.port : defaultPort; ReconnectToken = token;
+                recoveryStorageAvailable = ReconnectSessionStore.Save(savedAddress, token, savedPort);
                 if (!recoveryStorageAvailable) Status = "已连接，但无法保存重启恢复信息";
             }
         }

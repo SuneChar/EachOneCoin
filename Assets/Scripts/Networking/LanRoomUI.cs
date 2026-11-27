@@ -20,6 +20,7 @@ public sealed class LanRoomUI : MonoBehaviour
     [SerializeField] private Button reconnectButton;
     [SerializeField] private TMP_Text fillLabel;
     [SerializeField] private InputField address;
+    [SerializeField] private LanQrUI qrUI;
 
     public void Initialize(BootMenu owner)
     {
@@ -40,6 +41,7 @@ public sealed class LanRoomUI : MonoBehaviour
             networkObject.SetActive(true);
         }
 
+        if (qrUI != null) qrUI.Initialize(network);
         panel.SetActive(false);
         if ((network.HasRecoverySession && !NetworkClient.active && !NetworkServer.active) || (network.HasSnapshot && NetworkClient.isConnected)) Open();
     }
