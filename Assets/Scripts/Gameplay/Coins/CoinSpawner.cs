@@ -139,6 +139,33 @@ namespace EachOneCoin.Gameplay
             return false;
         }
 
+        public void CopyActiveCoins(List<GridPosition> output)
+        {
+            if (output == null) return;
+            output.Clear();
+            for (int i = 0; i < slots.Count; i++)
+                if (slots[i].Coin != null) output.Add(slots[i].Position);
+        }
+
+        public void CopyWarningCells(List<GridPosition> output)
+        {
+            if (output == null) return;
+            output.Clear();
+            for (int i = 0; i < pending.Count; i++)
+            {
+                var cells = pending[i].Cells;
+                if (cells == null) continue;
+                for (int c = 0; c < cells.Length; c++) output.Add(cells[c]);
+            }
+        }
+
+        public bool IsMineWarning(int mineIndex)
+        {
+            for (int i = 0; i < pending.Count; i++)
+                if (pending[i].MineIndex == mineIndex) return true;
+            return false;
+        }
+
         // Describes the next delivery for the HUD; the mine stays unknown until its warning starts.
         public bool TryDescribeNextEvent(out int mineIndex, out float secondsUntilSpawn, out bool warningActive)
         {

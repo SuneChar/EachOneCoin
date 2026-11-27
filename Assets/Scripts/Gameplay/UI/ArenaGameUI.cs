@@ -18,6 +18,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Image staminaFill;
         [SerializeField] private TMP_Text staminaText;
         [SerializeField] private ArcStaminaBarView arcStaminaBarView;
+        [SerializeField] private ArenaMinimapView minimapView;
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
         [SerializeField] private ControlPromptImages promptImages;
@@ -43,6 +44,7 @@ namespace EachOneCoin.Gameplay
         private bool legacyHealthHidden;
         private bool staminaBarInitialized;
         private bool legacyStaminaHidden;
+        private bool minimapInitialized;
         private bool leftHudAdjusted;
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
@@ -152,6 +154,18 @@ namespace EachOneCoin.Gameplay
             var model = match.Model;
             EnsureHealthHearts(match.InitialHealth);
             EnsureArcStaminaBar();
+            EnsureMinimap();
+            if (minimapView != null && (!match.IsPaused || firstRefresh))
+            {
+                byte visibleMask = 0;
+                for (int i = 0; i < model.Participants.Count; i++)
+                {
+                    var participant = model.Participants[i];
+                    if (participant.IsParticipating && participant.Status == ParticipantStatus.Active)
+                        visibleMask |= (byte)(1 << i);
+                }
+                minimapView.Refresh(0, visibleMask, Time.unscaledTime);
+            }
             if (arcStaminaBarView != null && match.Stamina != null)
             {
                 Transform localTarget = match.Characters != null && match.Characters.Length > 0 && match.Characters[0] != null
@@ -280,6 +294,16 @@ namespace EachOneCoin.Gameplay
             }
             if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
             EnsureArcStaminaBar();
+            EnsureMinimap();
+            if (minimapView != null)
+            {
+                byte visibleMask = 0;
+                for (int i = 0; i < 4; i++)
+                    if (state.IsSlotActive(i) && state.StatusAt(i) == ParticipantStatus.Active)
+                        visibleMask |= (byte)(1 << i);
+                int focusSlot = state.IsSpectating && state.SpectateSlot >= 0 ? state.SpectateSlot : slot;
+                minimapView.Refresh(focusSlot, visibleMask, Time.unscaledTime);
+            }
             if (arcStaminaBarView != null)
             {
                 Transform localTarget = match.Characters != null && slot < match.Characters.Length && match.Characters[slot] != null
@@ -502,6 +526,27 @@ namespace EachOneCoin.Gameplay
             }
             if (staminaFill != null) staminaFill.gameObject.SetActive(false);
             if (staminaText != null) staminaText.gameObject.SetActive(false);
+        }
+
+        private void EnsureMinimap()
+        {
+            if (minimapInitialized && minimapView != null) return;
+            if (minimapView == null && hudPanel != null)
+            {
+                var container = new GameObject("ArenaMinimap", typeof(RectTransform));
+                var rt = (RectTransform)container.transform;
+                rt.SetParent(hudPanel.transform, false);
+                rt.anchorMin = new Vector2(1f, 0f);
+                rt.anchorMax = new Vector2(1f, 0f);
+                rt.pivot = new Vector2(1f, 0f);
+                minimapView = container.AddComponent<ArenaMinimapView>();
+                rt.anchoredPosition = minimapView.BottomRightOffset;
+            }
+            if (minimapView != null && match != null && match.Model != null)
+            {
+                minimapView.Initialize(match);
+                minimapInitialized = true;
+            }
         }
 
         private Camera ResolveActiveCamera()

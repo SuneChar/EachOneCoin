@@ -36,6 +36,7 @@ namespace EachOneCoin.Gameplay
         private CharacterNameplate nameplate;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
+        public Vector3 FacingDirection { get; private set; } = Vector3.forward;
         public void StopNetworkInput() { movementVelocity = Vector3.zero; }
         public float RegionSpeedMultiplier
         {
@@ -152,8 +153,12 @@ namespace EachOneCoin.Gameplay
         {
             if (!controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active || IsKnockedBack) return;
             delta = PlanarVelocity.Cardinal(delta, Vector3.zero);
-            if (delta.sqrMagnitude > 0.000001f) lastMovement = delta;
-            if (arrow != null && delta.sqrMagnitude > 0.000001f) arrow.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
+            if (delta.sqrMagnitude > 0.000001f)
+            {
+                lastMovement = delta;
+                FacingDirection = delta.normalized;
+            }
+            if (arrow != null && delta.sqrMagnitude > 0.000001f) arrow.localRotation = Quaternion.LookRotation(FacingDirection, Vector3.up);
             if (delta.x != 0f) desiredFacing = delta.x < 0f ? -1 : 1;
             UpdateFacing(Time.deltaTime);
             int steps = Mathf.Max(1, Mathf.CeilToInt(delta.magnitude / 0.2f));
@@ -179,7 +184,8 @@ namespace EachOneCoin.Gameplay
             delta.y = 0f;
             if (delta.sqrMagnitude > 0.000001f)
             {
-                if (arrow != null) arrow.localRotation = Quaternion.LookRotation(delta.normalized, Vector3.up);
+                FacingDirection = delta.normalized;
+                if (arrow != null) arrow.localRotation = Quaternion.LookRotation(FacingDirection, Vector3.up);
                 if (Mathf.Abs(delta.x) > 0.0001f) desiredFacing = delta.x < 0f ? -1 : 1;
                 UpdateFacing(Time.deltaTime);
                 if (match != null && match.IsNetworkMovementTest && !Mirror.NetworkServer.active)
