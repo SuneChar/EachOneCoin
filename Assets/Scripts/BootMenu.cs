@@ -93,5 +93,13 @@ public class BootMenu : MonoBehaviour
         Refresh();
         if (usingGamepad && quitButton != null && EventSystem.current != null) EventSystem.current.SetSelectedGameObject(quitButton.gameObject);
     }
-    public void ConfirmQuit() { if (quitOpen) Application.Quit(); }
+    public void ConfirmQuit()
+    {
+        if (!quitOpen) return;
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
 }
