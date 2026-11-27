@@ -58,7 +58,21 @@ namespace EachOneCoin.Gameplay
             controller.stepOffset = 0f;
             arrow = transform.Find("Direction Indicator/Arrow");
             visual = transform.Find("Root");
-            if (visual != null) visualScale = visual.localScale;
+            if (visual != null)
+            {
+                visualScale = visual.localScale;
+                var accessories = visual.Find("Accessories");
+                if (accessories != null)
+                {
+                    for (int i = 0; i < 4; i++)
+                    {
+                        var slot = accessories.Find("Slot " + i);
+                        if (slot != null) slot.gameObject.SetActive(i == id);
+                    }
+                    var reference = accessories.Find("Reference Capsule");
+                    if (reference != null) reference.gameObject.SetActive(false);
+                }
+            }
             sprites = GetComponentsInChildren<SpriteRenderer>(true);
             spriteColors = new Color[sprites.Length];
             SpriteRenderer characterSprite = null;
