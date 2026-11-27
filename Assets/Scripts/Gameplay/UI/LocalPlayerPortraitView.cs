@@ -41,14 +41,15 @@ namespace EachOneCoin.Gameplay
         private TMP_FontAsset cachedFont;
 
         private RectTransform rootRect;
-        private RectTransform contentRoot;
-        private RectTransform circleMaskRect;
-        private Image circleBackgroundImage;
-        private Mask circleMask;
-        private Image basePortraitImage;
-        private RectTransform overlayContainer;
-        private Image statusOverlayImage;
-        private Image frameImage;
+        [Header("Prefab References (optional)")]
+        [SerializeField] private RectTransform contentRoot;
+        [SerializeField] private RectTransform circleMaskRect;
+        [SerializeField] private Image circleBackgroundImage;
+        [SerializeField] private Mask circleMask;
+        [SerializeField] private Image basePortraitImage;
+        [SerializeField] private RectTransform overlayContainer;
+        [SerializeField] private Image statusOverlayImage;
+        [SerializeField] private Image frameImage;
 
         private bool initialized;
         private bool hasParticipant;
@@ -77,6 +78,17 @@ namespace EachOneCoin.Gameplay
                 {
                     SetAppearanceProvider(provider);
                 }
+                return;
+            }
+
+            if (contentRoot != null && circleMaskRect != null && circleBackgroundImage != null &&
+                circleMask != null && basePortraitImage != null && overlayContainer != null &&
+                statusOverlayImage != null && frameImage != null)
+            {
+                if (icons == null) icons = new HudProceduralIcons();
+                initialized = true;
+                SetAppearanceProvider(provider);
+                ApplyStatusAndFlashVisuals();
                 return;
             }
 

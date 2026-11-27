@@ -13,6 +13,11 @@ namespace EachOneCoin.Gameplay
         private const int MaxWarningMarkers = 8;
         private const int GridSize = ArenaGridView.Size;
 
+        [Header("Prefab References (optional)")]
+        [SerializeField] private UnityEngine.UI.RawImage gridRawImage;
+        [SerializeField] private UnityEngine.UI.Image markerTemplate;
+        [SerializeField] private MinimapPlayerMarkerView playerMarkerTemplate;
+
         [Header("Layout (No Frame)")]
         [SerializeField, Min(64f)] private float mapSize = 368f;
         [SerializeField] private Vector2 bottomRightOffset = new Vector2(-12f, 12f);
@@ -70,15 +75,15 @@ namespace EachOneCoin.Gameplay
         private GridModel boundGrid;
         private RectTransform mapRect;
         private Texture2D gridTexture;
-        private UnityEngine.UI.RawImage gridRawImage;
 
-        private Sprite circleSprite;
-        private Sprite ringSprite;
-        private Sprite diamondSprite;
-        private Sprite squareOutlineSprite;
-        private Sprite crossSprite;
-        private Sprite triangleSprite;
-        private Sprite solidSprite;
+        [Header("Marker Sprites (optional)")]
+        [SerializeField] private Sprite circleSprite;
+        [SerializeField] private Sprite ringSprite;
+        [SerializeField] private Sprite diamondSprite;
+        [SerializeField] private Sprite squareOutlineSprite;
+        [SerializeField] private Sprite crossSprite;
+        [SerializeField] private Sprite triangleSprite;
+        [SerializeField] private Sprite solidSprite;
 
         private UnityEngine.UI.Image[] spawnMarkers;
         private UnityEngine.UI.Image[] mineMarkers;
@@ -300,6 +305,7 @@ namespace EachOneCoin.Gameplay
 
             mapRect = transform as RectTransform;
             if (mapRect == null) mapRect = gameObject.AddComponent<RectTransform>();
+            mapRect.anchoredPosition = bottomRightOffset;
             mapRect.sizeDelta = new Vector2(mapSize, mapSize);
 
             BuildProceduralSprites();
@@ -312,14 +318,17 @@ namespace EachOneCoin.Gameplay
             };
             runtimeTextures.Add(gridTexture);
 
-            var bgObj = new GameObject("GridLayer", typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.RawImage));
-            var bgRect = (RectTransform)bgObj.transform;
-            bgRect.SetParent(mapRect, false);
-            bgRect.anchorMin = Vector2.zero;
-            bgRect.anchorMax = Vector2.one;
-            bgRect.offsetMin = Vector2.zero;
-            bgRect.offsetMax = Vector2.zero;
-            gridRawImage = bgObj.GetComponent<UnityEngine.UI.RawImage>();
+            if (gridRawImage == null)
+            {
+                var bgObj = new GameObject("GridLayer", typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.RawImage));
+                var bgRect = (RectTransform)bgObj.transform;
+                bgRect.SetParent(mapRect, false);
+                bgRect.anchorMin = Vector2.zero;
+                bgRect.anchorMax = Vector2.one;
+                bgRect.offsetMin = Vector2.zero;
+                bgRect.offsetMax = Vector2.zero;
+                gridRawImage = bgObj.GetComponent<UnityEngine.UI.RawImage>();
+            }
             gridRawImage.texture = gridTexture;
             gridRawImage.raycastTarget = false;
 
@@ -599,7 +608,11 @@ namespace EachOneCoin.Gameplay
 
         private UnityEngine.UI.Image CreateMarkerImage(string objectName, Sprite sprite, float size, Color color)
         {
-            var go = new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.Image));
+            var go = markerTemplate != null
+                ? Instantiate(markerTemplate.gameObject, mapRect)
+                : new GameObject(objectName, typeof(RectTransform), typeof(CanvasRenderer), typeof(UnityEngine.UI.Image));
+            go.name = objectName;
+            go.SetActive(true);
             var rt = (RectTransform)go.transform;
             rt.SetParent(mapRect, false);
             rt.anchorMin = Vector2.zero;
@@ -616,6 +629,29 @@ namespace EachOneCoin.Gameplay
 
         private PlayerMarker CreatePlayerMarker(int index, float cellPx)
         {
+            if (playerMarkerTemplate != null && playerMarkerTemplate.HasRequiredLayers)
+            {
+                var template = Instantiate(playerMarkerTemplate, mapRect);
+                template.name = "PlayerMarker_" + index;
+                var templateRoot = (RectTransform)template.transform;
+                templateRoot.anchorMin = templateRoot.anchorMax = Vector2.zero;
+                templateRoot.pivot = new Vector2(0.5f, 0.5f);
+                templateRoot.sizeDelta = new Vector2(cellPx, cellPx);
+                template.ring.sprite = circleSprite;
+                template.dot.sprite = circleSprite;
+                template.arrow.sprite = triangleSprite;
+                template.ring.color = Color.white;
+                template.dot.color = playerColors[index];
+                template.arrow.color = Color.white;
+                template.ring.rectTransform.sizeDelta = new Vector2(cellPx, cellPx);
+                template.dot.rectTransform.sizeDelta = new Vector2(cellPx * 0.72f, cellPx * 0.72f);
+                float arrowSize = Mathf.Max(6f, cellPx * 0.55f);
+                template.arrow.rectTransform.sizeDelta = new Vector2(arrowSize, arrowSize);
+                template.arrow.enabled = false;
+                template.gameObject.SetActive(false);
+                return new PlayerMarker { Root = templateRoot, Ring = template.ring, Dot = template.dot, FacingArrow = template.arrow };
+            }
+
             var rootObj = new GameObject("PlayerMarker_" + index, typeof(RectTransform));
             var root = (RectTransform)rootObj.transform;
             root.SetParent(mapRect, false);
@@ -653,7 +689,7 @@ namespace EachOneCoin.Gameplay
 
         private void BuildProceduralSprites()
         {
-            circleSprite = CreateProceduralSprite("MiniCircle", 32, (x, y, s) =>
+            if (circleSprite == null) circleSprite = CreateProceduralSprite("MiniCircle", 32, (x, y, s) =>
             {
                 float dx = x + 0.5f - s * 0.5f;
                 float dy = y + 0.5f - s * 0.5f;
@@ -662,7 +698,7 @@ namespace EachOneCoin.Gameplay
                 return Mathf.Clamp01(r - dist + 0.75f);
             });
 
-            ringSprite = CreateProceduralSprite("MiniRing", 32, (x, y, s) =>
+            if (ringSprite == null) ringSprite = CreateProceduralSprite("MiniRing", 32, (x, y, s) =>
             {
                 float dx = x + 0.5f - s * 0.5f;
                 float dy = y + 0.5f - s * 0.5f;
@@ -674,7 +710,7 @@ namespace EachOneCoin.Gameplay
                 return Mathf.Min(aOut, aIn);
             });
 
-            diamondSprite = CreateProceduralSprite("MiniDiamond", 32, (x, y, s) =>
+            if (diamondSprite == null) diamondSprite = CreateProceduralSprite("MiniDiamond", 32, (x, y, s) =>
             {
                 float dx = Mathf.Abs(x + 0.5f - s * 0.5f);
                 float dy = Mathf.Abs(y + 0.5f - s * 0.5f);
@@ -682,14 +718,14 @@ namespace EachOneCoin.Gameplay
                 return Mathf.Clamp01(r - (dx + dy) + 0.8f);
             });
 
-            squareOutlineSprite = CreateProceduralSprite("MiniSquareOutline", 32, (x, y, s) =>
+            if (squareOutlineSprite == null) squareOutlineSprite = CreateProceduralSprite("MiniSquareOutline", 32, (x, y, s) =>
             {
                 int b = 4;
                 bool onEdge = x < b || x >= s - b || y < b || y >= s - b;
                 return onEdge ? 1f : 0f;
             });
 
-            crossSprite = CreateProceduralSprite("MiniCross", 32, (x, y, s) =>
+            if (crossSprite == null) crossSprite = CreateProceduralSprite("MiniCross", 32, (x, y, s) =>
             {
                 float nx = (x + 0.5f) / s - 0.5f;
                 float ny = (y + 0.5f) / s - 0.5f;
@@ -700,7 +736,7 @@ namespace EachOneCoin.Gameplay
                 return Mathf.Clamp01((0.14f - d) * s * 0.65f);
             });
 
-            triangleSprite = CreateProceduralSprite("MiniTriangle", 32, (x, y, s) =>
+            if (triangleSprite == null) triangleSprite = CreateProceduralSprite("MiniTriangle", 32, (x, y, s) =>
             {
                 // Right-pointing equilateral-ish arrow inside [0..1]
                 float u = (x + 0.5f) / s;
@@ -710,7 +746,7 @@ namespace EachOneCoin.Gameplay
                 return Mathf.Clamp01((halfH - v) * s * 0.8f);
             });
 
-            solidSprite = CreateProceduralSprite("MiniSolid", 4, (x, y, s) => 1f);
+            if (solidSprite == null) solidSprite = CreateProceduralSprite("MiniSolid", 4, (x, y, s) => 1f);
         }
 
         private Sprite CreateProceduralSprite(string namePrefix, int size, System.Func<int, int, int, float> alphaFunc)

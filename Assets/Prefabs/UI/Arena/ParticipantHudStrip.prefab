@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2245469869104734232
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3540745537804691620}
+  - component: {fileID: 5154605999127296593}
+  m_Layer: 0
+  m_Name: ParticipantHudStrip
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &3540745537804691620
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2245469869104734232}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 1, y: 0}
+  m_AnchorMax: {x: 1, y: 0}
+  m_AnchoredPosition: {x: -12, y: 388}
+  m_SizeDelta: {x: 368, y: 154}
+  m_Pivot: {x: 1, y: 0}
+--- !u!114 &5154605999127296593
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2245469869104734232}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ac9a90b2dc65b794ab02c062d7b5f33e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  slotTemplate: {fileID: 5788417685357053972, guid: 91c602614204ff440909dc21daab77ad,
+    type: 3}
+  bottomRightOffset: {x: -12, y: 388}
+  stripWidth: 368
+  stripHeight: 154
+  horizontalPadding: 4
+  slotSpacing: 6
+  avatarBackdropColor: {r: 0.118, g: 0.149, b: 0.204, a: 0.95}
+  localFrameHighlightColor: {r: 1, g: 0.98, b: 0.88, a: 1}
+  coinTextColor: {r: 1, g: 0.969, b: 0.878, a: 1}
+  lostCoinTextColor: {r: 0.58, g: 0.6, b: 0.64, a: 0.85}
+  medalRankTextColor: {r: 0.14, g: 0.09, b: 0.03, a: 1}
+  wonFrameAccentColor: {r: 1, g: 0.878, b: 0.341, a: 1}
+  respawningOverlayColor: {r: 0.05, g: 0.07, b: 0.11, a: 0.42}
+  lostOverlayColor: {r: 0.08, g: 0.08, b: 0.1, a: 0.48}
+  healthBarFrameColor: {r: 0.075, g: 0.09, b: 0.122, a: 1}
+  healthFullColor: {r: 0.2, g: 0.82, b: 0.35, a: 1}
+  healthDimColor: {r: 0.56, g: 0.66, b: 0.59, a: 1}
+  healthBrokenColor: {r: 0.88, g: 0.24, b: 0.24, a: 1}
+  respawningSlotAlpha: 0.64
+  lostSlotAlpha: 0.72
+  crownBobSpeed: 3.8
+  crownBobAmplitude: 1.8
+  crownPulseScale: 0.035

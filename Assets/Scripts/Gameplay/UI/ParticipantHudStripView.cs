@@ -21,6 +21,9 @@ namespace EachOneCoin.Gameplay
         private static readonly string[] CachedTwoDigitStrings = BuildTwoDigitStrings();
         private static readonly string[] CachedRankStrings = BuildRankStrings();
 
+        [Header("Prefab Template (optional)")]
+        [SerializeField] private ParticipantHudSlotView slotTemplate;
+
         [Header("Layout (1920x1080 Reference Canvas)")]
         [SerializeField] private Vector2 bottomRightOffset = new Vector2(-12f, 388f);
         [SerializeField, Min(120f)] private float stripWidth = 368f;
@@ -513,6 +516,9 @@ namespace EachOneCoin.Gameplay
 
         private ParticipantSlot BuildSlot(int index, float slotWidth, float avatarSize)
         {
+            if (slotTemplate != null && slotTemplate.HasRequiredLayers)
+                return BuildPrefabSlot(index);
+
             float scaleY = stripHeight / ReferenceStripHeight;
             Sprite circleMaskSprite = icons.GetCircleMaskSprite();
             Sprite circleFrameSprite = icons.GetCircleFrameSprite();
@@ -659,6 +665,56 @@ namespace EachOneCoin.Gameplay
             slot.HealthBarRect.anchoredPosition = new Vector2(0f, avatarSize * HealthBarOuterRimOffsetRatio);
             slot.HealthBarRect.sizeDelta = ComputeHealthBarSize(slotWidth, avatarSize);
 
+            return slot;
+        }
+
+        private ParticipantSlot BuildPrefabSlot(int index)
+        {
+            var template = Instantiate(slotTemplate, rootRect);
+            template.name = "ParticipantSlot_" + index;
+            float scaleY = stripHeight / ReferenceStripHeight;
+            if (!Mathf.Approximately(scaleY, 1f))
+            {
+                foreach (var rect in template.GetComponentsInChildren<RectTransform>(true))
+                {
+                    if (rect == template.transform) continue;
+                    rect.anchoredPosition *= scaleY;
+                    rect.sizeDelta *= scaleY;
+                }
+            }
+            var slot = new ParticipantSlot
+            {
+                Root = (RectTransform)template.transform,
+                CanvasGroup = template.canvasGroup,
+                CrownImage = template.crownImage,
+                CrownRect = template.crownImage.rectTransform,
+                CrownBaseY = template.crownImage.rectTransform.anchoredPosition.y,
+                CoinGroup = template.coinGroup,
+                CoinIconImage = template.coinIconImage,
+                CoinText = template.coinText,
+                MedalGroup = template.medalGroup,
+                MedalIconImage = template.medalIconImage,
+                MedalRankText = template.medalRankText,
+                AvatarRoot = template.avatarRoot,
+                MaskImage = template.maskImage,
+                BasePortraitImage = template.basePortraitImage,
+                OverlayContainer = template.overlayContainer,
+                StatusOverlayImage = template.statusOverlayImage,
+                FrameImage = template.frameImage,
+                HealthBarRect = template.healthBarRect
+            };
+            slot.MaskImage.sprite = icons.GetCircleMaskSprite();
+            slot.StatusOverlayImage.sprite = icons.GetCircleMaskSprite();
+            slot.FrameImage.sprite = icons.GetCircleFrameSprite();
+            slot.BasePortraitImage.sprite = icons.GetDefaultPortraitSprite();
+            slot.CoinIconImage.sprite = icons.GetCoinSprite();
+            slot.CrownImage.sprite = icons.GetCrownSprite();
+            slot.MedalIconImage.sprite = icons.GetMedalSprite(1);
+            if (cachedFont != null)
+            {
+                slot.CoinText.font = cachedFont;
+                slot.MedalRankText.font = cachedFont;
+            }
             return slot;
         }
 

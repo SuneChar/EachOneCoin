@@ -42,11 +42,13 @@ namespace EachOneCoin.Gameplay
 
         private HudProceduralIcons icons;
         private RectTransform rootRect;
-        private RectTransform capsuleRoot;
-        private Image backgroundImage;
-        private Image coinIconImage;
-        private TMP_Text countText;
+        [Header("Prefab References (optional)")]
+        [SerializeField] private RectTransform capsuleRoot;
+        [SerializeField] private Image backgroundImage;
+        [SerializeField] private Image coinIconImage;
+        [SerializeField] private TMP_Text countText;
 
+        private bool usesPrefabLayout;
         private bool initialized;
         private bool hasAppliedState;
         private AnimationMode activeAnimation;
@@ -62,7 +64,7 @@ namespace EachOneCoin.Gameplay
         {
             if (initialized)
             {
-                if (font != null && countText != null)
+                if (!usesPrefabLayout && font != null && countText != null)
                 {
                     if (countText.font != font)
                     {
@@ -74,6 +76,24 @@ namespace EachOneCoin.Gameplay
                     }
                 }
                 RefreshCoinSprite();
+                return;
+            }
+
+            usesPrefabLayout = capsuleRoot != null && backgroundImage != null && coinIconImage != null && countText != null;
+            if (usesPrefabLayout)
+            {
+                if (icons == null) icons = new HudProceduralIcons();
+                if (backgroundImage.sprite == null)
+                {
+                    Sprite fallbackPanelSprite = icons.GetRoundedPanelSprite();
+                    backgroundImage.sprite = fallbackPanelSprite;
+                    backgroundImage.type = fallbackPanelSprite != null && fallbackPanelSprite.border.sqrMagnitude > 0.01f
+                        ? Image.Type.Sliced
+                        : Image.Type.Simple;
+                }
+                if (countText.font == null && font != null) countText.font = font;
+                RefreshCoinSprite();
+                InitializeState();
                 return;
             }
 
@@ -155,6 +175,11 @@ namespace EachOneCoin.Gameplay
             tmp.raycastTarget = false;
             countText = tmp;
 
+            InitializeState();
+        }
+
+        private void InitializeState()
+        {
             CurrentCoins = 0;
             TargetCoins = 0;
             hasAppliedState = false;
@@ -255,9 +280,10 @@ namespace EachOneCoin.Gameplay
         private void RefreshCoinSprite()
         {
             if (coinIconImage == null) return;
-            coinIconImage.sprite = coinSpriteOverride != null
-                ? coinSpriteOverride
-                : (icons != null ? icons.GetCoinSprite() : null);
+            if (coinSpriteOverride != null)
+                coinIconImage.sprite = coinSpriteOverride;
+            else if (!usesPrefabLayout || coinIconImage.sprite == null)
+                coinIconImage.sprite = icons != null ? icons.GetCoinSprite() : null;
         }
 
         private void StartGainPulse()

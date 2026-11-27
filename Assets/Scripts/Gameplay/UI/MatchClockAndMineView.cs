@@ -60,13 +60,14 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Range(0f, 0.20f)] private float warningPulseScaleAmplitude = 0.06f;
 
         private HudProceduralIcons icons;
-        private Image connectionDotImage;
-        private TMP_Text timeCaptionText;
-        private TMP_Text timeValueText;
-        private TMP_Text mineCaptionText;
-        private TMP_Text mineValueText;
-        private TMP_Text countdownCaptionText;
-        private TMP_Text countdownValueText;
+        [Header("Prefab References (optional)")]
+        [SerializeField] private Image connectionDotImage;
+        [SerializeField] private TMP_Text timeCaptionText;
+        [SerializeField] private TMP_Text timeValueText;
+        [SerializeField] private TMP_Text mineCaptionText;
+        [SerializeField] private TMP_Text mineValueText;
+        [SerializeField] private TMP_Text countdownCaptionText;
+        [SerializeField] private TMP_Text countdownValueText;
 
         private bool initialized;
         private bool hasTimeValue;
@@ -91,6 +92,13 @@ namespace EachOneCoin.Gameplay
             if (initialized)
             {
                 if (font != null) ApplyFont(font);
+                return;
+            }
+
+            if (connectionDotImage != null && timeCaptionText != null && timeValueText != null &&
+                mineCaptionText != null && mineValueText != null && countdownCaptionText != null && countdownValueText != null)
+            {
+                InitializeDisplayState();
                 return;
             }
 
@@ -170,6 +178,11 @@ namespace EachOneCoin.Gameplay
             SetStretch(countdownValueText.rectTransform, Vector2.zero, new Vector2(1f, 0.60f), new Vector2(4f, 0f), new Vector2(-4f, 0f));
             countdownValueText.text = EmptyCountdownText;
 
+            InitializeDisplayState();
+        }
+
+        private void InitializeDisplayState()
+        {
             DisplayedTimeText = EmptyCountdownText;
             DisplayedMineText = PendingMineText;
             DisplayedCountdownText = EmptyCountdownText;

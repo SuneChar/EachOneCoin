@@ -44,10 +44,11 @@ namespace EachOneCoin.Gameplay
         private RectTransform rectTransform;
         private CanvasGroup canvasGroup;
         private Canvas rootCanvas;
-        private UnityEngine.UI.Image backgroundImage;
-        private UnityEngine.UI.Image trailImage;
-        private UnityEngine.UI.Image fillImage;
-        private UnityEngine.UI.Image ticksFrameImage;
+        [Header("Prefab References (optional)")]
+        [SerializeField] private UnityEngine.UI.Image backgroundImage;
+        [SerializeField] private UnityEngine.UI.Image trailImage;
+        [SerializeField] private UnityEngine.UI.Image fillImage;
+        [SerializeField] private UnityEngine.UI.Image ticksFrameImage;
 
         private Transform targetTransform;
         private bool initialized;
@@ -79,10 +80,14 @@ namespace EachOneCoin.Gameplay
 
             rectTransform = transform as RectTransform;
             if (rectTransform == null) rectTransform = gameObject.AddComponent<RectTransform>();
-            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
-            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            rectTransform.sizeDelta = barSize;
+            bool hasPrefabLayers = backgroundImage != null && trailImage != null && fillImage != null && ticksFrameImage != null;
+            if (!hasPrefabLayers)
+            {
+                rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+                rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+                rectTransform.pivot = new Vector2(0.5f, 0.5f);
+                rectTransform.sizeDelta = barSize;
+            }
 
             canvasGroup = GetComponent<CanvasGroup>();
             if (canvasGroup == null) canvasGroup = gameObject.AddComponent<CanvasGroup>();
@@ -93,10 +98,13 @@ namespace EachOneCoin.Gameplay
 
             EnsureSpritesLoaded();
 
-            backgroundImage = CreateLayer("Background", backgroundSprite, false);
-            trailImage = CreateLayer("TrailFill", trailSprite != null ? trailSprite : fillSprite, true);
-            fillImage = CreateLayer("MainFill", fillSprite, true);
-            ticksFrameImage = CreateLayer("TicksFrame", ticksFrameSprite, false);
+            if (!hasPrefabLayers)
+            {
+                backgroundImage = CreateLayer("Background", backgroundSprite, false);
+                trailImage = CreateLayer("TrailFill", trailSprite != null ? trailSprite : fillSprite, true);
+                fillImage = CreateLayer("MainFill", fillSprite, true);
+                ticksFrameImage = CreateLayer("TicksFrame", ticksFrameSprite, false);
+            }
 
             trailImage.color = trailColor;
             fillImage.color = normalColor;

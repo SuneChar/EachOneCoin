@@ -29,6 +29,9 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Sprite[] shardSprites;
         [SerializeField] private Sprite shatterRingSprite;
 
+        [Header("Prefab Template (optional)")]
+        [SerializeField] private HealthHeartSlotView slotTemplate;
+
         [Header("Layout")]
         [SerializeField, Min(16f)] private float heartSize = 87f;
         [SerializeField, Min(0f)] private float heartSpacing = 10f;
@@ -328,6 +331,9 @@ namespace EachOneCoin.Gameplay
 
         private HeartSlot CreateSlot(int index)
         {
+            if (slotTemplate != null && slotTemplate.HasRequiredLayers)
+                return CreatePrefabSlot(index);
+
             var slotObj = new GameObject("HeartSlot_" + index, typeof(RectTransform));
             var slotRect = (RectTransform)slotObj.transform;
             slotRect.SetParent(transform, false);
@@ -364,6 +370,46 @@ namespace EachOneCoin.Gameplay
                 slot.ShardImages[s] = CreateChildImage(slotRect, "Shard_" + s, GetShardSprite(s % 2), heartSize * 0.2f);
             }
 
+            ApplyStaticSlot(slot, HeartVisualState.Full);
+            return slot;
+        }
+
+        private HeartSlot CreatePrefabSlot(int index)
+        {
+            var template = Instantiate(slotTemplate, transform);
+            template.name = "HeartSlot_" + index;
+            var rect = (RectTransform)template.transform;
+            float templateSize = rect.sizeDelta.x;
+            float scale = templateSize > 0.001f ? heartSize / templateSize : 1f;
+            foreach (var image in template.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+                image.rectTransform.sizeDelta *= scale;
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(0f, 1f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(heartSize, heartSize);
+            var basePos = new Vector2(heartSize * 0.5f + index * (heartSize + heartSpacing), -heartSize * 0.5f);
+            rect.anchoredPosition = basePos;
+
+            var slot = new HeartSlot
+            {
+                State = HeartVisualState.Full,
+                Root = rect,
+                BasePosition = basePos,
+                BaseImage = template.baseImage,
+                FadeOverlay = template.fadeOverlay,
+                FlashOverlay = template.flashOverlay,
+                CrackOverlay = template.crackOverlay,
+                RingOverlay = template.ringOverlay,
+                ChunkImages = template.chunkImages,
+                ShardImages = template.shardImages
+            };
+            slot.FadeOverlay.sprite = heartFullSprite;
+            slot.FlashOverlay.sprite = heartFlashMaskSprite != null ? heartFlashMaskSprite : heartFullSprite;
+            slot.CrackOverlay.sprite = GetCrackSprite(0);
+            slot.RingOverlay.sprite = shatterRingSprite;
+            Sprite[] chunkSprites = { chunkTopLeftSprite, chunkTopRightSprite, chunkBottomSprite };
+            for (int c = 0; c < ChunkCount; c++) slot.ChunkImages[c].sprite = chunkSprites[c];
+            for (int s = 0; s < MaxPooledShards; s++) slot.ShardImages[s].sprite = GetShardSprite(s % 2);
             ApplyStaticSlot(slot, HeartVisualState.Full);
             return slot;
         }

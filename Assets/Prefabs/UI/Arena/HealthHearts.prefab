@@ -1,0 +1,77 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &2088951746926848044
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 7677921039601505277}
+  - component: {fileID: 7344317669311338075}
+  m_Layer: 0
+  m_Name: HealthHearts
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!224 &7677921039601505277
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2088951746926848044}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0, y: 1}
+  m_AnchorMax: {x: 0, y: 1}
+  m_AnchoredPosition: {x: 28, y: -24}
+  m_SizeDelta: {x: 281, y: 87}
+  m_Pivot: {x: 0, y: 1}
+--- !u!114 &7344317669311338075
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 2088951746926848044}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c49b6f2ae04f4b46a3177fda7714a81, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  heartFullSprite: {fileID: 21300000, guid: 20c59ecb5e45cf245b97e29a868163fb, type: 2}
+  heartDimSprite: {fileID: 21300000, guid: a36fd73d555bd0d46aacea59b9aa9368, type: 2}
+  heartBrokenGraySprite: {fileID: 21300000, guid: 9fe9648f201189c448e8279e43b7877b,
+    type: 2}
+  heartFlashMaskSprite: {fileID: 21300000, guid: 849d900d4ce97be4597f99401877ea59,
+    type: 2}
+  crackOverlaySprites:
+  - {fileID: 21300000, guid: 51f8920645675c747b495f43ac4c0ee2, type: 2}
+  - {fileID: 21300000, guid: a9c512c3e2c2fc9499cd6c4a50e7be35, type: 2}
+  chunkTopLeftSprite: {fileID: 21300000, guid: 5b6c968c83ae81a4488d70a34f5e9ef6, type: 2}
+  chunkTopRightSprite: {fileID: 21300000, guid: 36aa9f90369771141b9b62306dcf6371,
+    type: 2}
+  chunkBottomSprite: {fileID: 21300000, guid: 60809e1c0a4738c4c8db96d53bdd141e, type: 2}
+  shardSprites:
+  - {fileID: 21300000, guid: 71259e5278897994885986cc5cb32ddb, type: 2}
+  - {fileID: 21300000, guid: 51f6a63dd0a05d14c8b07a5ef186ae2e, type: 2}
+  shatterRingSprite: {fileID: 21300000, guid: 1c48862302b23954d80a09c8f4a9d134, type: 2}
+  slotTemplate: {fileID: 7754332985983064307, guid: 6f997c0b425117344bb53aaea2d3c27a,
+    type: 3}
+  heartSize: 87
+  heartSpacing: 10
+  topLeftPosition: {x: 28, y: -24}
+  damageBlinkDuration: 0.3
+  damageBlinkCount: 2
+  healPopDuration: 0.26
+  shatterCrackDuration: 0.11
+  shatterBurstDuration: 0.48

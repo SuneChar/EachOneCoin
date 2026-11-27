@@ -59,6 +59,54 @@ namespace EachOneCoin.Tests
             => tickMethod.Invoke(view, new object[] { deltaTime });
 
         [Test]
+        public void Initialize_WithPrefabReferences_PreservesLayoutAndDoesNotCreateChildren()
+        {
+            var prefabRoot = new GameObject("AuthoredCounter", typeof(RectTransform));
+            var texture = new Texture2D(2, 2);
+            var sprite = Sprite.Create(texture, new Rect(0, 0, 2, 2), new Vector2(0.5f, 0.5f));
+            try
+            {
+                var authored = prefabRoot.AddComponent(viewType);
+                var capsule = new GameObject("CapsuleRoot", typeof(RectTransform));
+                capsule.transform.SetParent(prefabRoot.transform, false);
+                var imageType = Type.GetType("UnityEngine.UI.Image, UnityEngine.UI", true);
+                var textType = Type.GetType("TMPro.TextMeshProUGUI, Unity.TextMeshPro", true);
+                var background = new GameObject("Background", typeof(RectTransform));
+                background.transform.SetParent(capsule.transform, false);
+                var backgroundImage = background.AddComponent(imageType);
+                var icon = new GameObject("CoinIcon", typeof(RectTransform));
+                icon.transform.SetParent(capsule.transform, false);
+                var iconImage = icon.AddComponent(imageType);
+                imageType.GetProperty("sprite").SetValue(iconImage, sprite);
+                var text = new GameObject("CountText", typeof(RectTransform));
+                text.transform.SetParent(capsule.transform, false);
+                var textComponent = text.AddComponent(textType);
+                var rootRect = (RectTransform)prefabRoot.transform;
+                rootRect.anchoredPosition = new Vector2(37f, -61f);
+                rootRect.sizeDelta = new Vector2(222f, 77f);
+                foreach (var entry in new[] { ("capsuleRoot", (object)capsule.transform), ("backgroundImage", backgroundImage), ("coinIconImage", iconImage), ("countText", textComponent) })
+                    viewType.GetField(entry.Item1, BindingFlags.Instance | BindingFlags.NonPublic).SetValue(authored, entry.Item2);
+
+                initMethod.Invoke(authored, new object[] { null });
+                initMethod.Invoke(authored, new object[] { null });
+                setCoinsMethod.Invoke(authored, new object[] { 7, 10, false });
+
+                Assert.That(rootRect.anchoredPosition, Is.EqualTo(new Vector2(37f, -61f)));
+                Assert.That(rootRect.sizeDelta, Is.EqualTo(new Vector2(222f, 77f)));
+                Assert.That(prefabRoot.transform.childCount, Is.EqualTo(1));
+                Assert.That(capsule.transform.childCount, Is.EqualTo(3));
+                Assert.That(imageType.GetProperty("sprite").GetValue(iconImage), Is.SameAs(sprite));
+                Assert.That(displayedTextProp.GetValue(authored), Is.EqualTo("07"));
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(prefabRoot);
+                UnityEngine.Object.DestroyImmediate(sprite);
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        [Test]
         public void SetCoins_FormatsTwoDigitsAndTriggersAnimationOnChange()
         {
             Assert.That(CurrentCoins, Is.EqualTo(0));
