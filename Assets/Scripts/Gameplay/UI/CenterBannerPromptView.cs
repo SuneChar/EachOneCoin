@@ -44,15 +44,16 @@ namespace EachOneCoin.Gameplay
 
         private HudProceduralIcons icons;
         private RectTransform rootRect;
-        private CanvasGroup canvasGroup;
-        private RectTransform contentRoot;
-        private RectTransform bannerCardRect;
-        private Image inlineIconImage;
-        private TMP_Text titleText;
-        private TMP_Text subtitleText;
-        private RectTransform popIconContainer;
-        private Image popIconGlowImage;
-        private Image popIconImage;
+        [Header("Prefab References (optional)")]
+        [SerializeField] private CanvasGroup canvasGroup;
+        [SerializeField] private RectTransform contentRoot;
+        [SerializeField] private RectTransform bannerCardRect;
+        [SerializeField] private Image inlineIconImage;
+        [SerializeField] private TMP_Text titleText;
+        [SerializeField] private TMP_Text subtitleText;
+        [SerializeField] private RectTransform popIconContainer;
+        [SerializeField] private Image popIconGlowImage;
+        [SerializeField] private Image popIconImage;
 
         private bool initialized;
         private bool hasActiveBanner;
@@ -77,6 +78,18 @@ namespace EachOneCoin.Gameplay
             if (initialized)
             {
                 if (font != null) ApplyFont(font);
+                return;
+            }
+
+            if (canvasGroup != null && contentRoot != null && bannerCardRect != null && inlineIconImage != null &&
+                titleText != null && subtitleText != null && popIconContainer != null && popIconGlowImage != null && popIconImage != null)
+            {
+                rootRect = transform as RectTransform;
+                if (icons == null) icons = new HudProceduralIcons();
+                canvasGroup.interactable = false;
+                canvasGroup.blocksRaycasts = false;
+                initialized = true;
+                Clear();
                 return;
             }
 

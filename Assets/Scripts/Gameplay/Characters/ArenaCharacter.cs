@@ -6,6 +6,8 @@ namespace EachOneCoin.Gameplay
     [RequireComponent(typeof(CharacterController))]
     public sealed class ArenaCharacter : MonoBehaviour
     {
+        [SerializeField] private CharacterAppearanceProfile[] appearanceProfiles;
+
         private readonly HashSet<Collider> touching = new HashSet<Collider>();
         private readonly List<Collider> released = new List<Collider>();
         private MatchCoordinator match;
@@ -65,10 +67,11 @@ namespace EachOneCoin.Gameplay
                 var accessories = visual.Find("Accessories");
                 if (accessories != null)
                 {
-                    for (int i = 0; i < 4; i++)
+                    string selectedSlot = ResolveAccessorySlotName(accessories, id);
+                    foreach (Transform slot in accessories)
                     {
-                        var slot = accessories.Find("Slot " + i);
-                        if (slot != null) slot.gameObject.SetActive(i == id);
+                        if (slot.name.StartsWith("Slot ", System.StringComparison.Ordinal))
+                            slot.gameObject.SetActive(slot.name == selectedSlot);
                     }
                     var reference = accessories.Find("Reference Capsule");
                     if (reference != null) reference.gameObject.SetActive(false);
@@ -92,6 +95,19 @@ namespace EachOneCoin.Gameplay
                 CreateOutline(characterSprite, "Outline Outer", new Color(0.07f, 0.08f, 0.1f), 1.22f, -2);
                 CreateOutline(characterSprite, "Outline Inner", Color.white, 1.1f, -1);
             }
+        }
+
+        private string ResolveAccessorySlotName(Transform accessories, int id)
+        {
+            string fallback = "Slot " + id;
+            if (appearanceProfiles == null || id < 0 || id >= appearanceProfiles.Length || appearanceProfiles[id] == null)
+                return fallback;
+
+            string configured = appearanceProfiles[id].AccessorySlotName;
+            if (string.IsNullOrWhiteSpace(configured) || !configured.StartsWith("Slot ", System.StringComparison.Ordinal))
+                return fallback;
+            var target = accessories.Find(configured);
+            return target != null && target.parent == accessories ? configured : fallback;
         }
 
         private static void CreateOutline(SpriteRenderer source, string name, Color color, float scale, int orderOffset)

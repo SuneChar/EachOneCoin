@@ -11,6 +11,9 @@ namespace EachOneCoin.Gameplay
     public sealed class CoinSpawner : MonoBehaviour
     {
         [SerializeField] private GameObject coinModel;
+        [SerializeField] private GameObject goldMinePrefab;
+        [SerializeField] private CoinWarningMarkerView warningMarkerPrefab;
+        [SerializeField] private Material warningMaterialOverride;
         [SerializeField] private Transform coinRoot;
         [SerializeField] private Transform warningRoot;
         // A coin in the character's own cell always counts as within reach.
@@ -18,7 +21,7 @@ namespace EachOneCoin.Gameplay
         private enum CoinKind { Mine, Dropped }
         private sealed class Slot { public uint Id; public GridPosition Position; public CoinKind Kind; public GameObject Coin; }
         private uint nextId;
-        private sealed class CoinEvent { public int Index; public int MineIndex; public GridPosition[] Cells; public GameObject[] Markers; }
+        private sealed class CoinEvent { public int Index; public int MineIndex; public GridPosition[] Cells; public GameObject[] Markers; public Transform[] PulseDiscs; }
         private readonly List<Slot> slots = new List<Slot>();
         private readonly List<CoinEvent> pending = new List<CoinEvent>();
         private readonly List<GridPosition> candidates = new List<GridPosition>();
@@ -70,17 +73,21 @@ namespace EachOneCoin.Gameplay
             mineRenderers = new Renderer[minePoints.Length];
             for (int i = 0; i < minePoints.Length; i++)
             {
-                var mine = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                var mine = goldMinePrefab != null ? Instantiate(goldMinePrefab, coinRoot) : GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 mine.name = "Gold Mine " + MineNames[i];
                 mine.transform.SetParent(coinRoot, false);
                 mine.transform.position = match.Grid.CellToWorld(minePoints[i]) + Vector3.up * 0.2f;
                 mine.transform.localScale = new Vector3(0.8f, 0.2f, 0.8f);
-                mine.GetComponent<Collider>().enabled = false;
-                var blocker = mine.AddComponent<BoxCollider>();
-                blocker.center = new Vector3(0f, 1.5f, 0f);
-                blocker.size = new Vector3(1.25f, 5f, 1.25f);
+                if (goldMinePrefab == null)
+                {
+                    mine.GetComponent<Collider>().enabled = false;
+                    var blocker = mine.AddComponent<BoxCollider>();
+                    blocker.center = new Vector3(0f, 1.5f, 0f);
+                    blocker.size = new Vector3(1.25f, 5f, 1.25f);
+                }
                 mineRenderers[i] = mine.GetComponent<Renderer>();
-                mineRenderers[i].sharedMaterial = mineMaterial;
+                if (goldMinePrefab == null || mineRenderers[i].sharedMaterial == null)
+                    mineRenderers[i].sharedMaterial = mineMaterial;
                 SetMineColor(i, BaseMineColor);
             }
             Physics.SyncTransforms();
@@ -275,7 +282,8 @@ namespace EachOneCoin.Gameplay
             var coinEvent = new CoinEvent { Index = index, MineIndex = chosenMine, Cells = chosenCells };
             if (!withMarkers) return coinEvent;
             coinEvent.Markers = new GameObject[chosenCells.Length];
-            for (int i = 0; i < chosenCells.Length; i++) coinEvent.Markers[i] = CreateWarningMarker(chosenCells[i]);
+            coinEvent.PulseDiscs = new Transform[chosenCells.Length];
+            for (int i = 0; i < chosenCells.Length; i++) coinEvent.Markers[i] = CreateWarningMarker(chosenCells[i], out coinEvent.PulseDiscs[i]);
             return coinEvent;
         }
 
@@ -379,20 +387,31 @@ namespace EachOneCoin.Gameplay
             for (int i = 0; i < coinEvent.Markers.Length; i++)
                 if (coinEvent.Markers[i] != null) Destroy(coinEvent.Markers[i]);
             coinEvent.Markers = null;
+            coinEvent.PulseDiscs = null;
         }
 
-        private GameObject CreateWarningMarker(GridPosition cell)
+        private GameObject CreateWarningMarker(GridPosition cell, out Transform pulseDisc)
         {
+            if (warningMarkerPrefab != null && warningMarkerPrefab.IsConfigured)
+            {
+                var view = Instantiate(warningMarkerPrefab, warningRoot != null ? warningRoot : coinRoot);
+                view.name = "Coin Warning";
+                view.transform.position = match.Grid.CellToWorld(cell);
+                view.SetMaterial(WarningMaterial());
+                pulseDisc = view.PulseDisc;
+                return view.gameObject;
+            }
+
             var marker = new GameObject("Coin Warning");
             marker.transform.SetParent(warningRoot != null ? warningRoot : coinRoot, false);
             marker.transform.position = match.Grid.CellToWorld(cell);
-            AddWarningPart(marker.transform, "Coin Warning Disc", new Vector3(0f, 0.02f, 0f), new Vector3(0.85f, 0.01f, 0.85f));
+            pulseDisc = AddWarningPart(marker.transform, "Coin Warning Disc", new Vector3(0f, 0.02f, 0f), new Vector3(0.85f, 0.01f, 0.85f));
             AddWarningPart(marker.transform, "Coin Warning Pillar", new Vector3(0f, 1.1f, 0f), new Vector3(0.14f, 1.1f, 0.14f));
             return marker;
         }
 
         // A flat disc marks the cell while the pillar keeps the spot readable from the arena camera.
-        private void AddWarningPart(Transform parent, string partName, Vector3 localPosition, Vector3 localScale)
+        private Transform AddWarningPart(Transform parent, string partName, Vector3 localPosition, Vector3 localScale)
         {
             var part = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             part.name = partName;
@@ -405,10 +424,12 @@ namespace EachOneCoin.Gameplay
             renderer.sharedMaterial = WarningMaterial();
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
+            return part.transform;
         }
 
         private Material WarningMaterial()
         {
+            if (warningMaterialOverride != null) return warningMaterialOverride;
             if (warningMaterial != null) return warningMaterial;
             var shader = Shader.Find("Universal Render Pipeline/Unlit");
             if (shader == null) shader = Shader.Find("Unlit/Transparent");
@@ -430,10 +451,10 @@ namespace EachOneCoin.Gameplay
             float pulse = 0.7f + 0.2f * Mathf.Sin(Time.time * 9f);
             for (int i = 0; i < pending.Count; i++)
             {
-                var markers = pending[i].Markers;
-                if (markers == null) continue;
-                for (int m = 0; m < markers.Length; m++)
-                    if (markers[m] != null) markers[m].transform.GetChild(0).localScale = new Vector3(pulse, 0.01f, pulse);
+                var discs = pending[i].PulseDiscs;
+                if (discs == null) continue;
+                for (int m = 0; m < discs.Length; m++)
+                    if (discs[m] != null) discs[m].localScale = new Vector3(pulse, 0.01f, pulse);
             }
         }
 
@@ -559,8 +580,8 @@ namespace EachOneCoin.Gameplay
                 ClearWarnings();
                 if (status.warningMine >= 0)
                 {
-                    var warning = new CoinEvent { Index = status.nextEvent, MineIndex = status.warningMine, Cells = new GridPosition[status.warningX.Length], Markers = new GameObject[status.warningX.Length] };
-                    for (int i = 0; i < warning.Cells.Length; i++) { warning.Cells[i] = new GridPosition(status.warningX[i], status.warningY[i]); warning.Markers[i] = CreateWarningMarker(warning.Cells[i]); }
+            var warning = new CoinEvent { Index = status.nextEvent, MineIndex = status.warningMine, Cells = new GridPosition[status.warningX.Length], Markers = new GameObject[status.warningX.Length], PulseDiscs = new Transform[status.warningX.Length] };
+            for (int i = 0; i < warning.Cells.Length; i++) { warning.Cells[i] = new GridPosition(status.warningX[i], status.warningY[i]); warning.Markers[i] = CreateWarningMarker(warning.Cells[i], out warning.PulseDiscs[i]); }
                     pending.Add(warning);
                 }
             }

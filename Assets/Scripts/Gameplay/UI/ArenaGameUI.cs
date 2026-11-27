@@ -74,8 +74,8 @@ namespace EachOneCoin.Gameplay
         private bool leftHudAdjusted;
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
-        private GameObject networkStatusBannerRoot;
-        private TMP_Text networkStatusBannerText;
+        [SerializeField] private GameObject networkStatusBannerRoot;
+        [SerializeField] private TMP_Text networkStatusBannerText;
         private HudProceduralIcons statusBannerIcons;
         private bool networkStatusStateInitialized;
         private bool lastBannerResuming;
@@ -1103,7 +1103,12 @@ namespace EachOneCoin.Gameplay
 
         private void EnsureNetworkStatusBanner()
         {
-            if (networkStatusBannerInitialized && networkStatusBannerRoot != null) return;
+            if (networkStatusBannerInitialized && networkStatusBannerRoot != null && networkStatusBannerText != null) return;
+            if (networkStatusBannerRoot != null && networkStatusBannerText != null)
+            {
+                networkStatusBannerInitialized = true;
+                return;
+            }
             if (hudPanel == null) return;
 
             var bannerObj = new GameObject("NetworkStatusBanner", typeof(RectTransform));

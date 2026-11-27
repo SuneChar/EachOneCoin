@@ -36,6 +36,9 @@ namespace EachOneCoin.Gameplay
             public bool Active;
         }
 
+        [Header("Prefab Template (optional)")]
+        [SerializeField] private MatchEventFeedEntryView entryTemplate;
+
         [Header("Layout (1920x1080 Reference Canvas)")]
         [SerializeField] private Vector2 topRightOffset = new Vector2(-20f, -150f);
         [SerializeField, Min(120f)] private float panelWidth = 300f;
@@ -269,6 +272,42 @@ namespace EachOneCoin.Gameplay
 
         private FeedEntry CreatePooledEntry(int poolIndex, float width, float height, TMP_FontAsset font)
         {
+            if (entryTemplate != null && entryTemplate.HasRequiredLayers)
+            {
+                var template = Instantiate(entryTemplate, rootRect);
+                template.name = "FeedEntry_" + poolIndex;
+                var rect = (RectTransform)template.transform;
+                rect.anchorMin = rect.anchorMax = new Vector2(1f, 1f);
+                rect.pivot = new Vector2(1f, 1f);
+                rect.sizeDelta = new Vector2(width, height);
+                rect.anchoredPosition = Vector2.zero;
+                template.canvasGroup.alpha = 0f;
+                template.canvasGroup.interactable = false;
+                template.canvasGroup.blocksRaycasts = false;
+                float templateBarWidth = Mathf.Max(MinAccentBarWidth, accentBarWidth);
+                var templateAccentRect = template.accentBarImage.rectTransform;
+                templateAccentRect.offsetMin = new Vector2(templateAccentRect.offsetMax.x - templateBarWidth, templateAccentRect.offsetMin.y);
+                var messageRect = template.messageText.rectTransform;
+                messageRect.offsetMax = new Vector2(templateAccentRect.offsetMin.x - TextGapBeforeAccent, messageRect.offsetMax.y);
+                template.messageText.color = textColor;
+                if (font != null)
+                {
+                    template.messageText.font = font;
+                    if (font.material != null) template.messageText.fontSharedMaterial = font.material;
+                }
+                template.gameObject.SetActive(false);
+                return new FeedEntry
+                {
+                    RootObject = template.gameObject,
+                    RootRect = rect,
+                    CanvasGroup = template.canvasGroup,
+                    AccentBarImage = template.accentBarImage,
+                    MessageText = template.messageText,
+                    Alpha = 0f,
+                    Active = false
+                };
+            }
+
             var entryObj = new GameObject("FeedEntry_" + poolIndex, typeof(RectTransform), typeof(CanvasGroup));
             var entryRect = (RectTransform)entryObj.transform;
             entryRect.SetParent(rootRect, false);

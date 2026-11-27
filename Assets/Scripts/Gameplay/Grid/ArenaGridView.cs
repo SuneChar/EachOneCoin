@@ -6,6 +6,7 @@ namespace EachOneCoin.Gameplay
     {
         [SerializeField] private Transform tileRoot;
         [SerializeField] private Transform overlayRoot;
+        [SerializeField] private ArenaGridVisualConfig visualConfig;
         [SerializeField, Range(0.2f, 1f)] private float disconnectedBrightness = 0.65f;
         [SerializeField, Range(0.1f, 1f)] private float tileBrightness = 0.55f;
         [SerializeField, Range(0f, 1f)] private float paintOpacity = 0.55f;
@@ -62,12 +63,15 @@ namespace EachOneCoin.Gameplay
 
         public GridPosition WorldToCell(Vector3 world) => new GridPosition(Mathf.Clamp(Mathf.FloorToInt(world.x + Size / 2f), 0, Size - 1), Mathf.Clamp(Mathf.FloorToInt(world.z + Size / 2f), 0, Size - 1));
         public Vector3 CellToWorld(GridPosition cell) => new Vector3(cell.X - Size / 2f + 0.5f, 0f, cell.Y - Size / 2f + 0.5f);
-        public Color PlayerColor(int id) => colors[id];
+        public Color PlayerColor(int id) => visualConfig != null ? visualConfig.PlayerColor(id, colors[id]) : colors[id];
         public bool IsConnected(int id, GridPosition cell) => connected[id][cell.X, cell.Y];
 
         public void Refresh(GridModel grid)
         {
             for (int i = 0; i < colors.Length; i++) grid.CopyConnectedTo(i, connected[i]);
+            float brightness = visualConfig != null ? visualConfig.TileBrightness : tileBrightness;
+            float disconnected = visualConfig != null ? visualConfig.DisconnectedBrightness : disconnectedBrightness;
+            float opacity = visualConfig != null ? visualConfig.PaintOpacity : paintOpacity;
             for (int x = 0; x < Size; x++) for (int y = 0; y < Size; y++)
             {
                 var renderer = tiles[x, y];
@@ -77,9 +81,9 @@ namespace EachOneCoin.Gameplay
                 if (state == displayedState[x, y]) continue;
                 displayedState[x, y] = state;
                 renderer.enabled = owner.HasValue;
-                Color color = owner.HasValue ? colors[owner.Value] * tileBrightness : Color.white;
-                if (owner.HasValue && !connected[owner.Value][x, y]) color *= disconnectedBrightness;
-                color.a = Mathf.Clamp01(paintOpacity);
+                Color color = owner.HasValue ? PlayerColor(owner.Value) * brightness : Color.white;
+                if (owner.HasValue && !connected[owner.Value][x, y]) color *= disconnected;
+                color.a = Mathf.Clamp01(opacity);
                 block.Clear();
                 block.SetColor("_BaseColor", color);
                 block.SetColor("_Color", color);
