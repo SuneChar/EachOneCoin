@@ -5,10 +5,14 @@ namespace EachOneCoin.Gameplay
 {
     public sealed class NpcController : MonoBehaviour
     {
+        public enum Difficulty { Normal = 0, Easy = 1, Hard = 2 }
         private enum Personality { Explorer, TreasureHunter, Challenger }
+        [SerializeField] private Difficulty difficulty = Difficulty.Normal;
         private readonly Personality[] personalities = new Personality[4];
         private readonly bool[] explorationPaths = new bool[4];
         private readonly float[] windup = new float[4];
+        private readonly int[] reactionTarget = { -1, -1, -1, -1 };
+        private readonly float[] reactionElapsed = new float[4];
         private readonly float[] chaseElapsed = new float[4];
         private readonly float[] chaseCooldown = new float[4];
         private readonly bool[] chasing = new bool[4];
@@ -55,6 +59,10 @@ namespace EachOneCoin.Gameplay
                 default: return "NPC";
             }
         }
+        private float ReactionSeconds => difficulty == Difficulty.Easy ? 0.3f : 0f;
+        private float WindupDuration => Mathf.Max(difficulty == Difficulty.Hard ? 0.3f : 0.1f, windupSeconds * (difficulty == Difficulty.Easy ? 1.5f : difficulty == Difficulty.Hard ? 0.7f : 1f));
+        private float ExplorerExplorationChance => difficulty == Difficulty.Easy ? 0.7f : difficulty == Difficulty.Hard ? 0.35f : 0.55f;
+        private void ClearReaction(int id) { reactionTarget[id] = -1; reactionElapsed[id] = 0f; }
         private void ResetWaypointTracking(int id) { blockedSeconds[id] = 0f; progressDistance[id] = -1f; alignmentAxis[id] = 0; }
         public void ResetPath(int id) { paths[id].Clear(); pathIndices[id] = 0; retries[id] = 0f; ResetWaypointTracking(id); explorationPaths[id] = false; CancelWindup(id); }
         public bool IsWindingUp(int id) => windup[id] > 0f;
@@ -63,9 +71,9 @@ namespace EachOneCoin.Gameplay
 
         public void Tick(int id, float deltaTime)
         {
-            if (match.Model.Participants[id].Status != ParticipantStatus.Active) { ResetPath(id); return; }
+            if (match.Model.Participants[id].Status != ParticipantStatus.Active) { ResetPath(id); ClearReaction(id); return; }
             var character = match.Characters[id];
-            if (character.IsKnockedBack) { ResetPath(id); return; }
+            if (character.IsKnockedBack) { ResetPath(id); ClearReaction(id); return; }
             chaseCooldown[id] = Mathf.Max(0f, chaseCooldown[id] - deltaTime);
             if (chasing[id])
             {
@@ -92,7 +100,7 @@ namespace EachOneCoin.Gameplay
                 if (!returning && (!found || personalities[id] != Personality.TreasureHunter))
                 {
                     var alternative = new List<GridPosition>();
-                    if (FindAlternativePath(id, alternative) && (!found || (personalities[id] == Personality.Challenger && chasing[id]) || (personalities[id] == Personality.Explorer && Random.value < 0.55f)))
+                    if (FindAlternativePath(id, alternative) && (!found || (personalities[id] == Personality.Challenger && chasing[id]) || (personalities[id] == Personality.Explorer && Random.value < ExplorerExplorationChance)))
                     {
                         path.Clear(); path.AddRange(alternative); found = true; explorationPaths[id] = true;
                     }
@@ -189,7 +197,7 @@ namespace EachOneCoin.Gameplay
 
         public void CancelAllWindups()
         {
-            for (int i = 0; i < windup.Length; i++) CancelWindup(i);
+            for (int i = 0; i < windup.Length; i++) { CancelWindup(i); ClearReaction(i); }
         }
 
         private void CancelWindup(int id)
@@ -214,11 +222,11 @@ namespace EachOneCoin.Gameplay
                 }
                 return true;
             }
-            if (!match.Combat.CanAttack(id)) return false;
+            if (!match.Combat.CanAttack(id)) { ClearReaction(id); return false; }
             Vector3 origin = match.Characters[id].transform.position;
             Vector3 direction = Vector3.zero;
             float nearestSquared = match.Combat.AttackRange * match.Combat.AttackRange;
-            bool found = false;
+            int target = -1;
             for (int i = 0; i < match.Characters.Length; i++)
             {
                 if (i == id || !match.Model.Participants[i].IsParticipating || match.Model.Participants[i].Status != ParticipantStatus.Active ||
@@ -226,11 +234,18 @@ namespace EachOneCoin.Gameplay
                 Vector3 delta = match.Characters[i].transform.position - origin;
                 delta.y = 0f;
                 if (delta.sqrMagnitude > nearestSquared) continue;
-                nearestSquared = delta.sqrMagnitude; direction = delta; found = true;
+                nearestSquared = delta.sqrMagnitude; direction = delta; target = i;
             }
-            if (!found) return false;
+            if (target < 0) { ClearReaction(id); return false; }
+            if (reactionTarget[id] != target) { reactionTarget[id] = target; reactionElapsed[id] = 0f; }
+            if (reactionElapsed[id] < ReactionSeconds)
+            {
+                reactionElapsed[id] += Mathf.Max(0f, deltaTime);
+                if (reactionElapsed[id] < ReactionSeconds) return false;
+            }
+            ClearReaction(id);
             windupDirection[id] = direction.sqrMagnitude < 0.000001f ? Vector3.forward : direction.normalized;
-            windup[id] = Mathf.Max(0.1f, windupSeconds);
+            windup[id] = WindupDuration;
             match.Characters[id].SetAttackAim(true, windupDirection[id], match.Combat.AttackRange, match.Combat.AttackAngle);
             if (match.IsNetworkMovementTest && Mirror.NetworkServer.active && match.NetworkController != null) match.NetworkController.SendCombatState();
             return true;

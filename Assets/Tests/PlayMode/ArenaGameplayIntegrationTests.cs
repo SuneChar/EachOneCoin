@@ -738,6 +738,60 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator Npc_DifficultyControlsReactionAndWindupWithoutChangingPersonality()
+        {
+            var npc = Character(1);
+            Call(npc, "Teleport", CellToWorld(new GridPosition(10, 2)));
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(11, 2)));
+            Physics.SyncTransforms();
+            var type = npcs.GetType();
+            var difficultyField = type.GetField("difficulty", Private);
+            var windups = (float[])type.GetField("windup", Private).GetValue(npcs);
+            var tickAttack = type.GetMethod("TickAttack", Private);
+            type.GetField("windupSeconds", Private).SetValue(npcs, 0.6f);
+            byte personality = (byte)Call(npcs, "PersonalityCode", 1);
+
+            difficultyField.SetValue(npcs, Enum.Parse(difficultyField.FieldType, "Easy"));
+            Assert.That((bool)tickAttack.Invoke(npcs, new object[] { 1, 0.1f }), Is.False);
+            Assert.That((bool)Call(npcs, "IsWindingUp", 1), Is.False);
+            Assert.That((bool)tickAttack.Invoke(npcs, new object[] { 1, 0.21f }), Is.True);
+            Assert.That(windups[1], Is.EqualTo(0.9f).Within(0.001f));
+            Call(npcs, "ResetPath", 1);
+
+            difficultyField.SetValue(npcs, Enum.Parse(difficultyField.FieldType, "Normal"));
+            Assert.That((bool)tickAttack.Invoke(npcs, new object[] { 1, 0.01f }), Is.True);
+            Assert.That(windups[1], Is.EqualTo(0.6f).Within(0.001f));
+            Call(npcs, "ResetPath", 1);
+
+            difficultyField.SetValue(npcs, Enum.Parse(difficultyField.FieldType, "Hard"));
+            Assert.That((bool)tickAttack.Invoke(npcs, new object[] { 1, 0.01f }), Is.True);
+            Assert.That(windups[1], Is.EqualTo(0.42f).Within(0.001f));
+            Assert.That((byte)Call(npcs, "PersonalityCode", 1), Is.EqualTo(personality));
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator Npc_EasyReactionRestartsWhenTargetLeavesRange()
+        {
+            Call(Character(1), "Teleport", CellToWorld(new GridPosition(10, 2)));
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(11, 2)));
+            Physics.SyncTransforms();
+            var type = npcs.GetType();
+            var difficulty = type.GetField("difficulty", Private);
+            difficulty.SetValue(npcs, Enum.Parse(difficulty.FieldType, "Easy"));
+            var tick = type.GetMethod("TickAttack", Private);
+            Assert.That((bool)tick.Invoke(npcs, new object[] { 1, 0.2f }), Is.False);
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(14, 2)));
+            Physics.SyncTransforms();
+            Assert.That((bool)tick.Invoke(npcs, new object[] { 1, 0.1f }), Is.False);
+            Call(Character(0), "Teleport", CellToWorld(new GridPosition(11, 2)));
+            Physics.SyncTransforms();
+            Assert.That((bool)tick.Invoke(npcs, new object[] { 1, 0.2f }), Is.False, "Reaction time must restart when a target is reacquired.");
+            Assert.That((bool)tick.Invoke(npcs, new object[] { 1, 0.11f }), Is.True);
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator Npc_AttackWaitsForWindupAndCanMissWhenTargetMoves()
         {
             var npc = Character(1);
