@@ -227,5 +227,35 @@ namespace EachOneCoin.Tests
             Assert.That(GetEntryText(3), Is.EqualTo("E5"));
             Assert.That(GetEntryAlpha(3), Is.EqualTo(1f).Within(0.001f));
         }
+
+        [Test]
+        public void Initialize_BuildsCompactRightAlignedEntriesWithoutBackground()
+        {
+            Transform entryTransform = root.transform.Find("FeedEntry_0");
+            Assert.That(entryTransform, Is.Not.Null);
+            Assert.That(entryTransform.Find("Background"), Is.Null);
+
+            Transform accentTransform = entryTransform.Find("AccentBar");
+            Assert.That(accentTransform, Is.Not.Null);
+            var accentRect = accentTransform as RectTransform;
+            Assert.That(accentRect, Is.Not.Null);
+            Assert.That(accentRect.anchorMin.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(accentRect.anchorMax.x, Is.EqualTo(1f).Within(0.001f));
+            Assert.That(accentRect.pivot.x, Is.EqualTo(1f).Within(0.001f));
+
+            Transform messageTransform = entryTransform.Find("MessageText");
+            Assert.That(messageTransform, Is.Not.Null);
+
+            Type tmpTextType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro", false)
+                ?? initMethod.GetParameters()[0].ParameterType.Assembly.GetType("TMPro.TMP_Text", true);
+            Component tmpComponent = messageTransform.GetComponent(tmpTextType);
+            Assert.That(tmpComponent, Is.Not.Null);
+
+            PropertyInfo alignmentProp = tmpTextType.GetProperty("alignment", BindingFlags.Public | BindingFlags.Instance);
+            Assert.That(alignmentProp, Is.Not.Null);
+            object alignmentValue = alignmentProp.GetValue(tmpComponent);
+            Assert.That(alignmentValue, Is.Not.Null);
+            Assert.That(alignmentValue.ToString(), Is.EqualTo("MidlineRight"));
+        }
     }
 }

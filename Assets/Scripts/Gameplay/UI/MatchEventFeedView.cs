@@ -12,23 +12,22 @@ namespace EachOneCoin.Gameplay
     public sealed class MatchEventFeedView : MonoBehaviour
     {
         private const float MinPanelWidth = 120f;
-        private const float MinEntryHeight = 24f;
+        private const float MinEntryHeight = 18f;
         private const float MinAccentBarWidth = 2f;
         private const float MinEntryLifetime = 0.05f;
-        private const float AccentInsetLeft = 4f;
-        private const float AccentInsetVertical = 6f;
-        private const float TextGapAfterAccent = 8f;
-        private const float TextInsetRight = 10f;
-        private const float TextInsetVertical = 2f;
-        private const float EntryFontSizeMin = 13f;
-        private const float EntryFontSizeMax = 18f;
+        private const float AccentInsetRight = 2f;
+        private const float AccentInsetVertical = 3f;
+        private const float TextGapBeforeAccent = 6f;
+        private const float TextInsetLeft = 4f;
+        private const float TextInsetVertical = 0f;
+        private const float EntryFontSizeMin = 12f;
+        private const float EntryFontSizeMax = 16f;
 
         private sealed class FeedEntry
         {
             public GameObject RootObject;
             public RectTransform RootRect;
             public CanvasGroup CanvasGroup;
-            public Image BackgroundImage;
             public Image AccentBarImage;
             public TMP_Text MessageText;
             public string Text;
@@ -38,23 +37,21 @@ namespace EachOneCoin.Gameplay
         }
 
         [Header("Layout (1920x1080 Reference Canvas)")]
-        [SerializeField] private Vector2 topRightOffset = new Vector2(-20f, -156f);
-        [SerializeField, Min(120f)] private float panelWidth = 320f;
+        [SerializeField] private Vector2 topRightOffset = new Vector2(-20f, -150f);
+        [SerializeField, Min(120f)] private float panelWidth = 300f;
         [SerializeField, Min(1)] private int maxVisibleEntries = 4;
-        [SerializeField, Min(24f)] private float entryHeight = 38f;
-        [SerializeField, Min(0f)] private float entrySpacing = 8f;
-        [SerializeField, Min(2f)] private float accentBarWidth = 4f;
+        [SerializeField, Min(18f)] private float entryHeight = 26f;
+        [SerializeField, Min(0f)] private float entrySpacing = 3f;
+        [SerializeField, Min(2f)] private float accentBarWidth = 3f;
 
         [Header("Timing")]
         [SerializeField, Min(0.05f)] private float entryLifetime = 4.5f;
         [SerializeField, Min(0f)] private float fadeOutDuration = 0.6f;
 
         [Header("Colors")]
-        [SerializeField] private Color stripBackgroundColor = new Color(0.082f, 0.102f, 0.141f, 0.84f);
         [SerializeField] private Color textColor = new Color(0.95f, 0.97f, 1.00f, 1f);
 
         private RectTransform rootRect;
-        private HudProceduralIcons icons;
         private FeedEntry[] pool;
         private FeedEntry[] activeEntries;
         private FeedEntry[] freeEntries;
@@ -95,13 +92,6 @@ namespace EachOneCoin.Gameplay
             rootRect.anchoredPosition = topRightOffset;
             rootRect.sizeDelta = new Vector2(width, totalHeight);
 
-            if (icons == null)
-            {
-                icons = new HudProceduralIcons();
-            }
-
-            Sprite panelSprite = icons.GetRoundedPanelSprite();
-
             pool = new FeedEntry[capacity];
             activeEntries = new FeedEntry[capacity];
             freeEntries = new FeedEntry[capacity];
@@ -110,7 +100,7 @@ namespace EachOneCoin.Gameplay
 
             for (int i = 0; i < capacity; i++)
             {
-                FeedEntry entry = CreatePooledEntry(i, width, height, panelSprite, font);
+                FeedEntry entry = CreatePooledEntry(i, width, height, font);
                 pool[i] = entry;
                 freeEntries[capacity - 1 - i] = entry;
             }
@@ -277,16 +267,7 @@ namespace EachOneCoin.Gameplay
             return activeEntries[index].Alpha;
         }
 
-        private void OnDestroy()
-        {
-            if (icons != null)
-            {
-                icons.Dispose();
-                icons = null;
-            }
-        }
-
-        private FeedEntry CreatePooledEntry(int poolIndex, float width, float height, Sprite panelSprite, TMP_FontAsset font)
+        private FeedEntry CreatePooledEntry(int poolIndex, float width, float height, TMP_FontAsset font)
         {
             var entryObj = new GameObject("FeedEntry_" + poolIndex, typeof(RectTransform), typeof(CanvasGroup));
             var entryRect = (RectTransform)entryObj.transform;
@@ -302,45 +283,28 @@ namespace EachOneCoin.Gameplay
             canvasGroup.interactable = false;
             canvasGroup.blocksRaycasts = false;
 
-            var bgObj = new GameObject("Background", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            var bgRect = (RectTransform)bgObj.transform;
-            bgRect.SetParent(entryRect, false);
-            bgRect.anchorMin = Vector2.zero;
-            bgRect.anchorMax = Vector2.one;
-            bgRect.pivot = new Vector2(0.5f, 0.5f);
-            bgRect.offsetMin = Vector2.zero;
-            bgRect.offsetMax = Vector2.zero;
-
-            var bgImage = bgObj.GetComponent<Image>();
-            bgImage.sprite = panelSprite;
-            bgImage.type = panelSprite != null && panelSprite.border != Vector4.zero
-                ? Image.Type.Sliced
-                : Image.Type.Simple;
-            bgImage.color = stripBackgroundColor;
-            bgImage.raycastTarget = false;
-
             float barWidth = Mathf.Max(MinAccentBarWidth, accentBarWidth);
             var accentObj = new GameObject("AccentBar", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             var accentRect = (RectTransform)accentObj.transform;
             accentRect.SetParent(entryRect, false);
-            accentRect.anchorMin = new Vector2(0f, 0f);
-            accentRect.anchorMax = new Vector2(0f, 1f);
-            accentRect.pivot = new Vector2(0f, 0.5f);
-            accentRect.offsetMin = new Vector2(AccentInsetLeft, AccentInsetVertical);
-            accentRect.offsetMax = new Vector2(AccentInsetLeft + barWidth, -AccentInsetVertical);
+            accentRect.anchorMin = new Vector2(1f, 0f);
+            accentRect.anchorMax = new Vector2(1f, 1f);
+            accentRect.pivot = new Vector2(1f, 0.5f);
+            accentRect.offsetMin = new Vector2(-(AccentInsetRight + barWidth), AccentInsetVertical);
+            accentRect.offsetMax = new Vector2(-AccentInsetRight, -AccentInsetVertical);
 
             var accentImage = accentObj.GetComponent<Image>();
             accentImage.color = Color.white;
             accentImage.raycastTarget = false;
 
-            var textObj = new GameObject("MessageText", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI));
+            var textObj = new GameObject("MessageText", typeof(RectTransform), typeof(CanvasRenderer), typeof(TextMeshProUGUI), typeof(Shadow));
             var textRect = (RectTransform)textObj.transform;
             textRect.SetParent(entryRect, false);
             textRect.anchorMin = Vector2.zero;
             textRect.anchorMax = Vector2.one;
             textRect.pivot = new Vector2(0.5f, 0.5f);
-            textRect.offsetMin = new Vector2(AccentInsetLeft + barWidth + TextGapAfterAccent, TextInsetVertical);
-            textRect.offsetMax = new Vector2(-TextInsetRight, -TextInsetVertical);
+            textRect.offsetMin = new Vector2(TextInsetLeft, TextInsetVertical);
+            textRect.offsetMax = new Vector2(-(AccentInsetRight + barWidth + TextGapBeforeAccent), -TextInsetVertical);
 
             var tmp = textObj.GetComponent<TextMeshProUGUI>();
             if (font != null)
@@ -360,10 +324,14 @@ namespace EachOneCoin.Gameplay
             tmp.fontSizeMax = EntryFontSizeMax;
             tmp.enableWordWrapping = false;
             tmp.overflowMode = TextOverflowModes.Ellipsis;
-            tmp.alignment = TextAlignmentOptions.MidlineLeft;
+            tmp.alignment = TextAlignmentOptions.MidlineRight;
             tmp.color = textColor;
             tmp.raycastTarget = false;
             tmp.text = string.Empty;
+
+            var shadow = textObj.GetComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
+            shadow.effectDistance = new Vector2(1f, -1f);
 
             entryObj.SetActive(false);
 
@@ -372,7 +340,6 @@ namespace EachOneCoin.Gameplay
                 RootObject = entryObj,
                 RootRect = entryRect,
                 CanvasGroup = canvasGroup,
-                BackgroundImage = bgImage,
                 AccentBarImage = accentImage,
                 MessageText = tmp,
                 Text = null,

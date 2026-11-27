@@ -30,6 +30,7 @@ namespace EachOneCoin.Tests
         private MethodInfo providerSetOverrideMethod;
         private MethodInfo providerClearOverrideMethod;
 
+        private PropertyInfo portraitSizeProp;
         private PropertyInfo currentSlotIdProp;
         private PropertyInfo currentCosmeticIdProp;
         private PropertyInfo activeOverlayCountProp;
@@ -65,6 +66,7 @@ namespace EachOneCoin.Tests
             providerSetOverrideMethod = defaultProviderType.GetMethod("SetOverride", new[] { typeof(int), appearanceType });
             providerClearOverrideMethod = defaultProviderType.GetMethod("ClearOverride", new[] { typeof(int) });
 
+            portraitSizeProp = viewType.GetProperty("PortraitSize");
             currentSlotIdProp = viewType.GetProperty("CurrentSlotId");
             currentCosmeticIdProp = viewType.GetProperty("CurrentCosmeticId");
             activeOverlayCountProp = viewType.GetProperty("ActiveOverlayCount");
@@ -121,6 +123,7 @@ namespace EachOneCoin.Tests
             runtimeTextures.Clear();
         }
 
+        private float PortraitSize => (float)portraitSizeProp.GetValue(view);
         private int CurrentSlotId => (int)currentSlotIdProp.GetValue(view);
         private string CurrentCosmeticId => (string)currentCosmeticIdProp.GetValue(view);
         private int ActiveOverlayCount => (int)activeOverlayCountProp.GetValue(view);
@@ -369,6 +372,16 @@ namespace EachOneCoin.Tests
             SetParticipant(0, appearance, ParticipantStatus.Active);
             Assert.That(CurrentStatus, Is.EqualTo(ParticipantStatus.Active));
             Assert.That(IsImageEnabled("ContentRoot/CircleMaskRoot/StatusOverlay"), Is.False);
+        }
+
+        [Test]
+        public void Initialize_UsesEnlargedDefaultPortraitSizeOf378()
+        {
+            Assert.That(PortraitSize, Is.EqualTo(378f).Within(0.001f));
+
+            var rootRect = (RectTransform)root.transform;
+            Assert.That(rootRect.sizeDelta.x, Is.EqualTo(378f).Within(0.001f));
+            Assert.That(rootRect.sizeDelta.y, Is.EqualTo(378f).Within(0.001f));
         }
     }
 }

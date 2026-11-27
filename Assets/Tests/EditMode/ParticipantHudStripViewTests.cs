@@ -29,6 +29,7 @@ namespace EachOneCoin.Tests
         private MethodInfo getCoinTextMethod;
         private MethodInfo getMiniHeartStateMethod;
         private MethodInfo getMiniHeartCountMethod;
+        private MethodInfo getHealthSegmentColorMethod;
         private MethodInfo getSlotCosmeticIdMethod;
         private MethodInfo getSlotOverlayCountMethod;
 
@@ -87,6 +88,7 @@ namespace EachOneCoin.Tests
             getCoinTextMethod = viewType.GetMethod("GetCoinText", new[] { typeof(int) });
             getMiniHeartStateMethod = viewType.GetMethod("GetMiniHeartState", new[] { typeof(int), typeof(int) });
             getMiniHeartCountMethod = viewType.GetMethod("GetMiniHeartCount", new[] { typeof(int) });
+            getHealthSegmentColorMethod = viewType.GetMethod("GetHealthSegmentColor", new[] { typeof(int), typeof(int) });
             getSlotCosmeticIdMethod = viewType.GetMethod("GetSlotCosmeticId", new[] { typeof(int) });
             getSlotOverlayCountMethod = viewType.GetMethod("GetSlotOverlayCount", new[] { typeof(int) });
 
@@ -179,6 +181,9 @@ namespace EachOneCoin.Tests
 
         private int GetMiniHeartCount(int slotIndex)
             => (int)getMiniHeartCountMethod.Invoke(view, new object[] { slotIndex });
+
+        private Color GetHealthSegmentColor(int slotIndex, int segmentIndex)
+            => (Color)getHealthSegmentColorMethod.Invoke(view, new object[] { slotIndex, segmentIndex });
 
         private string GetSlotCosmeticId(int index)
             => (string)getSlotCosmeticIdMethod.Invoke(view, new object[] { index });
@@ -584,6 +589,80 @@ namespace EachOneCoin.Tests
             Tick(0.25f);
             Assert.That(leaderCrownRect.anchoredPosition.y, Is.GreaterThan(initialPos.y + 0.5f));
             Assert.That(leaderCrownRect.localScale.x, Is.GreaterThan(1f));
+        }
+
+        [Test]
+        public void Refresh_RemovesCardBackgroundsAndEmbedsThreeStateSegmentedHealthBar()
+        {
+            Array snapshots = CreateSnapshotArray(
+                CreateSnapshot(0, coins: 3, status: ParticipantStatus.Active, isParticipating: true, isLocal: true, health: 1, maxHealth: 2, initialMaxHealth: 3),
+                CreateSnapshot(1, coins: 1, status: ParticipantStatus.Active, isParticipating: true, health: 3, maxHealth: 3, initialMaxHealth: 3),
+                CreateSnapshot(2, coins: 0, status: ParticipantStatus.Lost, isParticipating: true, health: 0, maxHealth: 1, initialMaxHealth: 3),
+                CreateSnapshot(3, coins: 0, status: ParticipantStatus.Active, isParticipating: false, health: 3, maxHealth: 3, initialMaxHealth: 3));
+
+            Refresh(snapshots);
+
+            for (int i = 0; i < 4; i++)
+            {
+                Transform slotRoot = root.transform.Find("ParticipantSlot_" + i);
+                Assert.That(slotRoot, Is.Not.Null);
+                Assert.That(slotRoot.Find("CardBackground"), Is.Null);
+                Assert.That(slotRoot.Find("LocalHighlight"), Is.Null);
+            }
+
+            var avatarRoot = (RectTransform)root.transform.Find("ParticipantSlot_0/AvatarRoot");
+            Assert.That(avatarRoot, Is.Not.Null);
+            Assert.That(avatarRoot.sizeDelta.x, Is.EqualTo(71.5f).Within(0.5f));
+            Assert.That(avatarRoot.sizeDelta.y, Is.EqualTo(71.5f).Within(0.5f));
+
+            Transform frameTransform = avatarRoot.Find("FrameImage");
+            Assert.That(frameTransform, Is.Not.Null);
+
+            var healthBarRect = (RectTransform)avatarRoot.Find("HealthBarRoot");
+            Assert.That(healthBarRect, Is.Not.Null);
+            Assert.That(healthBarRect.parent, Is.EqualTo(avatarRoot));
+            Assert.That(healthBarRect.GetSiblingIndex(), Is.GreaterThan(frameTransform.GetSiblingIndex()));
+            Assert.That(healthBarRect.sizeDelta.x, Is.EqualTo(71.5f * 0.81f).Within(0.5f));
+            Assert.That(healthBarRect.sizeDelta.x, Is.LessThan(avatarRoot.sizeDelta.x));
+            Assert.That(healthBarRect.sizeDelta.y, Is.LessThan(healthBarRect.sizeDelta.x * 0.25f));
+            Assert.That(healthBarRect.sizeDelta.y, Is.LessThan(avatarRoot.sizeDelta.y * 0.25f));
+            Assert.That(healthBarRect.pivot, Is.EqualTo(new Vector2(0.5f, 0.5f)));
+            Assert.That(healthBarRect.anchorMin, Is.EqualTo(new Vector2(0.5f, 0f)));
+            Assert.That(healthBarRect.anchorMax, Is.EqualTo(new Vector2(0.5f, 0f)));
+            Assert.That(healthBarRect.anchoredPosition.y, Is.InRange(0f, 1.5f));
+            Assert.That(healthBarRect.anchoredPosition.y, Is.EqualTo(avatarRoot.sizeDelta.y * 0.004f).Within(0.05f));
+
+            var crownRect = (RectTransform)root.transform.Find("ParticipantSlot_0/CrownIcon");
+            Assert.That(crownRect, Is.Not.Null);
+            Assert.That(crownRect.sizeDelta.x, Is.EqualTo(36f).Within(0.5f));
+            Assert.That(crownRect.sizeDelta.y, Is.EqualTo(28f).Within(0.5f));
+
+            Assert.That(IsImageEnabled("ParticipantSlot_0/AvatarRoot/HealthBarRoot/HealthSegment_0"), Is.True);
+            Assert.That(IsImageEnabled("ParticipantSlot_0/AvatarRoot/HealthBarRoot/HealthSegment_1"), Is.True);
+            Assert.That(IsImageEnabled("ParticipantSlot_0/AvatarRoot/HealthBarRoot/HealthSegment_2"), Is.True);
+
+            Color fullColor = GetHealthSegmentColor(0, 0);
+            Color dimColor = GetHealthSegmentColor(0, 1);
+            Color brokenColor = GetHealthSegmentColor(0, 2);
+
+            Assert.That(fullColor.g, Is.GreaterThan(fullColor.r + 0.4f));
+            Assert.That(fullColor.g, Is.GreaterThan(fullColor.b + 0.3f));
+
+            float fullChroma = Mathf.Max(fullColor.r, Mathf.Max(fullColor.g, fullColor.b))
+                - Mathf.Min(fullColor.r, Mathf.Min(fullColor.g, fullColor.b));
+            float dimChroma = Mathf.Max(dimColor.r, Mathf.Max(dimColor.g, dimColor.b))
+                - Mathf.Min(dimColor.r, Mathf.Min(dimColor.g, dimColor.b));
+            Assert.That(dimColor.g, Is.GreaterThan(dimColor.r));
+            Assert.That(dimColor.g, Is.GreaterThan(dimColor.b));
+            Assert.That(dimChroma, Is.LessThan(0.2f));
+            Assert.That(dimChroma, Is.LessThan(fullChroma * 0.5f));
+
+            Assert.That(brokenColor.r, Is.GreaterThan(brokenColor.g + 0.4f));
+            Assert.That(brokenColor.r, Is.GreaterThan(brokenColor.b + 0.4f));
+
+            TargetInvocationException outOfRangeEx = Assert.Throws<TargetInvocationException>(
+                () => GetHealthSegmentColor(0, 3));
+            Assert.That(outOfRangeEx.InnerException, Is.TypeOf<ArgumentOutOfRangeException>());
         }
     }
 }

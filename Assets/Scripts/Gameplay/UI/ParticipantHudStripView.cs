@@ -13,7 +13,10 @@ namespace EachOneCoin.Gameplay
         private const int DefaultCapacity = 4;
         private const int CachedCoinStringCount = 100;
         private const int CachedRankStringCount = 16;
-        private const float ReferenceStripHeight = 148f;
+        private const float ReferenceStripHeight = 154f;
+        private const float HealthBarFrameThickness = 1.5f;
+        private const float HealthBarSegmentGap = 2f;
+        private const float HealthBarOuterRimOffsetRatio = 0.004f;
 
         private static readonly string[] CachedTwoDigitStrings = BuildTwoDigitStrings();
         private static readonly string[] CachedRankStrings = BuildRankStrings();
@@ -21,22 +24,25 @@ namespace EachOneCoin.Gameplay
         [Header("Layout (1920x1080 Reference Canvas)")]
         [SerializeField] private Vector2 bottomRightOffset = new Vector2(-12f, 388f);
         [SerializeField, Min(120f)] private float stripWidth = 368f;
-        [SerializeField, Min(80f)] private float stripHeight = 148f;
+        [SerializeField, Min(80f)] private float stripHeight = 154f;
         [SerializeField, Min(0f)] private float horizontalPadding = 4f;
         [SerializeField, Min(0f)] private float slotSpacing = 6f;
 
         [Header("Colors")]
-        [SerializeField] private Color cardBackgroundColor = new Color(0.075f, 0.098f, 0.137f, 0.82f);
-        [SerializeField] private Color localCardBackgroundColor = new Color(0.118f, 0.157f, 0.220f, 0.88f);
-        [SerializeField] private Color lostCardBackgroundColor = new Color(0.065f, 0.070f, 0.080f, 0.74f);
-        [SerializeField] private Color localHighlightBaseColor = new Color(1f, 0.953f, 0.784f, 0.85f);
         [SerializeField] private Color avatarBackdropColor = new Color(0.118f, 0.149f, 0.204f, 0.95f);
+        [SerializeField] private Color localFrameHighlightColor = new Color(1f, 0.98f, 0.88f, 1f);
         [SerializeField] private Color coinTextColor = new Color(1f, 0.969f, 0.878f, 1f);
         [SerializeField] private Color lostCoinTextColor = new Color(0.58f, 0.60f, 0.64f, 0.85f);
         [SerializeField] private Color medalRankTextColor = new Color(0.14f, 0.09f, 0.03f, 1f);
         [SerializeField] private Color wonFrameAccentColor = new Color(1f, 0.878f, 0.341f, 1f);
         [SerializeField] private Color respawningOverlayColor = new Color(0.05f, 0.07f, 0.11f, 0.42f);
         [SerializeField] private Color lostOverlayColor = new Color(0.08f, 0.08f, 0.10f, 0.48f);
+
+        [Header("Health Bar")]
+        [SerializeField] private Color healthBarFrameColor = new Color(0.075f, 0.090f, 0.122f, 1f);
+        [SerializeField] private Color healthFullColor = new Color(0.20f, 0.82f, 0.35f, 1f);
+        [SerializeField] private Color healthDimColor = new Color(0.56f, 0.66f, 0.59f, 1f);
+        [SerializeField] private Color healthBrokenColor = new Color(0.88f, 0.24f, 0.24f, 1f);
 
         [Header("Status & Animation")]
         [SerializeField, Range(0.2f, 1f)] private float respawningSlotAlpha = 0.64f;
@@ -49,8 +55,6 @@ namespace EachOneCoin.Gameplay
         {
             public RectTransform Root;
             public CanvasGroup CanvasGroup;
-            public Image LocalHighlightImage;
-            public Image CardBackgroundImage;
 
             public RectTransform CrownRect;
             public Image CrownImage;
@@ -72,9 +76,9 @@ namespace EachOneCoin.Gameplay
             public Image StatusOverlayImage;
             public Image FrameImage;
 
-            public RectTransform MiniHeartsContainer;
-            public readonly List<Image> MiniHeartImages = new List<Image>();
-            public readonly List<HeartVisualState> MiniHeartStates = new List<HeartVisualState>();
+            public RectTransform HealthBarRect;
+            public readonly List<Image> HealthSegmentImages = new List<Image>();
+            public readonly List<HeartVisualState> HealthSegmentStates = new List<HeartVisualState>();
 
             public bool HasAppliedState;
             public bool IsVisible;
@@ -104,6 +108,7 @@ namespace EachOneCoin.Gameplay
         private ParticipantSlot[] slots;
         private bool[] slotPopulated;
         private float cachedSlotWidth;
+        private float cachedAvatarSize;
         private bool initialized;
         private float crownAnimTime;
 
@@ -148,10 +153,11 @@ namespace EachOneCoin.Gameplay
             slots = new ParticipantSlot[targetCapacity];
             slotPopulated = new bool[targetCapacity];
             cachedSlotWidth = ComputeSlotWidth(targetCapacity);
+            cachedAvatarSize = ComputeAvatarSize(cachedSlotWidth);
 
             for (int i = 0; i < targetCapacity; i++)
             {
-                slots[i] = BuildSlot(i, cachedSlotWidth);
+                slots[i] = BuildSlot(i, cachedSlotWidth, cachedAvatarSize);
                 HideSlot(slots[i]);
             }
 
@@ -358,7 +364,7 @@ namespace EachOneCoin.Gameplay
                 throw new ArgumentOutOfRangeException(nameof(heartIndex));
             }
 
-            return slot.MiniHeartStates[heartIndex];
+            return slot.HealthSegmentStates[heartIndex];
         }
 
         public int GetMiniHeartCount(int slotIndex)
@@ -368,6 +374,22 @@ namespace EachOneCoin.Gameplay
                 return 0;
             }
             return slots[slotIndex].ActiveHeartCount;
+        }
+
+        public Color GetHealthSegmentColor(int slotIndex, int segmentIndex)
+        {
+            if (!IsValidSlotIndex(slotIndex))
+            {
+                throw new ArgumentOutOfRangeException(nameof(slotIndex));
+            }
+
+            ParticipantSlot slot = slots[slotIndex];
+            if (segmentIndex < 0 || segmentIndex >= slot.ActiveHeartCount)
+            {
+                throw new ArgumentOutOfRangeException(nameof(segmentIndex));
+            }
+
+            return slot.HealthSegmentImages[segmentIndex].color;
         }
 
         public string GetSlotCosmeticId(int index)
@@ -425,6 +447,20 @@ namespace EachOneCoin.Gameplay
             return Mathf.Max(24f, (innerWidth - totalGap) / safeCapacity);
         }
 
+        private float ComputeAvatarSize(float slotWidth)
+        {
+            float scaleY = stripHeight / ReferenceStripHeight;
+            return Mathf.Min(71.5f * scaleY, Mathf.Max(20f, slotWidth - 6f));
+        }
+
+        private Vector2 ComputeHealthBarSize(float slotWidth, float avatarSize)
+        {
+            float scaleY = stripHeight / ReferenceStripHeight;
+            float barWidth = Mathf.Max(16f, Mathf.Min(slotWidth - 8f, avatarSize * 0.81f));
+            float barHeight = Mathf.Max(6f, 11f * scaleY);
+            return new Vector2(barWidth, barHeight);
+        }
+
         private void LayoutSlots()
         {
             if (slots == null || slots.Length == 0)
@@ -433,11 +469,13 @@ namespace EachOneCoin.Gameplay
             }
 
             float newSlotWidth = ComputeSlotWidth(slots.Length);
-            bool widthChanged = Mathf.Abs(newSlotWidth - cachedSlotWidth) > 0.01f;
+            float newAvatarSize = ComputeAvatarSize(newSlotWidth);
+            bool sizeChanged = Mathf.Abs(newSlotWidth - cachedSlotWidth) > 0.01f
+                || Mathf.Abs(newAvatarSize - cachedAvatarSize) > 0.01f;
             cachedSlotWidth = newSlotWidth;
+            cachedAvatarSize = newAvatarSize;
 
-            float scaleY = stripHeight / ReferenceStripHeight;
-            float avatarSize = Mathf.Min(62f * scaleY, Mathf.Max(20f, newSlotWidth - 10f));
+            Vector2 barSize = ComputeHealthBarSize(newSlotWidth, newAvatarSize);
 
             for (int i = 0; i < slots.Length; i++)
             {
@@ -456,20 +494,26 @@ namespace EachOneCoin.Gameplay
 
                 if (slot.AvatarRoot != null)
                 {
-                    slot.AvatarRoot.sizeDelta = new Vector2(avatarSize, avatarSize);
+                    slot.AvatarRoot.sizeDelta = new Vector2(newAvatarSize, newAvatarSize);
                 }
 
-                if (widthChanged && slot.ActiveHeartCount > 0)
+                if (slot.HealthBarRect != null)
                 {
-                    LayoutMiniHearts(slot, slot.ActiveHeartCount);
+                    slot.HealthBarRect.pivot = new Vector2(0.5f, 0.5f);
+                    slot.HealthBarRect.anchoredPosition = new Vector2(0f, newAvatarSize * HealthBarOuterRimOffsetRatio);
+                    slot.HealthBarRect.sizeDelta = barSize;
+                }
+
+                if (sizeChanged && slot.ActiveHeartCount > 0)
+                {
+                    LayoutHealthSegments(slot, slot.ActiveHeartCount);
                 }
             }
         }
 
-        private ParticipantSlot BuildSlot(int index, float slotWidth)
+        private ParticipantSlot BuildSlot(int index, float slotWidth, float avatarSize)
         {
             float scaleY = stripHeight / ReferenceStripHeight;
-            Sprite panelSprite = icons.GetRoundedPanelSprite();
             Sprite circleMaskSprite = icons.GetCircleMaskSprite();
             Sprite circleFrameSprite = icons.GetCircleFrameSprite();
 
@@ -483,26 +527,15 @@ namespace EachOneCoin.Gameplay
             slot.CanvasGroup.interactable = false;
             slot.CanvasGroup.blocksRaycasts = false;
 
-            float cardTopInset = 20f * scaleY;
-
-            // Local player subtle bright border behind the card
-            slot.LocalHighlightImage = CreatePanelImage(slot.Root, "LocalHighlight", panelSprite, localHighlightBaseColor);
-            SetStretch(slot.LocalHighlightImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(-2f, -2f), new Vector2(2f, -(cardTopInset - 2f)));
-            slot.LocalHighlightImage.enabled = false;
-
-            // Card background enclosing Layers 2, 3, 4
-            slot.CardBackgroundImage = CreatePanelImage(slot.Root, "CardBackground", panelSprite, cardBackgroundColor);
-            SetStretch(slot.CardBackgroundImage.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, new Vector2(0f, -cardTopInset));
-
             // Layer 1: Leader Crown (topmost, directly above coin count)
             slot.CrownImage = CreateImage(slot.Root, "CrownIcon", icons.GetCrownSprite(), Color.white);
             slot.CrownRect = slot.CrownImage.rectTransform;
             slot.CrownRect.anchorMin = new Vector2(0.5f, 1f);
             slot.CrownRect.anchorMax = new Vector2(0.5f, 1f);
             slot.CrownRect.pivot = new Vector2(0.5f, 0.5f);
-            slot.CrownBaseY = -12f * scaleY;
+            slot.CrownBaseY = -15f * scaleY;
             slot.CrownRect.anchoredPosition = new Vector2(0f, slot.CrownBaseY);
-            slot.CrownRect.sizeDelta = new Vector2(24f * scaleY, 20f * scaleY);
+            slot.CrownRect.sizeDelta = new Vector2(36f * scaleY, 28f * scaleY);
             slot.CrownImage.gameObject.SetActive(false);
 
             // Layer 2: Coin count (not won) OR Medal + rank number (won)
@@ -512,8 +545,8 @@ namespace EachOneCoin.Gameplay
             metricRect.anchorMin = new Vector2(0f, 1f);
             metricRect.anchorMax = new Vector2(1f, 1f);
             metricRect.pivot = new Vector2(0.5f, 1f);
-            metricRect.anchoredPosition = new Vector2(0f, -24f * scaleY);
-            metricRect.sizeDelta = new Vector2(0f, 30f * scaleY);
+            metricRect.anchoredPosition = new Vector2(0f, -31f * scaleY);
+            metricRect.sizeDelta = new Vector2(0f, 28f * scaleY);
 
             // Layer 2a: Coin Group
             var coinGroupObj = new GameObject("CoinGroup", typeof(RectTransform));
@@ -542,8 +575,12 @@ namespace EachOneCoin.Gameplay
             coinTextRect.anchorMin = new Vector2(0.5f, 0.5f);
             coinTextRect.anchorMax = new Vector2(0.5f, 0.5f);
             coinTextRect.pivot = new Vector2(0.5f, 0.5f);
-            coinTextRect.sizeDelta = new Vector2(38f, 28f * scaleY);
+            coinTextRect.sizeDelta = new Vector2(38f, 26f * scaleY);
             coinTextRect.anchoredPosition = new Vector2(15f, 0f);
+
+            var coinShadow = slot.CoinText.gameObject.AddComponent<Shadow>();
+            coinShadow.effectColor = new Color(0f, 0f, 0f, 0.72f);
+            coinShadow.effectDistance = new Vector2(1f, -1f);
 
             // Layer 2b: Medal Group (Gold / Silver / Bronze + centered rank digit)
             var medalGroupObj = new GameObject("MedalGroup", typeof(RectTransform));
@@ -551,7 +588,7 @@ namespace EachOneCoin.Gameplay
             slot.MedalGroup.SetParent(metricRect, false);
             SetStretch(slot.MedalGroup, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
-            float medalSize = 30f * scaleY;
+            float medalSize = 28f * scaleY;
             slot.MedalIconImage = CreateImage(slot.MedalGroup, "MedalIcon", icons.GetMedalSprite(1), Color.white);
             RectTransform medalIconRect = slot.MedalIconImage.rectTransform;
             medalIconRect.anchorMin = new Vector2(0.5f, 0.5f);
@@ -577,14 +614,13 @@ namespace EachOneCoin.Gameplay
             slot.MedalGroup.gameObject.SetActive(false);
 
             // Layer 3: Circular Avatar Frame (reserved cosmetic overlay pool)
-            float avatarSize = Mathf.Min(62f * scaleY, Mathf.Max(20f, slotWidth - 10f));
             var avatarObj = new GameObject("AvatarRoot", typeof(RectTransform));
             slot.AvatarRoot = (RectTransform)avatarObj.transform;
             slot.AvatarRoot.SetParent(slot.Root, false);
             slot.AvatarRoot.anchorMin = new Vector2(0.5f, 1f);
             slot.AvatarRoot.anchorMax = new Vector2(0.5f, 1f);
             slot.AvatarRoot.pivot = new Vector2(0.5f, 0.5f);
-            slot.AvatarRoot.anchoredPosition = new Vector2(0f, -87f * scaleY);
+            slot.AvatarRoot.anchoredPosition = new Vector2(0f, -100f * scaleY);
             slot.AvatarRoot.sizeDelta = new Vector2(avatarSize, avatarSize);
 
             var maskObj = new GameObject("AvatarMask", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Mask));
@@ -600,7 +636,7 @@ namespace EachOneCoin.Gameplay
             maskComponent.showMaskGraphic = true;
 
             slot.BasePortraitImage = CreateImage(maskRect, "BasePortrait", icons.GetDefaultPortraitSprite(), Color.white);
-            SetStretch(slot.BasePortraitImage.rectTransform, new Vector2(0.06f, 0.02f), new Vector2(0.94f, 0.94f), Vector2.zero, Vector2.zero);
+            SetStretch(slot.BasePortraitImage.rectTransform, new Vector2(0.04f, 0.00f), new Vector2(0.96f, 0.96f), Vector2.zero, Vector2.zero);
 
             var overlayObj = new GameObject("OverlayContainer", typeof(RectTransform));
             slot.OverlayContainer = (RectTransform)overlayObj.transform;
@@ -614,15 +650,14 @@ namespace EachOneCoin.Gameplay
             slot.FrameImage = CreateImage(slot.AvatarRoot, "FrameImage", circleFrameSprite, Color.white);
             SetStretch(slot.FrameImage.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
 
-            // Layer 4: Mini Health Bar (directly below avatar)
-            var heartsObj = new GameObject("MiniHeartsContainer", typeof(RectTransform));
-            slot.MiniHeartsContainer = (RectTransform)heartsObj.transform;
-            slot.MiniHeartsContainer.SetParent(slot.Root, false);
-            slot.MiniHeartsContainer.anchorMin = new Vector2(0f, 1f);
-            slot.MiniHeartsContainer.anchorMax = new Vector2(1f, 1f);
-            slot.MiniHeartsContainer.pivot = new Vector2(0.5f, 0.5f);
-            slot.MiniHeartsContainer.anchoredPosition = new Vector2(0f, -132f * scaleY);
-            slot.MiniHeartsContainer.sizeDelta = new Vector2(0f, 22f * scaleY);
+            // Layer 4: Segmented Rectangular Health Bar centered on the outer bottom rim of FrameImage
+            Image healthBarBg = CreateSolidImage(slot.AvatarRoot, "HealthBarRoot", healthBarFrameColor);
+            slot.HealthBarRect = healthBarBg.rectTransform;
+            slot.HealthBarRect.anchorMin = new Vector2(0.5f, 0f);
+            slot.HealthBarRect.anchorMax = new Vector2(0.5f, 0f);
+            slot.HealthBarRect.pivot = new Vector2(0.5f, 0.5f);
+            slot.HealthBarRect.anchoredPosition = new Vector2(0f, avatarSize * HealthBarOuterRimOffsetRatio);
+            slot.HealthBarRect.sizeDelta = ComputeHealthBarSize(slotWidth, avatarSize);
 
             return slot;
         }
@@ -699,10 +734,10 @@ namespace EachOneCoin.Gameplay
             // Layer 3: Avatar appearance & cosmetic overlays
             ApplyAvatarAppearance(slot, snapshot, firstOrShown, statusChanged, localChanged, colorChanged);
 
-            // Layer 4: Mini health bar
-            ApplyMiniHealth(slot, snapshot, firstOrShown, statusChanged);
+            // Layer 4: Embedded segmented rectangular health bar
+            ApplyHealthSegments(slot, snapshot, firstOrShown);
 
-            // Card / local highlight / overall status feedback
+            // Overall status feedback (CanvasGroup alpha, avatar status overlay, coin dim)
             if (firstOrShown || statusChanged || localChanged || colorChanged)
             {
                 ApplySlotStatusVisuals(slot, snapshot);
@@ -805,70 +840,62 @@ namespace EachOneCoin.Gameplay
             slot.ActiveOverlayCount = activeCount;
         }
 
-        private void ApplyMiniHealth(
+        private void ApplyHealthSegments(
             ParticipantSlot slot,
             ParticipantHudSnapshot snapshot,
-            bool force,
-            bool statusChanged)
+            bool force)
         {
-            int totalHearts = Mathf.Max(1, Mathf.Max(snapshot.InitialMaxHealth, snapshot.MaxHealth));
-            int clampedMax = Mathf.Clamp(snapshot.MaxHealth, 0, totalHearts);
+            int totalSegments = Mathf.Max(1, Mathf.Max(snapshot.InitialMaxHealth, snapshot.MaxHealth));
+            int clampedMax = Mathf.Clamp(snapshot.MaxHealth, 0, totalSegments);
             int clampedHealth = Mathf.Clamp(snapshot.Health, 0, clampedMax);
 
-            bool countChanged = force || slot.ActiveHeartCount != totalHearts;
+            bool countChanged = force || slot.ActiveHeartCount != totalSegments;
             bool valuesChanged = countChanged
                 || slot.LastHealth != clampedHealth
                 || slot.LastMaxHealth != clampedMax
-                || slot.LastInitialMaxHealth != totalHearts;
+                || slot.LastInitialMaxHealth != totalSegments;
 
-            if (!valuesChanged && !statusChanged)
+            if (!valuesChanged)
             {
                 return;
             }
 
             slot.LastHealth = clampedHealth;
             slot.LastMaxHealth = clampedMax;
-            slot.LastInitialMaxHealth = totalHearts;
+            slot.LastInitialMaxHealth = totalSegments;
 
-            EnsureMiniHeartPool(slot, totalHearts);
+            EnsureHealthSegmentPool(slot, totalSegments);
 
             if (countChanged)
             {
-                slot.ActiveHeartCount = totalHearts;
-                LayoutMiniHearts(slot, totalHearts);
+                slot.ActiveHeartCount = totalSegments;
+                LayoutHealthSegments(slot, totalSegments);
             }
 
-            Color heartTint = ResolveMiniHeartTint(snapshot.Status);
-
-            for (int i = 0; i < totalHearts; i++)
+            for (int i = 0; i < totalSegments; i++)
             {
                 HeartVisualState targetState = i < clampedHealth
                     ? HeartVisualState.Full
                     : (i < clampedMax ? HeartVisualState.Dim : HeartVisualState.Broken);
 
-                Image heartImg = slot.MiniHeartImages[i];
-                bool stateChanged = countChanged || slot.MiniHeartStates[i] != targetState;
-                slot.MiniHeartStates[i] = targetState;
+                Image segmentImg = slot.HealthSegmentImages[i];
+                slot.HealthSegmentStates[i] = targetState;
 
-                if (!heartImg.enabled)
+                if (!segmentImg.enabled)
                 {
-                    heartImg.enabled = true;
+                    segmentImg.enabled = true;
                 }
 
-                if (stateChanged || heartImg.sprite == null)
+                Color segmentColor = ResolveHealthSegmentColor(targetState);
+                if (!ColorsApproximatelyEqual(segmentImg.color, segmentColor))
                 {
-                    heartImg.sprite = icons.GetMiniHeartSprite(targetState);
-                }
-
-                if (!ColorsApproximatelyEqual(heartImg.color, heartTint))
-                {
-                    heartImg.color = heartTint;
+                    segmentImg.color = segmentColor;
                 }
             }
 
-            for (int i = totalHearts; i < slot.MiniHeartImages.Count; i++)
+            for (int i = totalSegments; i < slot.HealthSegmentImages.Count; i++)
             {
-                Image unused = slot.MiniHeartImages[i];
+                Image unused = slot.HealthSegmentImages[i];
                 if (unused.enabled)
                 {
                     unused.enabled = false;
@@ -887,26 +914,6 @@ namespace EachOneCoin.Gameplay
                 slot.CanvasGroup.alpha = isRespawning
                     ? respawningSlotAlpha
                     : (isLost ? lostSlotAlpha : 1f);
-            }
-
-            if (slot.CardBackgroundImage != null)
-            {
-                slot.CardBackgroundImage.color = isLost
-                    ? lostCardBackgroundColor
-                    : (snapshot.IsLocal ? localCardBackgroundColor : cardBackgroundColor);
-            }
-
-            if (slot.LocalHighlightImage != null)
-            {
-                bool showHighlight = snapshot.IsLocal && !isLost;
-                slot.LocalHighlightImage.enabled = showHighlight;
-                if (showHighlight)
-                {
-                    Color accent = snapshot.Color.a > 0.001f ? snapshot.Color : localHighlightBaseColor;
-                    Color rimColor = Color.Lerp(localHighlightBaseColor, accent, 0.28f);
-                    rimColor.a = isRespawning ? localHighlightBaseColor.a * 0.65f : localHighlightBaseColor.a;
-                    slot.LocalHighlightImage.color = rimColor;
-                }
             }
 
             if (slot.StatusOverlayImage != null)
@@ -976,44 +983,41 @@ namespace EachOneCoin.Gameplay
             return slot.OverlayImages[index];
         }
 
-        private void EnsureMiniHeartPool(ParticipantSlot slot, int requiredCount)
+        private void EnsureHealthSegmentPool(ParticipantSlot slot, int requiredCount)
         {
-            while (slot.MiniHeartImages.Count < requiredCount)
+            while (slot.HealthSegmentImages.Count < requiredCount)
             {
-                int newIdx = slot.MiniHeartImages.Count;
-                Image heartImg = CreateImage(slot.MiniHeartsContainer, "MiniHeart_" + newIdx, null, Color.white);
-                RectTransform rect = heartImg.rectTransform;
-                rect.anchorMin = new Vector2(0.5f, 0.5f);
-                rect.anchorMax = new Vector2(0.5f, 0.5f);
-                rect.pivot = new Vector2(0.5f, 0.5f);
-                heartImg.enabled = false;
-                slot.MiniHeartImages.Add(heartImg);
-                slot.MiniHeartStates.Add(HeartVisualState.Full);
+                int newIdx = slot.HealthSegmentImages.Count;
+                Image segmentImg = CreateSolidImage(slot.HealthBarRect, "HealthSegment_" + newIdx, healthFullColor);
+                RectTransform rect = segmentImg.rectTransform;
+                rect.anchorMin = new Vector2(0f, 0.5f);
+                rect.anchorMax = new Vector2(0f, 0.5f);
+                rect.pivot = new Vector2(0f, 0.5f);
+                segmentImg.enabled = false;
+                slot.HealthSegmentImages.Add(segmentImg);
+                slot.HealthSegmentStates.Add(HeartVisualState.Full);
             }
         }
 
-        private void LayoutMiniHearts(ParticipantSlot slot, int count)
+        private void LayoutHealthSegments(ParticipantSlot slot, int count)
         {
-            if (count <= 0)
+            if (count <= 0 || slot.HealthBarRect == null)
             {
                 return;
             }
 
-            float scaleY = stripHeight / ReferenceStripHeight;
-            float maxRowWidth = Mathf.Max(20f, cachedSlotWidth - 8f);
-            float spacing = count > 4 ? 2f : 3f;
-            float targetSize = 16f * scaleY;
-            float maxByWidth = (maxRowWidth - spacing * Mathf.Max(0, count - 1)) / count;
-            float heartSize = Mathf.Clamp(Mathf.Min(targetSize, maxByWidth), 6f, 20f * scaleY);
-
-            float totalWidth = count * heartSize + Mathf.Max(0, count - 1) * spacing;
-            float startX = -totalWidth * 0.5f + heartSize * 0.5f;
+            Vector2 barSize = slot.HealthBarRect.sizeDelta;
+            float border = HealthBarFrameThickness;
+            float innerWidth = Mathf.Max(4f, barSize.x - border * 2f);
+            float innerHeight = Mathf.Max(2f, barSize.y - border * 2f);
+            float gap = count > 1 ? Mathf.Min(HealthBarSegmentGap, innerWidth / (count * 3f)) : 0f;
+            float segmentWidth = Mathf.Max(1f, (innerWidth - gap * Mathf.Max(0, count - 1)) / count);
 
             for (int i = 0; i < count; i++)
             {
-                RectTransform rect = slot.MiniHeartImages[i].rectTransform;
-                rect.sizeDelta = new Vector2(heartSize, heartSize);
-                rect.anchoredPosition = new Vector2(startX + i * (heartSize + spacing), 0f);
+                RectTransform rect = slot.HealthSegmentImages[i].rectTransform;
+                rect.sizeDelta = new Vector2(segmentWidth, innerHeight);
+                rect.anchoredPosition = new Vector2(border + i * (segmentWidth + gap), 0f);
             }
         }
 
@@ -1083,13 +1087,10 @@ namespace EachOneCoin.Gameplay
             initialized = false;
         }
 
-        private Image CreatePanelImage(RectTransform parent, string objectName, Sprite panelSprite, Color color)
+        private Image CreateSolidImage(RectTransform parent, string objectName, Color color)
         {
-            Image img = CreateImage(parent, objectName, panelSprite, color);
+            Image img = CreateImage(parent, objectName, null, color);
             img.preserveAspect = false;
-            img.type = panelSprite != null && panelSprite.border.sqrMagnitude > 0.01f
-                ? Image.Type.Sliced
-                : Image.Type.Simple;
             return img;
         }
 
@@ -1150,6 +1151,19 @@ namespace EachOneCoin.Gameplay
             rect.offsetMax = offsetMax;
         }
 
+        private Color ResolveHealthSegmentColor(HeartVisualState state)
+        {
+            switch (state)
+            {
+                case HeartVisualState.Full:
+                    return healthFullColor;
+                case HeartVisualState.Dim:
+                    return healthDimColor;
+                default:
+                    return healthBrokenColor;
+            }
+        }
+
         private Color ResolveFrameColor(Color accent, ParticipantStatus status, bool isLocal)
         {
             if (status == ParticipantStatus.Lost)
@@ -1163,12 +1177,12 @@ namespace EachOneCoin.Gameplay
             }
 
             Color baseFrame = isLocal
-                ? Color.Lerp(Color.white, accent, 0.38f)
-                : Color.Lerp(Color.white, accent, 0.55f);
+                ? Color.Lerp(localFrameHighlightColor, accent, 0.24f)
+                : Color.Lerp(new Color(0.84f, 0.88f, 0.93f, 1f), accent, 0.62f);
 
             if (status == ParticipantStatus.Respawning)
             {
-                return DarkenColor(baseFrame, 0.65f);
+                return DarkenColor(baseFrame, 0.68f);
             }
 
             return baseFrame;
@@ -1199,21 +1213,6 @@ namespace EachOneCoin.Gameplay
             if (status == ParticipantStatus.Respawning)
             {
                 return new Color(0.72f, 0.74f, 0.78f, 0.90f);
-            }
-
-            return Color.white;
-        }
-
-        private static Color ResolveMiniHeartTint(ParticipantStatus status)
-        {
-            if (status == ParticipantStatus.Lost)
-            {
-                return new Color(0.52f, 0.52f, 0.54f, 0.80f);
-            }
-
-            if (status == ParticipantStatus.Respawning)
-            {
-                return new Color(0.78f, 0.78f, 0.82f, 0.88f);
             }
 
             return Color.white;

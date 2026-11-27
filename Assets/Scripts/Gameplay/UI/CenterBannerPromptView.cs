@@ -30,7 +30,6 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Range(0f, 24f)] private float exitSlideOffsetY = 6f;
 
         [Header("Colors")]
-        [SerializeField] private Color cardBackgroundColor = new Color(0.075f, 0.098f, 0.141f, 0.88f);
         [SerializeField] private Color titleTextColor = new Color(1f, 0.980f, 0.922f, 1f);
         [SerializeField] private Color subtitleTextColor = new Color(0.84f, 0.89f, 0.96f, 0.94f);
         [SerializeField] private Color mineWarningAccentColor = new Color(1f, 0.84f, 0.28f, 1f);
@@ -48,9 +47,6 @@ namespace EachOneCoin.Gameplay
         private CanvasGroup canvasGroup;
         private RectTransform contentRoot;
         private RectTransform bannerCardRect;
-        private Image cardBackgroundImage;
-        private Image accentGlowImage;
-        private Image accentTopBarImage;
         private Image inlineIconImage;
         private TMP_Text titleText;
         private TMP_Text subtitleText;
@@ -99,7 +95,6 @@ namespace EachOneCoin.Gameplay
             canvasGroup.blocksRaycasts = false;
 
             if (icons == null) icons = new HudProceduralIcons();
-            Sprite panelSprite = icons.GetRoundedPanelSprite();
 
             contentRoot = CreateContainer(rootRect, "ContentRoot");
             SetStretch(contentRoot, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
@@ -113,23 +108,6 @@ namespace EachOneCoin.Gameplay
             bannerCardRect.pivot = new Vector2(0.5f, 1f);
             bannerCardRect.anchoredPosition = Vector2.zero;
             bannerCardRect.sizeDelta = new Vector2(bannerWidth, singleLineCardHeight);
-
-            cardBackgroundImage = CreatePanelImage(bannerCardRect, "CardBackground", panelSprite, cardBackgroundColor);
-            SetStretch(cardBackgroundImage.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-
-            accentGlowImage = CreatePanelImage(
-                bannerCardRect,
-                "AccentGlow",
-                panelSprite,
-                new Color(mineWarningAccentColor.r, mineWarningAccentColor.g, mineWarningAccentColor.b, 0.14f));
-            SetStretch(accentGlowImage.rectTransform, Vector2.zero, Vector2.one, new Vector2(3f, 3f), new Vector2(-3f, -3f));
-
-            accentTopBarImage = CreateSolidImage(bannerCardRect, "AccentTopBar", mineWarningAccentColor);
-            accentTopBarImage.rectTransform.anchorMin = new Vector2(0f, 1f);
-            accentTopBarImage.rectTransform.anchorMax = new Vector2(1f, 1f);
-            accentTopBarImage.rectTransform.pivot = new Vector2(0.5f, 1f);
-            accentTopBarImage.rectTransform.offsetMin = new Vector2(16f, -3.5f);
-            accentTopBarImage.rectTransform.offsetMax = new Vector2(-16f, 0f);
 
             inlineIconImage = CreateIconImage(bannerCardRect, "InlineIcon", null, new Vector2(smallIconSize, smallIconSize), Color.white);
             inlineIconImage.rectTransform.anchorMin = new Vector2(0f, 0.5f);
@@ -505,16 +483,6 @@ namespace EachOneCoin.Gameplay
                 bannerCardRect.sizeDelta = new Vector2(bannerWidth, cardHeight);
             }
 
-            Color accent = request.AccentColor;
-            if (accentTopBarImage != null)
-            {
-                accentTopBarImage.color = new Color(accent.r, accent.g, accent.b, 0.96f);
-            }
-            if (accentGlowImage != null)
-            {
-                accentGlowImage.color = new Color(accent.r, accent.g, accent.b, 0.14f);
-            }
-
             if (inlineIconImage != null)
             {
                 inlineIconImage.sprite = showInlineIcon ? request.Icon : null;
@@ -807,30 +775,6 @@ namespace EachOneCoin.Gameplay
             return rt;
         }
 
-        private static Image CreatePanelImage(RectTransform parent, string name, Sprite sprite, Color color)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            var rt = (RectTransform)go.transform;
-            rt.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.sprite = sprite;
-            img.type = sprite != null && sprite.border.sqrMagnitude > 0.01f ? Image.Type.Sliced : Image.Type.Simple;
-            img.color = color;
-            img.raycastTarget = false;
-            return img;
-        }
-
-        private static Image CreateSolidImage(RectTransform parent, string name, Color color)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            var rt = (RectTransform)go.transform;
-            rt.SetParent(parent, false);
-            var img = go.GetComponent<Image>();
-            img.color = color;
-            img.raycastTarget = false;
-            return img;
-        }
-
         private static Image CreateIconImage(RectTransform parent, string name, Sprite sprite, Vector2 size, Color color)
         {
             var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
@@ -885,6 +829,9 @@ namespace EachOneCoin.Gameplay
             text.enableWordWrapping = false;
             text.overflowMode = TextOverflowModes.Overflow;
             text.raycastTarget = false;
+            var shadow = go.AddComponent<Shadow>();
+            shadow.effectColor = new Color(0f, 0f, 0f, 0.70f);
+            shadow.effectDistance = new Vector2(1.5f, -1.5f);
             return text;
         }
 

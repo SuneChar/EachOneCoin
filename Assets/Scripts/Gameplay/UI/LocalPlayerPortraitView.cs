@@ -10,11 +10,11 @@ namespace EachOneCoin.Gameplay
     public sealed class LocalPlayerPortraitView : MonoBehaviour
     {
         [Header("Layout (1920x1080 Reference Canvas)")]
-        [SerializeField] private Vector2 bottomLeftOffset = new Vector2(-12f, -12f);
-        [SerializeField, Min(48f)] private float portraitSize = 216f;
+        [SerializeField] private Vector2 bottomLeftOffset = new Vector2(-24f, -24f);
+        [SerializeField, Min(48f)] private float portraitSize = 378f;
         [SerializeField, Min(0f)] private float maskInset = 2f;
-        [SerializeField] private Vector2 portraitAnchorMin = new Vector2(0.06f, 0.02f);
-        [SerializeField] private Vector2 portraitAnchorMax = new Vector2(0.94f, 0.90f);
+        [SerializeField] private Vector2 portraitAnchorMin = new Vector2(0.04f, 0.00f);
+        [SerializeField] private Vector2 portraitAnchorMax = new Vector2(0.96f, 0.96f);
 
         [Header("Colors")]
         [SerializeField] private Color circleBackgroundColor = new Color(0.102f, 0.129f, 0.184f, 0.92f);

@@ -51,7 +51,6 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Color countdownWarningBrightColor = new Color(1f, 0.95f, 0.64f, 1f);
         [SerializeField] private Color connectedDotColor = new Color(0.24f, 0.92f, 0.46f, 1f);
         [SerializeField] private Color disconnectedDotColor = new Color(1f, 0.42f, 0.24f, 1f);
-        [SerializeField] private Color warningGlowColor = new Color(1f, 0.80f, 0.22f, 1f);
 
         [Header("Pulse Animation")]
         [SerializeField, Min(1)] private int dangerTimeThreshold = 10;
@@ -59,11 +58,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Range(0f, 0.25f)] private float timePulseScaleAmplitude = 0.08f;
         [SerializeField, Min(0.5f)] private float warningPulseSpeed = 6.5f;
         [SerializeField, Range(0f, 0.20f)] private float warningPulseScaleAmplitude = 0.06f;
-        [SerializeField, Range(0f, 0.5f)] private float warningGlowMinAlpha = 0.08f;
-        [SerializeField, Range(0f, 0.6f)] private float warningGlowMaxAlpha = 0.22f;
 
         private HudProceduralIcons icons;
-        private Image warningGlowImage;
         private Image connectionDotImage;
         private TMP_Text timeCaptionText;
         private TMP_Text timeValueText;
@@ -113,10 +109,6 @@ namespace EachOneCoin.Gameplay
 
             var backgroundImage = CreatePanelImage(rectTransform, "Background", panelSprite, backgroundColor);
             SetStretch(backgroundImage.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-
-            warningGlowImage = CreatePanelImage(rectTransform, "WarningGlow", panelSprite, new Color(warningGlowColor.r, warningGlowColor.g, warningGlowColor.b, 0f));
-            SetStretch(warningGlowImage.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 0.48f), new Vector2(4f, 4f), new Vector2(-4f, -2f));
-            warningGlowImage.enabled = false;
 
             var upperRect = CreateContainer(rectTransform, "UpperSection");
             SetStretch(upperRect, new Vector2(0f, 0.48f), Vector2.one, new Vector2(12f, 2f), new Vector2(-12f, -6f));
@@ -350,13 +342,6 @@ namespace EachOneCoin.Gameplay
         private void ApplyWarningPulseVisuals()
         {
             float breath = 0.5f - 0.5f * Mathf.Cos(warningPulsePhase);
-            if (warningGlowImage != null)
-            {
-                warningGlowImage.enabled = true;
-                float glowAlpha = Mathf.Lerp(warningGlowMinAlpha, warningGlowMaxAlpha, breath);
-                warningGlowImage.color = new Color(warningGlowColor.r, warningGlowColor.g, warningGlowColor.b, glowAlpha);
-            }
-
             if (countdownValueText != null)
             {
                 float cScale = 1f + warningPulseScaleAmplitude * breath;
@@ -419,11 +404,6 @@ namespace EachOneCoin.Gameplay
             {
                 countdownValueText.color = mode == ScheduleMode.NoUpcoming ? countdownExhaustedColor : countdownNormalColor;
                 countdownValueText.rectTransform.localScale = Vector3.one;
-            }
-
-            if (warningGlowImage != null)
-            {
-                warningGlowImage.enabled = false;
             }
         }
 

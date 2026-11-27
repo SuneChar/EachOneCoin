@@ -482,60 +482,152 @@ namespace EachOneCoin.Gameplay
 
         private static Color EvaluateCrownPixel(float u, float v, float invSize)
         {
-            float aa = 1.25f * invSize;
+            float aa = 1.15f * invSize;
             var p = new Vector2(u, v);
 
-            float bandSdf = SdfRoundedBox(p, new Vector2(0.50f, 0.245f), new Vector2(0.31f, 0.072f), 0.032f);
-            float leftSpire = SdfTriangle(p, new Vector2(0.19f, 0.27f), new Vector2(0.46f, 0.27f), new Vector2(0.16f, 0.70f));
-            float centerSpire = SdfTriangle(p, new Vector2(0.26f, 0.27f), new Vector2(0.74f, 0.27f), new Vector2(0.50f, 0.77f));
-            float rightSpire = SdfTriangle(p, new Vector2(0.54f, 0.27f), new Vector2(0.81f, 0.27f), new Vector2(0.84f, 0.70f));
+            // Thick rounded royal base band (~0.16 height, ~0.73 width)
+            float bandSdf = SdfRoundedBox(p, new Vector2(0.50f, 0.220f), new Vector2(0.365f, 0.080f), 0.044f);
 
-            float orbLeft = SdfCircle(p, new Vector2(0.155f, 0.735f), 0.048f);
-            float orbCenter = SdfCircle(p, new Vector2(0.50f, 0.815f), 0.056f);
-            float orbRight = SdfCircle(p, new Vector2(0.845f, 0.735f), 0.048f);
+            // Full-bodied lower waist inset inside outer wing walls so outer flanks stay clean
+            float waistSdf = SdfConvexQuad(
+                p,
+                new Vector2(0.165f, 0.23f),
+                new Vector2(0.835f, 0.23f),
+                new Vector2(0.815f, 0.445f),
+                new Vector2(0.185f, 0.445f));
 
-            float bodySdf = Mathf.Min(bandSdf, Mathf.Min(leftSpire, Mathf.Min(centerSpire, rightSpire)));
-            float crownSdf = Mathf.Min(bodySdf, Mathf.Min(orbLeft, Mathf.Min(orbCenter, orbRight)));
+            // Wide outward-flaring wing peaks + broad taller central peak
+            float leftPeakSdf = SdfConvexQuad(
+                p,
+                new Vector2(0.138f, 0.24f),
+                new Vector2(0.355f, 0.24f),
+                new Vector2(0.242f, 0.655f),
+                new Vector2(0.098f, 0.640f));
+            float centerPeakSdf = SdfConvexQuad(
+                p,
+                new Vector2(0.315f, 0.24f),
+                new Vector2(0.685f, 0.24f),
+                new Vector2(0.574f, 0.725f),
+                new Vector2(0.426f, 0.725f));
+            float rightPeakSdf = SdfConvexQuad(
+                p,
+                new Vector2(0.645f, 0.24f),
+                new Vector2(0.862f, 0.24f),
+                new Vector2(0.902f, 0.640f),
+                new Vector2(0.758f, 0.655f));
 
-            float outlineAlpha = Coverage(crownSdf - 0.024f, aa);
+            float peaksSdf = Mathf.Min(leftPeakSdf, Mathf.Min(centerPeakSdf, rightPeakSdf));
+            float bodyUpperSdf = SmoothMin(waistSdf, peaksSdf, 0.055f);
+            float bodySdf = Mathf.Min(bandSdf, bodyUpperSdf);
+
+            // Three large chunky top gold orbs (center orb slightly larger)
+            float orbLeftSdf = SdfCircle(p, new Vector2(0.162f, 0.678f), 0.074f);
+            float orbCenterSdf = SdfCircle(p, new Vector2(0.500f, 0.762f), 0.082f);
+            float orbRightSdf = SdfCircle(p, new Vector2(0.838f, 0.678f), 0.074f);
+
+            float orbsSdf = Mathf.Min(orbLeftSdf, Mathf.Min(orbCenterSdf, orbRightSdf));
+            float crownSdf = SmoothMin(bodySdf, orbsSdf, 0.018f);
+
+            // Bold dark brown-gold outer outline (#4A2504, thickness 0.044)
+            float outlineAlpha = Coverage(crownSdf - 0.044f, aa);
             if (outlineAlpha <= 0f) return Color.clear;
 
-            Color outlineCol = new Color(0.48f, 0.26f, 0.03f, 1f);
-            float verticalT = SmoothStep(0.18f, 0.84f, v);
-            float centerHighlight = 1f - Mathf.Clamp01(Mathf.Abs(u - 0.5f) * 1.45f);
-            Color goldCol = Color.Lerp(
-                new Color(0.86f, 0.53f, 0.06f, 1f),
-                new Color(1.00f, 0.93f, 0.48f, 1f),
-                Mathf.Clamp01(verticalT * 0.78f + centerHighlight * 0.28f));
+            float verticalT = SmoothStep(0.14f, 0.83f, v);
+            float centerGlow = 1f - Mathf.Clamp01(Mathf.Abs(u - 0.50f) * 1.32f);
+            float goldT = Mathf.Clamp01(verticalT * 0.72f + centerGlow * 0.34f);
 
-            // Slightly brighter sheen on the pearl tip orbs
-            float orbsSdf = Mathf.Min(orbLeft, Mathf.Min(orbCenter, orbRight));
+            Color lowGold = new Color(0.86f, 0.49f, 0.04f, 1f);
+            Color midGold = new Color(1.00f, 0.79f, 0.15f, 1f);
+            Color hiGold = new Color(1.00f, 0.94f, 0.49f, 1f);
+            Color goldCol = goldT < 0.5f
+                ? Color.Lerp(lowGold, midGold, goldT * 2f)
+                : Color.Lerp(midGold, hiGold, (goldT - 0.5f) * 2f);
+
+            float topGloss = SmoothStep(0.44f, 0.76f, v) * (1f - Mathf.Clamp01(Mathf.Abs(u - 0.46f) * 1.55f)) * 0.22f;
+            goldCol = Color.Lerp(goldCol, new Color(1.00f, 0.98f, 0.78f, 1f), topGloss);
+
+            float innerBevel = SmoothStep(-0.042f, 0.0f, crownSdf) * SmoothStep(0.25f, 0.85f, u - v * 0.35f + 0.35f) * 0.25f;
+            goldCol = Color.Lerp(goldCol, new Color(0.68f, 0.36f, 0.03f, 1f), innerBevel);
+
+            float orbNeckShadow = Mathf.Min(
+                SdfCircle(p, new Vector2(0.165f, 0.660f), 0.078f),
+                Mathf.Min(
+                    SdfCircle(p, new Vector2(0.500f, 0.742f), 0.086f),
+                    SdfCircle(p, new Vector2(0.835f, 0.660f), 0.078f)));
             float orbMask = Coverage(orbsSdf, aa);
-            goldCol = Color.Lerp(goldCol, new Color(1.00f, 0.96f, 0.74f, 1f), orbMask * 0.35f);
+            float neckMask = Coverage(orbNeckShadow, aa * 2.5f) * (1f - orbMask);
+            goldCol = Color.Lerp(goldCol, new Color(0.72f, 0.39f, 0.03f, 1f), neckMask * 0.40f);
 
+            goldCol = Color.Lerp(goldCol, new Color(1.00f, 0.93f, 0.58f, 1f), orbMask * 0.18f);
+
+            float orbSpec = Mathf.Min(
+                SdfCircle(p, new Vector2(0.140f, 0.702f), 0.025f),
+                Mathf.Min(
+                    SdfCircle(p, new Vector2(0.474f, 0.789f), 0.029f),
+                    SdfCircle(p, new Vector2(0.816f, 0.702f), 0.025f)));
+            float orbSpecMask = Coverage(orbSpec, aa * 2.2f) * orbMask;
+            goldCol = Color.Lerp(goldCol, new Color(1.00f, 0.99f, 0.86f, 1f), orbSpecMask * 0.85f);
+
+            Color outlineCol = new Color(74f / 255f, 37f / 255f, 4f / 255f, 1f);
             float fillMask = Coverage(crownSdf, aa);
             Color col = Color.Lerp(outlineCol, goldCol, fillMask);
 
-            // Base band divider stripe
             if (fillMask > 0f)
             {
-                float stripeSdf = SdfRoundedBox(p, new Vector2(0.50f, 0.312f), new Vector2(0.305f, 0.015f), 0.008f);
-                float stripeMask = Coverage(stripeSdf, aa) * fillMask;
-                col = Color.Lerp(col, new Color(0.68f, 0.38f, 0.04f, 1f), stripeMask * 0.85f);
+                // Crown band decorative trim bar + bright highlight lip
+                float trimMask = Coverage(SdfRoundedBox(p, new Vector2(0.50f, 0.312f), new Vector2(0.362f, 0.017f), 0.008f), aa) * fillMask;
+                col = Color.Lerp(col, new Color(0.56f, 0.28f, 0.03f, 1f), trimMask * 0.90f);
 
-                // Center crimson ruby + side gold studs on the crown band
-                float centerGem = Coverage(SdfCircle(p, new Vector2(0.50f, 0.238f), 0.032f), aa) * fillMask;
-                if (centerGem > 0f)
+                float lipMask = Coverage(SdfRoundedBox(p, new Vector2(0.50f, 0.285f), new Vector2(0.348f, 0.009f), 0.005f), aa) * fillMask;
+                col = Color.Lerp(col, new Color(1.00f, 0.96f, 0.70f, 1f), lipMask * 0.55f);
+
+                // Center large crimson ruby with dark-gold bezel and glint
+                float rubyBezel = Coverage(SdfCircle(p, new Vector2(0.50f, 0.219f), 0.064f), aa) * fillMask;
+                if (rubyBezel > 0f)
                 {
-                    col = Color.Lerp(col, new Color(0.92f, 0.20f, 0.26f, 1f), centerGem);
+                    col = Color.Lerp(col, new Color(0.46f, 0.22f, 0.03f, 1f), rubyBezel * 0.92f);
                 }
 
-                float sideGems = Mathf.Max(
-                    Coverage(SdfCircle(p, new Vector2(0.33f, 0.238f), 0.023f), aa),
-                    Coverage(SdfCircle(p, new Vector2(0.67f, 0.238f), 0.023f), aa)) * fillMask;
-                if (sideGems > 0f)
+                float rubyFill = Coverage(SdfCircle(p, new Vector2(0.50f, 0.219f), 0.050f), aa) * fillMask;
+                if (rubyFill > 0f)
                 {
-                    col = Color.Lerp(col, new Color(1.00f, 0.97f, 0.78f, 1f), sideGems * 0.9f);
+                    float rubyT = SmoothStep(0.170f, 0.268f, v);
+                    Color rubyCol = Color.Lerp(
+                        new Color(0.68f, 0.05f, 0.11f, 1f),
+                        new Color(1.00f, 0.26f, 0.33f, 1f),
+                        rubyT);
+                    float rubyGlint = Coverage(SdfCircle(p, new Vector2(0.483f, 0.236f), 0.016f), aa * 1.6f);
+                    rubyCol = Color.Lerp(rubyCol, new Color(1.00f, 0.88f, 0.90f, 1f), rubyGlint * 0.88f);
+                    col = Color.Lerp(col, rubyCol, rubyFill);
+                }
+
+                // Side bright cyan-white / light-blue small gems with bezel and glint
+                float sideBezelSdf = Mathf.Min(
+                    SdfCircle(p, new Vector2(0.278f, 0.219f), 0.049f),
+                    SdfCircle(p, new Vector2(0.722f, 0.219f), 0.049f));
+                float sideBezel = Coverage(sideBezelSdf, aa) * fillMask;
+                if (sideBezel > 0f)
+                {
+                    col = Color.Lerp(col, new Color(0.46f, 0.22f, 0.03f, 1f), sideBezel * 0.90f);
+                }
+
+                float sideGemSdf = Mathf.Min(
+                    SdfCircle(p, new Vector2(0.278f, 0.219f), 0.037f),
+                    SdfCircle(p, new Vector2(0.722f, 0.219f), 0.037f));
+                float sideFill = Coverage(sideGemSdf, aa) * fillMask;
+                if (sideFill > 0f)
+                {
+                    float gemT = SmoothStep(0.180f, 0.258f, v);
+                    Color gemCol = Color.Lerp(
+                        new Color(0.20f, 0.72f, 0.95f, 1f),
+                        new Color(0.80f, 0.97f, 1.00f, 1f),
+                        gemT);
+                    float sideGlintSdf = Mathf.Min(
+                        SdfCircle(p, new Vector2(0.266f, 0.231f), 0.012f),
+                        SdfCircle(p, new Vector2(0.710f, 0.231f), 0.012f));
+                    float sideGlint = Coverage(sideGlintSdf, aa * 1.6f);
+                    gemCol = Color.Lerp(gemCol, Color.white, sideGlint * 0.90f);
+                    col = Color.Lerp(col, gemCol, sideFill);
                 }
             }
 
@@ -678,45 +770,48 @@ namespace EachOneCoin.Gameplay
             float dx = u - 0.5f;
             float dy = v - 0.5f;
             float dist = Mathf.Sqrt(dx * dx + dy * dy);
-            float alpha = Coverage(dist - 0.475f, invSize);
+            float alpha = Coverage(dist - 0.478f, 1.05f * invSize);
             return new Color(1f, 1f, 1f, alpha);
         }
 
         private static Color EvaluateCircleFramePixel(float u, float v, float invSize)
         {
-            float aa = 2.2f * invSize;
+            float aa = 2.1f * invSize;
             float dx = u - 0.5f;
             float dy = v - 0.5f;
             float rn = Mathf.Sqrt(dx * dx + dy * dy) * 2f;
 
-            // Double-ring frame: outer bold ring + dark separator groove + inner accent ring
-            float frameOuter = Coverage(rn - 0.992f, aa);
-            float frameInner = 1f - Coverage(rn - 0.792f, aa);
+            // Double-ring crisp frame seamlessly overlapping mask outer edge (rn = 0.956)
+            float frameOuter = Coverage(rn - 0.994f, aa);
+            float frameInner = 1f - Coverage(rn - 0.794f, aa);
             float frameAlpha = Mathf.Min(frameOuter, frameInner);
             if (frameAlpha <= 0f) return Color.clear;
 
-            float topShade = SmoothStep(0.10f, 0.90f, v);
+            float topShade = SmoothStep(0.08f, 0.92f, v);
             Color brightRing = Color.Lerp(
-                new Color(0.88f, 0.91f, 0.96f, 1f),
+                new Color(0.90f, 0.92f, 0.96f, 1f),
                 new Color(1.00f, 1.00f, 1.00f, 1f),
                 topShade);
-            Color darkRim = new Color(0.12f, 0.15f, 0.20f, 1f);
             Color innerAccent = Color.Lerp(
-                new Color(0.84f, 0.88f, 0.95f, 1f),
+                new Color(0.87f, 0.90f, 0.95f, 1f),
                 new Color(0.98f, 0.99f, 1.00f, 1f),
                 topShade);
+            Color darkRim = new Color(0.095f, 0.115f, 0.155f, 1f);
 
-            // Compose radial bands cleanly from inner accent -> dark groove -> outer ring -> outer dark rim
-            Color col = innerAccent;
+            // Inner dark edge -> inner bright ring -> dark groove -> outer bright ring -> outer dark rim
+            Color col = darkRim;
 
-            float grooveMask = 1f - Coverage(rn - 0.835f, aa);
-            col = Color.Lerp(col, darkRim, grooveMask * 0.90f);
+            float innerRingMask = 1f - Coverage(rn - 0.806f, aa);
+            col = Color.Lerp(col, innerAccent, innerRingMask);
 
-            float outerRingMask = 1f - Coverage(rn - 0.875f, aa);
+            float grooveMask = 1f - Coverage(rn - 0.844f, aa);
+            col = Color.Lerp(col, darkRim, grooveMask * 0.94f);
+
+            float outerRingMask = 1f - Coverage(rn - 0.880f, aa);
             col = Color.Lerp(col, brightRing, outerRingMask);
 
-            float outerDarkRimMask = 1f - Coverage(rn - 0.962f, aa);
-            col = Color.Lerp(col, darkRim, outerDarkRimMask * 0.88f);
+            float outerDarkRimMask = 1f - Coverage(rn - 0.968f, aa);
+            col = Color.Lerp(col, darkRim, outerDarkRimMask * 0.92f);
 
             col.a = frameAlpha;
             return col;
@@ -724,48 +819,62 @@ namespace EachOneCoin.Gameplay
 
         private static Color EvaluateDefaultPortraitPixel(float u, float v, float invSize)
         {
-            float aa = 1.25f * invSize;
+            float aa = 1.15f * invSize;
             var p = new Vector2(u, v);
 
-            // Capsule character bust: vertical rounded capsule head smoothly blended into shoulders
-            float headSdf = SdfCapsule(p, new Vector2(0.50f, 0.37f), new Vector2(0.50f, 0.58f), 0.23f);
-            float shouldersSdf = SdfCapsule(p, new Vector2(0.31f, 0.06f), new Vector2(0.69f, 0.06f), 0.22f);
-            float bodySdf = SmoothMin(headSdf, shouldersSdf, 0.11f);
+            // Side-facing pure capsule upper body matching in-game PlayerSprite + single right-side eye
+            // Center u = 0.48, radius = 0.27 (width 0.54), dome center (0.48, 0.56) -> top at v = 0.83
+            // Straight vertical sides extend cleanly to v = 0 without widening shoulders or bottom cap
+            const float cx = 0.48f;
+            const float domeY = 0.56f;
+            const float radius = 0.27f;
+            const float outlineThickness = 0.032f;
 
-            float bodyAlpha = Coverage(bodySdf, aa);
-            if (bodyAlpha <= 0f) return Color.clear;
+            float capsuleSdf = SdfSegment(p, new Vector2(cx, -0.35f), new Vector2(cx, domeY)) - radius;
+            float outerAlpha = Coverage(capsuleSdf - outlineThickness, aa);
+            if (outerAlpha <= 0f) return Color.clear;
 
-            // Pure white base with gentle cylindrical shading so Image.color (TintColor) dyes cleanly
-            float horizontalLight = 1f - Mathf.Clamp01(Mathf.Abs(u - 0.43f) * 1.15f);
-            float verticalLight = SmoothStep(0.05f, 0.82f, v);
-            float lum = Mathf.Lerp(0.81f, 1.00f, horizontalLight * 0.58f + verticalLight * 0.42f);
+            float fillMask = Coverage(capsuleSdf, aa);
 
-            // Subtle chin/collar shadow to separate capsule head from torso
-            float neckShadowDist = SdfCapsule(p, new Vector2(0.41f, 0.33f), new Vector2(0.59f, 0.33f), 0.025f);
-            float neckShadow = Coverage(neckShadowDist, aa * 5.0f) * 0.09f;
-            lum -= neckShadow;
+            // Pure white base + subtle cylindrical 3D shading (0.85 ~ 1.00) so TintColor dyes cleanly
+            float nx = Mathf.Clamp((u - cx) / radius, -1f, 1f);
+            float cyl = 1f - Mathf.Clamp01(Mathf.Abs(nx + 0.22f) * 0.78f);
+            float cylSmooth = cyl * cyl * (3f - 2f * cyl);
+            float verticalLight = SmoothStep(0.0f, 0.85f, v);
+            float rightShade = SmoothStep(0.15f, 1.0f, nx) * 0.075f;
+            float lum = Mathf.Lerp(0.865f, 0.992f, cylSmooth * 0.68f + verticalLight * 0.32f) - rightShade;
 
-            // Soft specular pill highlight on top-left brow
-            float browSpec = Coverage(SdfCapsule(p, new Vector2(0.385f, 0.65f), new Vector2(0.415f, 0.705f), 0.024f), aa * 3.0f);
-            lum = Mathf.Clamp01(Mathf.Lerp(lum, 1.0f, browSpec * 0.65f));
+            // Subtle glossy crescent highlight along the upper-left dome arc
+            float dxDome = u - cx;
+            float dyDome = v - domeY;
+            float rDome = Mathf.Sqrt(dxDome * dxDome + dyDome * dyDome);
+            float specRad = Mathf.Abs(rDome - 0.195f) - 0.022f;
+            float specAngMask = SmoothStep(-0.26f, -0.06f, dxDome)
+                * (1f - SmoothStep(-0.04f, 0.06f, dxDome))
+                * SmoothStep(0.06f, 0.18f, dyDome);
+            float specMask = Coverage(specRad, aa * 6.0f) * specAngMask;
+            lum = Mathf.Clamp(Mathf.Lerp(lum, 1.0f, specMask * 0.72f), 0.85f, 1.0f);
 
-            Color col = new Color(lum, lum, lum, 1f);
+            Color outlineCol = new Color(22f / 255f, 25f / 255f, 32f / 255f, 1f);
+            Color bodyCol = new Color(lum, lum, lum, 1f);
+            Color col = Color.Lerp(outlineCol, bodyCol, fillMask);
 
-            // Cute dark capsule eyes + tiny bright catchlight
-            float leftEye = SdfCapsule(p, new Vector2(0.42f, 0.545f), new Vector2(0.42f, 0.595f), 0.024f);
-            float rightEye = SdfCapsule(p, new Vector2(0.58f, 0.545f), new Vector2(0.58f, 0.595f), 0.024f);
-            float eyesMask = Coverage(Mathf.Min(leftEye, rightEye), aa);
-            if (eyesMask > 0f)
+            // Signature single side-facing dot eye matching Facing Marker proportion
+            const float eyeCx = 0.615f;
+            const float eyeCy = 0.605f;
+            const float eyeRadius = 0.052f;
+            float eyeSdf = SdfCircle(p, new Vector2(eyeCx, eyeCy), eyeRadius);
+            float eyeMask = Coverage(eyeSdf, aa) * fillMask;
+            if (eyeMask > 0f)
             {
-                Color eyeCol = new Color(0.13f, 0.14f, 0.17f, 1f);
-                float leftGlint = SdfCircle(p, new Vector2(0.412f, 0.588f), 0.011f);
-                float rightGlint = SdfCircle(p, new Vector2(0.572f, 0.588f), 0.011f);
-                float glintMask = Coverage(Mathf.Min(leftGlint, rightGlint), aa);
-                eyeCol = Color.Lerp(eyeCol, new Color(0.98f, 0.98f, 1.00f, 1f), glintMask * 0.92f);
-                col = Color.Lerp(col, eyeCol, eyesMask);
+                Color eyeCol = new Color(26f / 255f, 28f / 255f, 33f / 255f, 1f);
+                float glintSdf = SdfCircle(p, new Vector2(eyeCx - 0.017f, eyeCy + 0.017f), 0.0145f);
+                float glintMask = Coverage(glintSdf, aa * 1.4f);
+                eyeCol = Color.Lerp(eyeCol, new Color(0.96f, 0.97f, 1.00f, 1f), glintMask * 0.86f);
+                col = Color.Lerp(col, eyeCol, eyeMask);
             }
 
-            col.a = bodyAlpha;
+            col.a = outerAlpha;
             return col;
         }
 
@@ -868,31 +977,6 @@ namespace EachOneCoin.Gameplay
             float d2y = p.y - m;
             float d2 = d2x * d2x + d2y * d2y;
             return Mathf.Sqrt(Mathf.Min(d1, d2)) * Mathf.Sign(p.x - p.y);
-        }
-
-        private static float SdfTriangle(Vector2 p, Vector2 p0, Vector2 p1, Vector2 p2)
-        {
-            Vector2 e0 = p1 - p0;
-            Vector2 e1 = p2 - p1;
-            Vector2 e2 = p0 - p2;
-
-            Vector2 v0 = p - p0;
-            Vector2 v1 = p - p1;
-            Vector2 v2 = p - p2;
-
-            Vector2 pq0 = v0 - e0 * Mathf.Clamp01(Vector2.Dot(v0, e0) / Mathf.Max(0.000001f, Vector2.Dot(e0, e0)));
-            Vector2 pq1 = v1 - e1 * Mathf.Clamp01(Vector2.Dot(v1, e1) / Mathf.Max(0.000001f, Vector2.Dot(e1, e1)));
-            Vector2 pq2 = v2 - e2 * Mathf.Clamp01(Vector2.Dot(v2, e2) / Mathf.Max(0.000001f, Vector2.Dot(e2, e2)));
-
-            float s = Mathf.Sign(e0.x * e2.y - e0.y * e2.x);
-            float minDistSq = Mathf.Min(Vector2.Dot(pq0, pq0), Mathf.Min(Vector2.Dot(pq1, pq1), Vector2.Dot(pq2, pq2)));
-
-            float c0 = s * (v0.x * e0.y - v0.y * e0.x);
-            float c1 = s * (v1.x * e1.y - v1.y * e1.x);
-            float c2 = s * (v2.x * e2.y - v2.y * e2.x);
-            float minCross = Mathf.Min(c0, Mathf.Min(c1, c2));
-
-            return -Mathf.Sqrt(minDistSq) * Mathf.Sign(minCross);
         }
 
         private static float SdfConvexQuad(Vector2 p, Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3)

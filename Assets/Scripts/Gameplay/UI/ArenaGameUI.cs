@@ -853,6 +853,11 @@ namespace EachOneCoin.Gameplay
             if (coinText != null) coinText.gameObject.SetActive(false);
             if (participantText != null) participantText.gameObject.SetActive(false);
             if (feedbackText != null) feedbackText.gameObject.SetActive(false);
+            if (hudPanel != null)
+            {
+                var legacyTimeCard = hudPanel.transform.Find("TimeCard");
+                if (legacyTimeCard != null) legacyTimeCard.gameObject.SetActive(false);
+            }
         }
 
         private void AdjustPauseButtonLayout()
