@@ -64,8 +64,13 @@ namespace EachOneCoin.Gameplay
                 var accessories = visual.Find("Accessories");
                 if (accessories != null)
                 {
-                    for (int i = 0; i < accessories.childCount; i++)
-                        accessories.GetChild(i).gameObject.SetActive(i == id);
+                    for (int i = 0; i < 4; i++)
+                    {
+                        var slot = accessories.Find("Slot " + i);
+                        if (slot != null) slot.gameObject.SetActive(i == id);
+                    }
+                    var reference = accessories.Find("Reference Capsule");
+                    if (reference != null) reference.gameObject.SetActive(false);
                 }
             }
             sprites = GetComponentsInChildren<SpriteRenderer>(true);
