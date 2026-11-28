@@ -1,0 +1,16 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 11ad8fab05e43e14b92a8c347babb493, type: 3}
+  m_Name: ArenaMapCatalog
+  m_EditorClassIdentifier: 
+  maps:
+  - {fileID: 11400000, guid: e59ef5e201c857d458ae32148b2a145b, type: 2}

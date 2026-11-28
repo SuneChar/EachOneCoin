@@ -30,6 +30,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0f)] private float obstacleInvulnerabilitySeconds = 1f;
         [SerializeField, Min(0f)] private float obstacleKnockbackDistance = 0.6f;
         [SerializeField, Min(0.01f)] private float obstacleKnockbackSeconds = 0.18f;
+        private bool isCustomSinglePlayerMap;
         private readonly Collider[] overlap = new Collider[64];
         public MatchModel Model { get; private set; }
         public ArenaGridView Grid => grid;
@@ -86,6 +87,11 @@ namespace EachOneCoin.Gameplay
         public void BeginReplayRecording(bool network, System.Action<string> onSaved = null)
         {
             if (Recorder != null) return;
+            if (isCustomSinglePlayerMap)
+            {
+                Debug.LogWarning("自定义地图暂不支持录像，已跳过录像录制。", this);
+                return;
+            }
             Recorder = gameObject.AddComponent<Replay.ReplayRecorder>();
             try { Recorder.Initialize(this, network, onSaved); }
             catch (System.Exception e) { Debug.LogWarning("录像初始化失败：" + e.Message); Destroy(Recorder); Recorder = null; }
@@ -162,6 +168,11 @@ namespace EachOneCoin.Gameplay
             Replay.ReplaySelection.Pending = null;
             IsReplay = replay != null;
             IsNetworkMovementTest = !IsReplay && network != null && Mirror.NetworkClient.active && network.HasSnapshot;
+            if (!IsReplay && !IsNetworkMovementTest && ArenaMapSelection.Selected != null)
+            {
+                isCustomSinglePlayerMap = ArenaMapSelection.Selected != mapDefinition;
+                mapDefinition = ArenaMapSelection.Selected;
+            }
             if (mapDefinition != null && (!ArenaMapValidator.TryValidate(mapDefinition, out var mapError) || mapDefinition.Width != ArenaGridView.Size || mapDefinition.Height != ArenaGridView.Size))
             {
                 Debug.LogError("竞技场地图无效或尺寸尚不受支持：" + mapError, mapDefinition);

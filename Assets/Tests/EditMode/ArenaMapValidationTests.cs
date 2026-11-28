@@ -70,6 +70,30 @@ public class ArenaMapValidationTests
     }
 
     [Test]
+    public void EditorResize_PreservesExistingCellsAndChangesDimensions()
+    {
+        var type = Type.GetType("EachOneCoin.Editor.ArenaMapEditorWindow, Assembly-CSharp-Editor", true);
+        var window = ScriptableObject.CreateInstance(type);
+        try
+        {
+            var cells = serialized.FindProperty("cells");
+            cells.GetArrayElementAtIndex(1).FindPropertyRelative("height").intValue = 7;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            type.GetField("map", flags).SetValue(window, map);
+            type.GetField("requestedWidth", flags).SetValue(window, 23);
+            type.GetField("requestedHeight", flags).SetValue(window, 20);
+            type.GetMethod("ResizeMap", flags).Invoke(window, null);
+            serialized.Update();
+            Assert.That(serialized.FindProperty("width").intValue, Is.EqualTo(23));
+            Assert.That(serialized.FindProperty("height").intValue, Is.EqualTo(20));
+            Assert.That(serialized.FindProperty("cells").arraySize, Is.EqualTo(460));
+            Assert.That(serialized.FindProperty("cells").GetArrayElementAtIndex(1).FindPropertyRelative("height").intValue, Is.EqualTo(7));
+        }
+        finally { Undo.ClearUndo(map); UnityEngine.Object.DestroyImmediate(window); }
+    }
+
+    [Test]
     public void MismatchedCellCount_IsRejected()
     {
         serialized.FindProperty("width").intValue = 22;
