@@ -24,6 +24,7 @@ namespace EachOneCoin.Networking
         private float connectDeadline;
         private float oldConnectionRetryDeadline;
         private readonly HashSet<int> movementReady = new HashSet<int>();
+        private readonly MatchRulesHandshake pendingRules = new MatchRulesHandshake();
         private readonly HashSet<int> reconnecting = new HashSet<int>();
         private readonly HashSet<int> voluntaryLeaving = new HashSet<int>();
         private readonly HashSet<int> returnedConnections = new HashSet<int>();
@@ -201,7 +202,7 @@ namespace EachOneCoin.Networking
             HasSnapshot = false;
             MatchStarted = false;
             MovementRunning = false;
-            movementReady.Clear(); reconnecting.Clear();
+            movementReady.Clear(); pendingRules.Clear(); reconnecting.Clear();
             Status = "已退出房间";
         }
 
@@ -233,7 +234,7 @@ namespace EachOneCoin.Networking
                 int slot = ServerSlot(conn.connectionId);
                 if (slot < 0 || slot == 0) return;
                 voluntaryLeaving.Add(conn.connectionId);
-                movementReady.Remove(conn.connectionId); reconnecting.Remove(conn.connectionId);
+                movementReady.Remove(conn.connectionId); pendingRules.Remove(conn.connectionId); reconnecting.Remove(conn.connectionId);
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller != null) controller.RemovePlayer(slot);
                 room.Remove(conn.connectionId);
@@ -249,6 +250,7 @@ namespace EachOneCoin.Networking
             });
             NetworkServer.RegisterHandler<RoomSnapshotRequest>((conn, _) => SendSnapshot(conn));
             NetworkServer.RegisterHandler<MovementReady>(OnMovementReady);
+            NetworkServer.RegisterHandler<MatchRulesAcknowledged>(OnMatchRulesAcknowledged);
             NetworkServer.RegisterHandler<CoinSnapshotRequest>((conn, _) =>
             {
                 if (!MatchStarted || ServerSlot(conn.connectionId) < 0) return;
@@ -277,78 +279,91 @@ namespace EachOneCoin.Networking
         {
             NetworkClient.RegisterHandler<HostClosing>(_ => { ClearRecoverySession(); Status = "房主已结束房间"; });
             NetworkClient.RegisterHandler<VoluntaryLeaveAcknowledged>(_ => leaveAcknowledged = true);
-            NetworkClient.RegisterHandler<ResumeComplete>(_ => { ClientResuming = false; IsReconnectAttempt = false; Status = "已恢复对局"; });
+            NetworkClient.RegisterHandler<ResumeComplete>(_ =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller == null || !controller.HasAuthoritativeRules) { RejectLocalRules(); return; }
+                ClientResuming = false; IsReconnectAttempt = false; Status = "已恢复对局";
+            });
             NetworkClient.RegisterHandler<ResumeRejected>(_ => OnAuthenticationRejected(2));
             NetworkClient.RegisterHandler<ReturnRoomState>(message => ReturnedMask = message.returnedMask);
             NetworkClient.RegisterHandler<RoomSnapshot>(message => { Snapshot = message; HasSnapshot = true; });
+            NetworkClient.RegisterHandler<MatchRulesMessage>(message =>
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller == null || !controller.ReceiveAuthoritativeRules(message)) { RejectLocalRules(); return; }
+                NetworkClient.Send(new MatchRulesAcknowledged { protocolVersion = message.protocolVersion, coinsToWin = message.coinsToWin, durationSeconds = message.durationSeconds });
+            });
+            NetworkClient.RegisterHandler<MatchRulesRejected>(_ => RejectLocalRules());
             NetworkClient.RegisterHandler<MovementBegin>(message =>
             {
-                MatchOccupied = message.occupied; MatchFillNpcs = message.fillNpcs; MovementRunning = true;
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.Begin(message.occupied, message.fillNpcs);
+                if (controller == null || !controller.HasAuthoritativeRules) { RejectLocalRules(); return; }
+                MatchOccupied = message.occupied; MatchFillNpcs = message.fillNpcs; MovementRunning = true;
+                controller.Begin(message.occupied, message.fillNpcs);
             });
             NetworkClient.RegisterHandler<MatchStateMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveMatchState(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveMatchState(message);
             });
             NetworkClient.RegisterHandler<CombatStateMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveCombatState(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveCombatState(message);
             });
             NetworkClient.RegisterHandler<AttackEvent>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveAttackEvent(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveAttackEvent(message);
             });
             NetworkClient.RegisterHandler<DamageEvent>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveDamageEvent(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveDamageEvent(message);
             });
             NetworkClient.RegisterHandler<MatchFeedEventMessage>(OnFeedEvent);
             NetworkClient.RegisterHandler<MineStatusMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveMineStatus(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveMineStatus(message);
             });
             NetworkClient.RegisterHandler<CoinSnapshotMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveCoinSnapshot(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveCoinSnapshot(message);
             });
             NetworkClient.RegisterHandler<CoinChangeMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveCoinChange(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveCoinChange(message);
             });
             NetworkClient.RegisterHandler<GridSnapshotMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveGridSnapshot(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveGridSnapshot(message);
             });
             NetworkClient.RegisterHandler<GridChangeMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveGridChange(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveGridChange(message);
             });
             NetworkClient.RegisterHandler<ObstacleStateMessage>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveObstacleState(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveObstacleState(message);
             });
             NetworkClient.RegisterHandler<MovementSnapshot>(message =>
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
-                if (controller != null) controller.ReceiveSnapshot(message);
+                if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveSnapshot(message);
             });
         }
 
         private void OnFeedEvent(MatchFeedEventMessage message)
         {
             var controller = FindObjectOfType<NetworkMatchController>();
-            if (controller != null) controller.ReceiveFeedEvent(message);
+            if (controller != null && controller.HasAuthoritativeRules) controller.ReceiveFeedEvent(message);
         }
 
         public override void OnServerConnect(NetworkConnectionToClient conn)
@@ -362,7 +377,7 @@ namespace EachOneCoin.Networking
             int slot = ServerSlot(conn.connectionId);
             bool voluntary = voluntaryLeaving.Remove(conn.connectionId);
             returnedConnections.Remove(conn.connectionId);
-            movementReady.Remove(conn.connectionId); reconnecting.Remove(conn.connectionId);
+            movementReady.Remove(conn.connectionId); pendingRules.Remove(conn.connectionId); reconnecting.Remove(conn.connectionId);
             var controller = FindObjectOfType<NetworkMatchController>();
             if (slot >= 0)
             {
@@ -448,7 +463,7 @@ namespace EachOneCoin.Networking
             for (int slot = 1; slot < RoomState.Capacity; slot++) if (room.IsReserved(slot)) room.Release(slot);
             MatchStarted = false; MovementRunning = false; MatchFinished = false;
             MatchOccupied = 0; MatchFillNpcs = false; ReturnedMask = 0;
-            returnedConnections.Clear(); movementReady.Clear(); reconnecting.Clear(); returningToRoom = false;
+            returnedConnections.Clear(); movementReady.Clear(); pendingRules.Clear(); reconnecting.Clear(); returningToRoom = false;
             ServerChangeScene("BootScene");
             BroadcastSnapshot();
         }
@@ -461,6 +476,7 @@ namespace EachOneCoin.Networking
             MatchStarted = true;
             MovementRunning = false;
             movementReady.Clear();
+            pendingRules.Clear();
             ServerChangeScene("ArenaScene");
             StartCoroutine(LoadingTimeout());
         }
@@ -480,11 +496,76 @@ namespace EachOneCoin.Networking
         {
             float deadline = Time.realtimeSinceStartup + 15f;
             while (FindObjectOfType<NetworkMatchController>() == null && Time.realtimeSinceStartup < deadline) yield return null;
-            if (NetworkClient.isConnected && FindObjectOfType<NetworkMatchController>() != null) NetworkClient.Send(new MovementReady());
-            else if (NetworkClient.active) ExitMovementTest();
+            if (!NetworkClient.isConnected || FindObjectOfType<NetworkMatchController>() == null)
+            {
+                if (NetworkClient.active) ExitMovementTest();
+                yield break;
+            }
+
+            NetworkClient.Send(new MovementReady { protocolVersion = MatchRulesProtocol.Version });
+            deadline = Time.realtimeSinceStartup + 15f;
+            while (NetworkClient.isConnected && Time.realtimeSinceStartup < deadline)
+            {
+                var controller = FindObjectOfType<NetworkMatchController>();
+                if (controller != null && controller.HasAuthoritativeRules) yield break;
+                yield return null;
+            }
+            if (NetworkClient.active && !leaving) RejectLocalRules();
+        }
+
+        private void RejectLocalRules()
+        {
+            Debug.LogWarning("无法确认房主规则或联机协议版本不匹配，已退出对局。");
+            ExitMovementTest();
+            Status = "联机规则无效或版本不匹配";
+        }
+
+        private void RejectRules(NetworkConnectionToClient connection)
+        {
+            if (connection == null) return;
+            pendingRules.Remove(connection.connectionId);
+            if (NetworkServer.active && connection.connectionId == 0)
+            {
+                Debug.LogWarning("房主对局配置无效或超出联机范围，已取消对局。");
+                ExitMovementTest();
+                Status = "房主对局规则无效";
+                return;
+            }
+            voluntaryLeaving.Add(connection.connectionId);
+            connection.Send(new MatchRulesRejected());
+            StartCoroutine(DisconnectRejectedResume(connection));
         }
 
         private void OnMovementReady(NetworkConnectionToClient conn, MovementReady message)
+        {
+            int slot = ServerSlot(conn.connectionId);
+            if (!MatchStarted || slot < 0 || (MovementRunning && !reconnecting.Contains(conn.connectionId))) return;
+            if (message.protocolVersion != MatchRulesProtocol.Version) { RejectRules(conn); return; }
+            if (reconnecting.Contains(conn.connectionId) && room.IsReclaimExpired(slot, Time.realtimeSinceStartupAsDouble))
+            {
+                RejectResume(conn);
+                return;
+            }
+            var controller = FindObjectOfType<NetworkMatchController>();
+            if (controller == null || !controller.TryGetAuthoritativeRules(out var rules))
+            {
+                Debug.LogWarning("房主对局规则不可用，已取消对局。");
+                ExitMovementTest();
+                Status = "房主对局规则无效";
+                return;
+            }
+            if (!pendingRules.Offer(conn.connectionId, rules)) { RejectRules(conn); return; }
+            conn.Send(rules);
+        }
+
+        private void OnMatchRulesAcknowledged(NetworkConnectionToClient conn, MatchRulesAcknowledged message)
+        {
+            if (!MatchStarted || !pendingRules.IsPending(conn.connectionId)) return;
+            if (!pendingRules.Confirm(conn.connectionId, message)) { RejectRules(conn); return; }
+            CompleteMovementReady(conn);
+        }
+
+        private void CompleteMovementReady(NetworkConnectionToClient conn)
         {
             int slot = ServerSlot(conn.connectionId);
             if (!MatchStarted || slot < 0) return;
@@ -606,7 +687,7 @@ namespace EachOneCoin.Networking
             if (!leaving && HasRecoverySession && !NetworkClient.active && !NetworkServer.active) Reconnect();
         }
 
-        public override void OnStopServer() { room = null; reconnecting.Clear(); voluntaryLeaving.Clear(); returnedConnections.Clear(); MatchFinished = false; returningToRoom = false; ReturnedMask = 0; }
+        public override void OnStopServer() { room = null; pendingRules.Clear(); reconnecting.Clear(); voluntaryLeaving.Clear(); returnedConnections.Clear(); MatchFinished = false; returningToRoom = false; ReturnedMask = 0; }
 
         private void BroadcastSnapshot()
         {

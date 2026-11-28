@@ -20,6 +20,16 @@ namespace EachOneCoin
 
         private MatchModel CurrentMatch => session?.Match ?? throw new InvalidOperationException("No active match session is available.");
 
+        public bool ConfigureRulesBeforeStart(int coinsToWin, float durationSeconds)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Waiting || coinsToWin <= 0 || float.IsNaN(durationSeconds) ||
+                float.IsInfinity(durationSeconds) || durationSeconds <= 0f) return false;
+            match.CoinsToWin = coinsToWin;
+            match.RemainingTime = durationSeconds;
+            return true;
+        }
+
         public void ConfigureParticipants(byte mask)
         {
             var match = CurrentMatch;

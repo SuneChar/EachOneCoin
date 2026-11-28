@@ -37,12 +37,16 @@ namespace EachOneCoin.Networking
                 return (ParticipantStatus)replicaMatchState.StatusAt(id);
             return hasCombatState ? (ParticipantStatus)replicaCombat[id].status : ParticipantStatus.Active;
         }
+        private MatchRulesMessage authoritativeRules;
+        private bool hasAuthoritativeRules;
+        public bool HasAuthoritativeRules => hasAuthoritativeRules;
+        public float AuthoritativeDurationSeconds => hasAuthoritativeRules ? authoritativeRules.durationSeconds : MatchModel.DefaultDurationSeconds;
         private MatchStateMessage replicaMatchState;
         private uint matchStateSequence;
         private bool hasMatchState, finalStateSent;
         private float nextMatchState;
         public MatchStatus CurrentMatchStatus => NetworkServer.active ? match.Model.Status : hasMatchState ? (MatchStatus)replicaMatchState.matchStatus : MatchStatus.Waiting;
-        public float RemainingTime => NetworkServer.active ? match.Model.RemainingTime : hasMatchState ? replicaMatchState.remaining : 60f;
+        public float RemainingTime => NetworkServer.active ? match.Model.RemainingTime : hasMatchState ? replicaMatchState.remaining : AuthoritativeDurationSeconds;
         public bool IsParticipant(int slot) => slot >= 0 && slot < RoomState.Capacity && (NetworkServer.active ? match.Model.Participants[slot].IsParticipating : hasMatchState && (replicaMatchState.participantMask & (1 << slot)) != 0);
         private const double InterpolationDelay = 0.10;
         private const double MaximumBacklog = 0.5;
@@ -77,6 +81,11 @@ namespace EachOneCoin.Networking
         public void Initialize(MatchCoordinator coordinator, LanNetworkManager manager, LocalPlayerInput input)
         {
             match = coordinator; network = manager; localInput = input;
+            if (NetworkServer.active && coordinator.NetworkRulesValid)
+            {
+                var rules = new MatchRulesMessage { protocolVersion = MatchRulesProtocol.Version, coinsToWin = coordinator.Model.CoinsToWin, durationSeconds = coordinator.InitialDurationSeconds };
+                if (MatchRulesProtocol.IsValid(rules)) { authoritativeRules = rules; hasAuthoritativeRules = true; }
+            }
             gameUI = FindObjectOfType<ArenaGameUI>();
             var patrols = new List<LinearPatrolObstacle>();
             var spikes = new List<TimedSpikeTrap>();
@@ -89,9 +98,27 @@ namespace EachOneCoin.Networking
             spikeTraps = spikes.ToArray();
         }
 
+        public bool TryGetAuthoritativeRules(out MatchRulesMessage rules)
+        {
+            rules = authoritativeRules;
+            return hasAuthoritativeRules && MatchRulesProtocol.IsValid(rules);
+        }
+
+        public bool ReceiveAuthoritativeRules(MatchRulesMessage rules)
+        {
+            if (!MatchRulesProtocol.IsValid(rules) || match == null) return false;
+            if (hasAuthoritativeRules)
+                return authoritativeRules.protocolVersion == rules.protocolVersion && authoritativeRules.coinsToWin == rules.coinsToWin &&
+                    authoritativeRules.durationSeconds == rules.durationSeconds;
+            if (NetworkServer.active || started || !match.ApplyAuthoritativeRulesBeforeStart(rules.coinsToWin, rules.durationSeconds)) return false;
+            authoritativeRules = rules;
+            hasAuthoritativeRules = true;
+            return true;
+        }
+
         public void Begin(byte occupied, bool fillNpcs)
         {
-            if (started || match == null) return;
+            if (started || match == null || !hasAuthoritativeRules) return;
             started = true; humans = occupied;
             visible = fillNpcs ? (byte)15 : occupied;
             connectedHumans = NetworkServer.active ? (byte)0 : occupied;
@@ -161,9 +188,9 @@ namespace EachOneCoin.Networking
 
         public void ReceiveMatchState(MatchStateMessage message)
         {
-            if (NetworkServer.active || match == null || (hasMatchState && message.sequence <= replicaMatchState.sequence)) return;
+            if (NetworkServer.active || match == null || !hasAuthoritativeRules || (hasMatchState && message.sequence <= replicaMatchState.sequence)) return;
             if (message.matchStatus > (byte)MatchStatus.Finished || (message.participantMask & ~15) != 0 || message.participantMask == 0 ||
-                float.IsNaN(message.remaining) || float.IsInfinity(message.remaining) || message.remaining < 0f || message.remaining > 60.01f) return;
+                float.IsNaN(message.remaining) || float.IsInfinity(message.remaining) || message.remaining < 0f || message.remaining > authoritativeRules.durationSeconds + 0.01f) return;
             for (int i = 0; i < RoomState.Capacity; i++)
                 if (message.StatusAt(i) > (byte)ParticipantStatus.Lost || message.ScoreAt(i) < 0 || message.OrderAt(i) < 0 || message.OrderAt(i) > RoomState.Capacity ||
                     (hasMatchState && (replicaMatchState.StatusAt(i) == (byte)ParticipantStatus.Won || replicaMatchState.StatusAt(i) == (byte)ParticipantStatus.Lost) && message.StatusAt(i) != replicaMatchState.StatusAt(i))) return;

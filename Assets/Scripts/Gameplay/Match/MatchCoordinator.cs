@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace EachOneCoin.Gameplay
 {
@@ -12,6 +13,9 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private NpcController npcs;
         [SerializeField] private LocalPlayerInput localInput;
         [SerializeField] private GameAudio gameAudio;
+        [FormerlySerializedAs("singlePlayerConfig")]
+        [SerializeField, Tooltip("单机及联机房主使用；客户端接收房主规则。")]
+        private ArenaMatchConfig matchConfig;
         [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
         [SerializeField, Min(0.1f)] private float movementAcceleration = 35f;
         [SerializeField, Min(0.1f)] private float movementDeceleration = 35f;
@@ -53,6 +57,8 @@ namespace EachOneCoin.Gameplay
         public event System.Action<MatchFeedEvent> FeedEventRaised;
         public bool IsPaused { get; private set; }
         public bool IsNetworkMovementTest { get; private set; }
+        public bool NetworkRulesValid { get; private set; } = true;
+        public float InitialDurationSeconds { get; private set; } = MatchModel.DefaultDurationSeconds;
         public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
         private readonly bool[] nearVictoryAnnounced = new bool[4];
         private readonly string[] participantNames = new string[4];
@@ -102,6 +108,42 @@ namespace EachOneCoin.Gameplay
             if (session != null) session.ClearMatch(Model);
         }
 
+        private bool ResolveMatchRules(bool isNetwork, bool isHost, out int coinsToWin, out float durationSeconds)
+        {
+            coinsToWin = MatchModel.DefaultCoinsToWin;
+            durationSeconds = MatchModel.DefaultDurationSeconds;
+            if (isNetwork && !isHost) return true;
+            if (matchConfig == null) return !isNetwork;
+            if (matchConfig.TryGetRules(out int configuredCoins, out float configuredDuration))
+            {
+                var rules = new EachOneCoin.Networking.MatchRulesMessage
+                {
+                    protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version,
+                    coinsToWin = configuredCoins,
+                    durationSeconds = configuredDuration
+                };
+                if (isNetwork && !EachOneCoin.Networking.MatchRulesProtocol.IsValid(rules)) return false;
+                coinsToWin = configuredCoins;
+                durationSeconds = configuredDuration;
+                return true;
+            }
+            if (isNetwork) return false;
+            Debug.LogWarning("单机对局配置无效，已回退为 60 秒、10 枚金币。", matchConfig);
+            return true;
+        }
+
+        public bool ApplyAuthoritativeRulesBeforeStart(int coinsToWin, float durationSeconds)
+        {
+            if (!IsNetworkMovementTest || Mirror.NetworkServer.active || Model == null ||
+                Model.Status != MatchStatus.Waiting || coins == null) return false;
+            if (!EachOneCoin.Networking.MatchRulesProtocol.IsValid(new EachOneCoin.Networking.MatchRulesMessage
+                { protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version, coinsToWin = coinsToWin, durationSeconds = durationSeconds })) return false;
+            if (!coins.ConfigureReplicaDurationBeforeStart(durationSeconds)) return false;
+            if (!Rules.ConfigureRulesBeforeStart(coinsToWin, durationSeconds)) return false;
+            InitialDurationSeconds = durationSeconds;
+            return true;
+        }
+
         private void Start()
         {
             var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
@@ -111,7 +153,9 @@ namespace EachOneCoin.Gameplay
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
             session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
             matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
-            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina));
+            NetworkRulesValid = ResolveMatchRules(IsNetworkMovementTest, Mirror.NetworkServer.active, out int coinsToWin, out float durationSeconds);
+            InitialDurationSeconds = durationSeconds;
+            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), coinsToWin, durationSeconds);
             if (!IsNetworkMovementTest) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())

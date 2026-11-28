@@ -12,7 +12,7 @@ namespace EachOneCoin
 
         protected override void OnInit() { }
 
-        public MatchModel CreateMatch(int width, int height, IReadOnlyList<GridPosition> spawns, int maxHealth, float maxStamina, int coinsToWin = 10, float duration = 60f)
+        public MatchModel CreateMatch(int width, int height, IReadOnlyList<GridPosition> spawns, int maxHealth, float maxStamina, int coinsToWin = MatchModel.DefaultCoinsToWin, float duration = MatchModel.DefaultDurationSeconds)
         {
             var match = new MatchModel(width, height, spawns, maxHealth, coinsToWin, duration);
             var models = new StaminaModel[spawns.Count];

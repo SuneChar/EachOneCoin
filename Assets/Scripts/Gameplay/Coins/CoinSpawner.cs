@@ -93,6 +93,15 @@ namespace EachOneCoin.Gameplay
             Physics.SyncTransforms();
         }
 
+        public bool ConfigureReplicaDurationBeforeStart(float durationSeconds)
+        {
+            if (match == null || match.Model == null || match.Model.Status != MatchStatus.Waiting ||
+                elapsed != 0d || nextWarning != 0 || nextSpawn != 0 || slots.Count != 0 || pending.Count != 0 ||
+                float.IsNaN(durationSeconds) || float.IsInfinity(durationSeconds) || durationSeconds <= 0f) return false;
+            duration = durationSeconds;
+            return true;
+        }
+
         public void Tick(float deltaTime)
         {
             for (int i = 0; i < slots.Count; i++)
