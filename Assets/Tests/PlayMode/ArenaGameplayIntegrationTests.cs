@@ -123,6 +123,35 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator Fall_DropsCoinsKeepsCameraHeightAndRespawnsAtCurrentMaximum()
+        {
+            var character = Character(0);
+            var camera = character.GetComponentInChildren<Camera>(true);
+            float cameraHeight = camera.transform.position.y;
+            Assert.That(rules.TryCollectCoin(0, model.Participants[0].Spawn), Is.True);
+            Assert.That(rules.TryCollectCoin(0, model.Participants[0].Spawn), Is.True);
+            Assert.That(rules.TryObstacleContact(0), Is.True);
+            var lastSafe = new GridPosition(2, 1);
+            Assert.That((bool)Call(combat, "TryStartFall", 0, lastSafe), Is.True);
+            Assert.That(model.Participants[0].Health, Is.Zero);
+            Assert.That(model.Participants[0].Coins, Is.Zero);
+            Assert.That(model.Participants[0].Status, Is.EqualTo(ParticipantStatus.Respawning));
+            var coinsOnGround = new System.Collections.Generic.List<GridPosition>();
+            Call(coins, "CopyActiveCoins", coinsOnGround);
+            Assert.That(coinsOnGround.Count, Is.EqualTo(2));
+            Assert.That(coinsOnGround.All(cell => model.Grid.Contains(cell) && !model.Grid.IsBlocked(cell)), Is.True);
+            Call(combat, "Tick", 0.3f);
+            yield return null;
+            Assert.That(camera.transform.position.y, Is.EqualTo(cameraHeight).Within(0.001f));
+            Assert.That(character.transform.Find("Root").localPosition.y, Is.LessThan(0f));
+            Call(combat, "Tick", 0.4f);
+            Call(combat, "Tick", 2f);
+            Assert.That(model.Participants[0].Status, Is.EqualTo(ParticipantStatus.Active));
+            Assert.That(model.Participants[0].Health, Is.EqualTo(2));
+            Assert.That(character.transform.Find("Root").localPosition.y, Is.EqualTo(0f).Within(0.001f));
+        }
+
+        [UnityTest]
         public IEnumerator GroundShadows_FollowAndRespectOwnerLifetime()
         {
             var character = Character(0);

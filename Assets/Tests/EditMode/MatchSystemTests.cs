@@ -48,6 +48,26 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void Fall_DropsAllCoinsAndRespawnsAtCurrentMaximumHealth()
+        {
+            var match = session.CreateMatch(3, 3, Spawns, 3, 100f);
+            rules.StartMatch();
+            Assert.That(rules.TryCollectCoin(0, Spawns[0]), Is.True);
+            Assert.That(rules.TryCollectCoin(0, Spawns[0]), Is.True);
+            Assert.That(rules.TryObstacleContact(0), Is.True);
+            Assert.That(rules.TryFall(0, out int dropped), Is.True);
+            Assert.That(dropped, Is.EqualTo(2));
+            Assert.That(match.Participants[0].Coins, Is.Zero);
+            Assert.That(match.Participants[0].Health, Is.Zero);
+            Assert.That(match.Participants[0].MaxHealth, Is.EqualTo(2));
+            Assert.That(match.Participants[0].Status, Is.EqualTo(ParticipantStatus.Respawning));
+            Assert.That(rules.TryFall(0, out int secondDrop), Is.False);
+            Assert.That(secondDrop, Is.Zero);
+            Assert.That(rules.TryRespawn(0), Is.True);
+            Assert.That(match.Participants[0].Health, Is.EqualTo(2));
+        }
+
+        [Test]
         public void Rules_UseNewMatchAndRejectClearedSession()
         {
             var first = session.CreateMatch(3, 3, Spawns, 3, 100f);
