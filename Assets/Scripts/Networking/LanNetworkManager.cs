@@ -17,6 +17,8 @@ namespace EachOneCoin.Networking
     public sealed class LanNetworkManager : NetworkManager
     {
         private RoomState room;
+        private NetworkReplayTransfer replayTransfer;
+        public void SendReplay(string path) { if (replayTransfer != null) replayTransfer.SendCompleted(path); }
         public RoomSnapshot Snapshot { get; private set; }
         public bool HasSnapshot { get; private set; }
         public string Status { get; private set; } = "未连接";
@@ -53,6 +55,8 @@ namespace EachOneCoin.Networking
         public override void Awake()
         {
             base.Awake();
+            replayTransfer = gameObject.AddComponent<NetworkReplayTransfer>();
+            replayTransfer.Initialize(this);
             if (ReconnectSessionStore.TryLoad(out var saved)) { savedAddress = saved.address; ReconnectToken = saved.token; Status = "发现可尝试恢复的对局"; }
         }
         public bool MatchStarted { get; private set; }
@@ -277,6 +281,7 @@ namespace EachOneCoin.Networking
 
         public override void OnStartClient()
         {
+            replayTransfer.RegisterClientHandlers();
             NetworkClient.RegisterHandler<HostClosing>(_ => { ClearRecoverySession(); Status = "房主已结束房间"; });
             NetworkClient.RegisterHandler<VoluntaryLeaveAcknowledged>(_ => leaveAcknowledged = true);
             NetworkClient.RegisterHandler<ResumeComplete>(_ =>
@@ -407,6 +412,7 @@ namespace EachOneCoin.Networking
 
         public override void OnClientDisconnect()
         {
+            if (replayTransfer != null) replayTransfer.ResetReceive();
             HasSnapshot = false;
             if (!leaving)
             {

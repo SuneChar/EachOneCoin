@@ -135,6 +135,7 @@ namespace EachOneCoin.Networking
                 match.Characters[i].SetActiveState(active);
                 inputTimes[i] = float.NegativeInfinity;
             }
+            if (NetworkServer.active) match.BeginReplayRecording(true, network.SendReplay);
         }
 
         private void SendToReadyClients<T>(T message) where T : struct, NetworkMessage
@@ -320,6 +321,12 @@ namespace EachOneCoin.Networking
             if (!match.Coins.ApplyReplicaSchedule(message)) return;
             hasMineStatus = true;
             lastMineStatusSequence = message.sequence;
+        }
+
+        public bool TryGetReplayAim(int slot, out Vector3 direction)
+        {
+            direction = aimDirection;
+            return network != null && slot == network.LocalSlot && aiming;
         }
 
         private void UpdateLocalAim()

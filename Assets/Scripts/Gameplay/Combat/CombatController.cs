@@ -49,6 +49,7 @@ namespace EachOneCoin.Gameplay
             cooldowns[attacker] = Mathf.Max(0.1f, attackCooldown);
             var attackerCharacter = match.Characters[attacker];
             attackerCharacter.PlayAttack(aimDirection, AttackRange, AttackAngle);
+            if (match.Recorder != null) match.Recorder.RecordAttack(attacker, aimDirection);
             if (match.IsNetworkMovementTest) match.NetworkController.BroadcastAttack(attacker, aimDirection);
             Vector3 origin = attackerCharacter.transform.position;
             for (int target = 0; target < match.Characters.Length; target++)

@@ -12,4 +12,5 @@ maintenanceRules: |-
   - Remove one-off arrangements, temporary phrasing, and unconfirmed inferences
 ---
 
+- UI 优先使用预制体和场景静态配置，不在运行时动态生成 UI。
 

@@ -21,6 +21,8 @@ public class BootMenu : MonoBehaviour
     private bool settingsOpen;
     private bool quitOpen;
     private bool lanRoomOpen;
+    private bool replayOpen;
+    [SerializeField] private EachOneCoin.Gameplay.Replay.ReplayBrowser replayBrowser;
     [SerializeField] private LanRoomUI lanRoom;
 
     private void Awake()
@@ -32,20 +34,21 @@ public class BootMenu : MonoBehaviour
         inputDevice.DeviceChanged += OnDeviceChanged;
         lanRoom.Initialize(this);
         Refresh();
+        if (replayBrowser != null) replayBrowser.Initialize(this);
     }
 
     private void OnDestroy() { if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged; }
     private void OnDeviceChanged(bool gamepad) { usingGamepad = gamepad; Refresh(); }
     private void Refresh()
     {
-        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen);
+        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen && !replayOpen);
         settingsPanel.SetActive(settingsOpen);
         quitConfirmPanel.SetActive(quitOpen);
         if (EventSystem.current != null)
         {
             EventSystem.current.sendNavigationEvents = usingGamepad && Application.isFocused;
             EventSystem.current.SetSelectedGameObject(null);
-            var active = lanRoomOpen ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
+            var active = replayOpen ? replayBrowser.Panel : lanRoomOpen ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
             GamepadNavigation.Configure(active);
             GamepadNavigation.EnsureFocus(active, usingGamepad);
         }
@@ -54,18 +57,20 @@ public class BootMenu : MonoBehaviour
     private void LateUpdate()
     {
         if (lanRoomOpen) return;
-        GamepadNavigation.EnsureFocus(quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel, usingGamepad);
+        GamepadNavigation.EnsureFocus(replayOpen ? replayBrowser.Panel : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel, usingGamepad);
     }
     private void Update()
     {
         if (!Application.isFocused) return;
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || Input.GetKeyDown(KeyCode.JoystickButton1))
         {
-            if (lanRoomOpen) lanRoom.Close();
+            if (replayOpen) replayBrowser.Close();
+            else if (lanRoomOpen) lanRoom.Close();
             else if (quitOpen) CancelQuit();
             else if (settingsOpen) CloseSettings();
         }
     }
+    public void SetReplayOpen(bool open) { replayOpen = open; Refresh(); }
     public void SetLanRoomOpen(bool open) { lanRoomOpen = open; Refresh(); }
     public void StartGame() { SceneManager.LoadScene("ArenaScene"); }
     public void OpenSettings()

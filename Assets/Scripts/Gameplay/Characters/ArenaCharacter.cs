@@ -231,6 +231,20 @@ namespace EachOneCoin.Gameplay
             transform.position = position;
         }
 
+        public void ApplyReplayPosition(Vector3 position, Vector3 facing)
+        {
+            if (controller != null) controller.enabled = false;
+            transform.position = position;
+            facing.y = 0f;
+            if (facing.sqrMagnitude > 0.0001f)
+            {
+                FacingDirection = facing.normalized;
+                if (arrow != null) arrow.localRotation = Quaternion.LookRotation(FacingDirection, Vector3.up);
+                if (Mathf.Abs(facing.x) > 0.0001f) desiredFacing = facing.x < 0f ? -1 : 1;
+                UpdateFacing(Time.deltaTime);
+            }
+        }
+
         public void StartAttackKnockback(Vector3 displacement, float duration)
         {
             if (controller == null || !controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
@@ -345,7 +359,7 @@ namespace EachOneCoin.Gameplay
 
         private void TryHazard(Collider other)
         {
-            if (match == null || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
+            if (match == null || match.IsReplay || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
             if (IsSameHazardTouching(other))
             {
                 touching.Add(other);

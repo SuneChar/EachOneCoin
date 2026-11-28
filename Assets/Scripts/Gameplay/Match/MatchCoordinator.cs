@@ -57,6 +57,7 @@ namespace EachOneCoin.Gameplay
         public event System.Action<MatchFeedEvent> FeedEventRaised;
         public bool IsPaused { get; private set; }
         public bool IsNetworkMovementTest { get; private set; }
+        public bool IsReplay { get; private set; }
         public bool NetworkRulesValid { get; private set; } = true;
         public float InitialDurationSeconds { get; private set; } = MatchModel.DefaultDurationSeconds;
         public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
@@ -79,6 +80,15 @@ namespace EachOneCoin.Gameplay
             }
         }
         internal MovementTelemetry Telemetry { get; private set; }
+        internal Replay.ReplayRecorder Recorder { get; private set; }
+
+        public void BeginReplayRecording(bool network, System.Action<string> onSaved = null)
+        {
+            if (Recorder != null) return;
+            Recorder = gameObject.AddComponent<Replay.ReplayRecorder>();
+            try { Recorder.Initialize(this, network, onSaved); }
+            catch (System.Exception e) { Debug.LogWarning("录像初始化失败：" + e.Message); Destroy(Recorder); Recorder = null; }
+        }
 
         public void Pause()
         {
@@ -147,16 +157,20 @@ namespace EachOneCoin.Gameplay
         private void Start()
         {
             var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
-            IsNetworkMovementTest = network != null && Mirror.NetworkClient.active && network.HasSnapshot;
+            var replay = Replay.ReplaySelection.Pending;
+            Replay.ReplaySelection.Pending = null;
+            IsReplay = replay != null;
+            IsNetworkMovementTest = !IsReplay && network != null && Mirror.NetworkClient.active && network.HasSnapshot;
             grid.Initialize();
             Spawns = new GridPosition[4];
             for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
             session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
             matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
             NetworkRulesValid = ResolveMatchRules(IsNetworkMovementTest, Mirror.NetworkServer.active, out int coinsToWin, out float durationSeconds);
+            if (IsReplay) { coinsToWin = replay.coinsToWin; durationSeconds = replay.duration; }
             InitialDurationSeconds = durationSeconds;
             Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), coinsToWin, durationSeconds);
-            if (!IsNetworkMovementTest) Rules.StartMatch();
+            if (!IsNetworkMovementTest && !IsReplay) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
             {
@@ -191,7 +205,7 @@ namespace EachOneCoin.Gameplay
                 coins.MineCoinsSpawned -= OnMineCoinsSpawned;
                 coins.MineCoinsSpawned += OnMineCoinsSpawned;
             }
-            if (!IsNetworkMovementTest)
+            if (!IsNetworkMovementTest && !IsReplay)
             {
                 npcs.AssignPersonalities(14);
                 participantNames[0] = "玩家1";
@@ -213,12 +227,34 @@ namespace EachOneCoin.Gameplay
                 NetworkController.Initialize(this, network, localInput);
                 return;
             }
+            if (IsReplay)
+            {
+                foreach (var root in gameObject.scene.GetRootGameObjects())
+                    foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.SetRunning(false);
+                gameObject.AddComponent<Replay.ReplayPlayer>().Initialize(this, replay);
+                return;
+            }
+            if (!IsNetworkMovementTest) BeginReplayRecording(false);
             if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
                 System.Array.Exists(System.Environment.GetCommandLineArgs(), arg => arg == "--movement-telemetry"))
             {
                 Telemetry = gameObject.AddComponent<MovementTelemetry>();
                 Telemetry.Initialize(this, localInput);
             }
+        }
+
+        public bool TryGetReplayAim(int slot, out Vector3 direction)
+        {
+            if (IsNetworkMovementTest && NetworkController != null) return NetworkController.TryGetReplayAim(slot, out direction);
+            direction = aimDirection;
+            return slot == 0 && aiming;
+        }
+
+        public void SetReplayParticipantName(int slot, string name)
+        {
+            if (!IsReplay || slot < 0 || slot >= participantNames.Length) return;
+            participantNames[slot] = name;
+            Characters[slot].SetDisplayName(name);
         }
 
         public void SetViewTarget(int slot)
@@ -230,7 +266,7 @@ namespace EachOneCoin.Gameplay
 
         private void Update()
         {
-            if (IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            if (IsReplay || IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;

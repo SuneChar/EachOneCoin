@@ -20,6 +20,33 @@ namespace EachOneCoin
 
         private MatchModel CurrentMatch => session?.Match ?? throw new InvalidOperationException("No active match session is available.");
 
+        public bool ApplyReplayState(float remaining, int status, ReplayParticipantState[] participants)
+        {
+            var match = CurrentMatch;
+            if (float.IsNaN(remaining) || float.IsInfinity(remaining) || remaining < 0f ||
+                status < (int)MatchStatus.Waiting || status > (int)MatchStatus.Finished ||
+                participants == null || participants.Length != match.Participants.Count) return false;
+            for (int i = 0; i < participants.Length; i++)
+            {
+                var p = participants[i];
+                if (p.status < (int)ParticipantStatus.Active || p.status > (int)ParticipantStatus.Lost ||
+                    p.health < 0 || p.maxHealth < 0 || p.health > p.maxHealth || p.coins < 0 || p.finishOrder < 0 ||
+                    p.finishOrder > participants.Length || float.IsNaN(p.stamina) || float.IsInfinity(p.stamina) ||
+                    p.stamina < 0f || p.stamina > session.StaminaAt(i).Maximum) return false;
+            }
+            match.RemainingTime = remaining;
+            match.Status = (MatchStatus)status;
+            for (int i = 0; i < participants.Length; i++)
+            {
+                var source = participants[i]; var target = match.Participants[i];
+                target.IsParticipating = source.participating; target.Health = source.health; target.MaxHealth = source.maxHealth;
+                target.Coins = source.coins; target.FinishOrder = source.finishOrder; target.Status = (ParticipantStatus)source.status;
+                session.StaminaAt(i).Current = source.stamina;
+                session.StaminaAt(i).IsSprinting = false;
+            }
+            return true;
+        }
+
         public bool ConfigureRulesBeforeStart(int coinsToWin, float durationSeconds)
         {
             var match = CurrentMatch;

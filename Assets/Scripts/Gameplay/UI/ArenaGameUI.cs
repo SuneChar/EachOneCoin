@@ -72,6 +72,7 @@ namespace EachOneCoin.Gameplay
         private bool eventFeedInitialized;
         private bool networkStatusBannerInitialized;
         private bool leftHudAdjusted;
+        private bool replayUiAdjusted;
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
         [SerializeField] private GameObject networkStatusBannerRoot;
@@ -277,13 +278,24 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (match == null || match.Model == null) return;
+            if (match.IsReplay)
+            {
+                if (!replayUiAdjusted)
+                {
+                    var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
+                    if (pauseButton != null) pauseButton.gameObject.SetActive(false);
+                    replayUiAdjusted = true;
+                }
+                if (attackPromptText != null && attackPromptText.gameObject.activeSelf) attackPromptText.gameObject.SetActive(false);
+                if (promptImages != null && promptImages.gameObject.activeSelf) promptImages.gameObject.SetActive(false);
+            }
             if (match.IsNetworkMovementTest)
             {
                 if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
                 UpdateNetworkUI();
                 return;
             }
-            if (Application.isFocused && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1))))
+            if (!match.IsReplay && Application.isFocused && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1))))
             {
                 if (settingsOpen) CloseSettings();
                 else if (match.IsPaused) Resume();
@@ -319,7 +331,7 @@ namespace EachOneCoin.Gameplay
                 if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
                 TickHudViews(Time.deltaTime);
             }
-            if (model.Status == MatchStatus.Finished && !resultShown)
+            if (!match.IsReplay && model.Status == MatchStatus.Finished && !resultShown)
             {
                 resultShown = true;
                 if (centerBannerView != null) centerBannerView.Clear();
@@ -1219,7 +1231,7 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        public void Pause() { if (match == null || resultShown) return; if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
+        public void Pause() { if (match == null || resultShown) return; if (match.IsReplay) { var replay = match.GetComponent<Replay.ReplayPlayer>(); if (replay != null) replay.TogglePause(); return; } if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
         public void Resume() { if (match == null) return; match.SuppressGamepadActionsUntilReleased(); settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
         public void OpenSettings()
         {
