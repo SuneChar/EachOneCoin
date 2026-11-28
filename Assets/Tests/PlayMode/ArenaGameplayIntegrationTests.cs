@@ -152,6 +152,61 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator HeightTerrain_AllowsRampAndStepButRejectsCliff()
+        {
+            var mapField = match.GetType().GetField("mapDefinition", Private);
+            var original = (ScriptableObject)mapField.GetValue(match);
+            var custom = UnityEngine.Object.Instantiate(original);
+            try
+            {
+                var mapType = custom.GetType();
+                var cellArray = (Array)mapType.GetField("cells", Private).GetValue(custom);
+                var cellType = cellArray.GetType().GetElementType();
+                var terrainField = cellType.GetField("terrain");
+                var heightField = cellType.GetField("height");
+                var directionField = cellType.GetField("direction");
+                void SetCell(int x, int y, int terrain, int height, int direction = 0)
+                {
+                    int index = x * 21 + y;
+                    object cell = cellArray.GetValue(index);
+                    terrainField.SetValue(cell, Enum.ToObject(terrainField.FieldType, terrain));
+                    heightField.SetValue(cell, height);
+                    directionField.SetValue(cell, direction);
+                    cellArray.SetValue(cell, index);
+                }
+                SetCell(11, 10, 4, 0, 1);
+                SetCell(12, 10, 0, 1);
+                SetCell(7, 7, 5, 1);
+                SetCell(8, 7, 0, 1);
+                mapField.SetValue(match, custom);
+                Call(grid, "ConfigureMap", custom);
+                var character = Character(0);
+                Call(character, "Teleport", CellToWorld(new GridPosition(10, 10)));
+                Physics.SyncTransforms();
+                float baseY = character.transform.position.y;
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.y, Is.EqualTo(baseY + 0.125f).Within(0.02f));
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.y, Is.EqualTo(baseY + 0.25f).Within(0.02f));
+                Call(character, "Teleport", CellToWorld(new GridPosition(6, 7)));
+                Physics.SyncTransforms();
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.y, Is.EqualTo(baseY + 0.25f).Within(0.02f));
+                Call(character, "Move", Vector3.right);
+                Vector3 before = character.transform.position;
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.x - before.x, Is.LessThan(0.6f));
+                yield return null;
+            }
+            finally
+            {
+                mapField.SetValue(match, original);
+                Call(grid, "ConfigureMap", original);
+                UnityEngine.Object.DestroyImmediate(custom);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator GroundShadows_FollowAndRespectOwnerLifetime()
         {
             var character = Character(0);

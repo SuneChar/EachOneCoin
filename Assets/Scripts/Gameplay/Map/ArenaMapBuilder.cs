@@ -34,7 +34,16 @@ namespace EachOneCoin.Gameplay
                     if (cell.terrain == ArenaTerrain.Hole) continue;
                     var tile = UnityEngine.Object.Instantiate(cell.tilePrefabOverride != null ? cell.tilePrefabOverride : map.DefaultTilePrefab, staging.transform);
                     tile.name = "tile";
-                    tile.transform.position = new Vector3(x - map.Width / 2f + 0.5f, -0.2f, y - map.Height / 2f + 0.5f);
+                    float surface = cell.height * ArenaMapTopology.HeightUnit;
+                    if (cell.terrain == ArenaTerrain.Ramp) surface += ArenaMapTopology.HeightUnit * 0.5f;
+                    tile.transform.position = new Vector3(x - map.Width / 2f + 0.5f, surface - 0.2f, y - map.Height / 2f + 0.5f);
+                    if (cell.terrain == ArenaTerrain.Ramp)
+                    {
+                        float angle = Mathf.Atan(ArenaMapTopology.HeightUnit) * Mathf.Rad2Deg;
+                        tile.transform.rotation = cell.direction == 0 ? Quaternion.Euler(-angle, 0f, 0f) :
+                            cell.direction == 1 ? Quaternion.Euler(0f, 0f, angle) :
+                            cell.direction == 2 ? Quaternion.Euler(angle, 0f, 0f) : Quaternion.Euler(0f, 0f, -angle);
+                    }
                     if (cell.meshOverride != null) tile.GetComponentInChildren<MeshFilter>(true).sharedMesh = cell.meshOverride;
                     if (cell.terrain == ArenaTerrain.Slow)
                     {
@@ -49,7 +58,7 @@ namespace EachOneCoin.Gameplay
                     {
                         var wall = UnityEngine.Object.Instantiate(map.WallPrefab, tile.transform);
                         wall.name = "Map Wall";
-                        wall.transform.position = new Vector3(tile.transform.position.x, 0.5f, tile.transform.position.z);
+                        wall.transform.position = new Vector3(tile.transform.position.x, surface + 0.5f, tile.transform.position.z);
                         wall.transform.rotation = Quaternion.identity;
                     }
                     created.Add(tile);
@@ -63,7 +72,13 @@ namespace EachOneCoin.Gameplay
         public static void ResizeBoundary(ArenaMapDefinition map, Scene scene)
         {
             if (!Application.isPlaying) throw new InvalidOperationException("Map construction requires Play Mode.");
-            if (map.Width == ArenaGridView.Size && map.Height == ArenaGridView.Size) return;
+            int minLevel = 0, maxLevel = 0;
+            foreach (var cell in map.Cells)
+            {
+                minLevel = Mathf.Min(minLevel, cell.height);
+                maxLevel = Mathf.Max(maxLevel, cell.height + (cell.terrain == ArenaTerrain.Ramp ? 1 : 0));
+            }
+            if (map.Width == ArenaGridView.Size && map.Height == ArenaGridView.Size && minLevel == 0 && maxLevel == 0) return;
             Transform world = null;
             foreach (var root in scene.GetRootGameObjects()) if (root.name == "---World---") { world = root.transform; break; }
             var boundary = world != null ? world.Find("Arena Boundary") : null;
@@ -87,23 +102,31 @@ namespace EachOneCoin.Gameplay
                 for (int i = 0; i < map.Width; i++)
                 {
                     float x = i - map.Width / 2f + 0.5f;
-                    AddFence(template, staging.transform, created, new Vector3(x, 0f, -map.Height / 2f), 0f);
-                    AddFence(template, staging.transform, created, new Vector3(x, 0f, map.Height / 2f), 180f);
+                    float south = ArenaMapTopology.SurfaceHeight(map, new Vector3(x, 0f, -map.Height / 2f + 0.001f));
+                    float north = ArenaMapTopology.SurfaceHeight(map, new Vector3(x, 0f, map.Height / 2f - 0.001f));
+                    AddFence(template, staging.transform, created, new Vector3(x, south, -map.Height / 2f), 0f);
+                    AddFence(template, staging.transform, created, new Vector3(x, north, map.Height / 2f), 180f);
                 }
                 for (int i = 0; i < map.Height; i++)
                 {
                     float z = i - map.Height / 2f + 0.5f;
-                    AddFence(template, staging.transform, created, new Vector3(-map.Width / 2f, 0f, z), 90f);
-                    AddFence(template, staging.transform, created, new Vector3(map.Width / 2f, 0f, z), 270f);
+                    float west = ArenaMapTopology.SurfaceHeight(map, new Vector3(-map.Width / 2f + 0.001f, 0f, z));
+                    float east = ArenaMapTopology.SurfaceHeight(map, new Vector3(map.Width / 2f - 0.001f, 0f, z));
+                    AddFence(template, staging.transform, created, new Vector3(-map.Width / 2f, west, z), 90f);
+                    AddFence(template, staging.transform, created, new Vector3(map.Width / 2f, east, z), 270f);
                 }
                 for (int i = boundary.childCount - 1; i >= 0; i--)
                     if (boundary.GetChild(i).GetComponent<MeshRenderer>() != null) UnityEngine.Object.DestroyImmediate(boundary.GetChild(i).gameObject);
-                colliders[0].transform.position = new Vector3(0f, 0.75f, -map.Height / 2f);
-                colliders[1].transform.position = new Vector3(0f, 0.75f, map.Height / 2f);
-                colliders[2].transform.position = new Vector3(-map.Width / 2f, 0.75f, 0f);
-                colliders[3].transform.position = new Vector3(map.Width / 2f, 0.75f, 0f);
-                colliders[0].size = colliders[1].size = new Vector3(map.Width + 0.5f, 1.5f, 0.3f);
-                colliders[2].size = colliders[3].size = new Vector3(0.3f, 1.5f, map.Height + 0.5f);
+                float bottom = minLevel * ArenaMapTopology.HeightUnit - 0.5f;
+                float top = maxLevel * ArenaMapTopology.HeightUnit + 1.5f;
+                float centerY = (bottom + top) * 0.5f;
+                float colliderHeight = top - bottom;
+                colliders[0].transform.position = new Vector3(0f, centerY, -map.Height / 2f);
+                colliders[1].transform.position = new Vector3(0f, centerY, map.Height / 2f);
+                colliders[2].transform.position = new Vector3(-map.Width / 2f, centerY, 0f);
+                colliders[3].transform.position = new Vector3(map.Width / 2f, centerY, 0f);
+                colliders[0].size = colliders[1].size = new Vector3(map.Width + 0.5f, colliderHeight, 0.3f);
+                colliders[2].size = colliders[3].size = new Vector3(0.3f, colliderHeight, map.Height + 0.5f);
                 foreach (var fence in created) fence.transform.SetParent(boundary, true);
             }
             finally { UnityEngine.Object.DestroyImmediate(staging); }
@@ -142,7 +165,9 @@ namespace EachOneCoin.Gameplay
                 {
                     var instance = UnityEngine.Object.Instantiate(entry.prefab, staging.transform);
                     instance.name = entry.id;
-                    instance.transform.SetPositionAndRotation(entry.position, Quaternion.Euler(entry.rotation));
+                    Vector3 position = entry.position;
+                    position.y += ArenaMapTopology.SurfaceHeight(map, position);
+                    instance.transform.SetPositionAndRotation(position, Quaternion.Euler(entry.rotation));
                     if (entry.overridePatrolSpeed) instance.GetComponent<LinearPatrolObstacle>().ConfigureSpeedBeforeActivation(entry.patrolSpeed);
                     if (entry.overrideInitiallyVisible) instance.GetComponent<TimedSpikeTrap>().ConfigureInitialVisibilityBeforeStart(entry.initiallyVisible);
                     created.Add(instance);

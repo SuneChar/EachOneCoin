@@ -513,7 +513,7 @@ namespace EachOneCoin.Gameplay
             coin.transform.position = match.Grid.CellToWorld(position) + Vector3.up * 0.45f;
             if (coinModel == null) coin.transform.localScale = Vector3.one * 0.35f;
             foreach (var collider in coin.GetComponentsInChildren<Collider>()) collider.enabled = false;
-            GroundShadow.Create(coin, 0.55f);
+            GroundShadow.Create(coin, 0.55f, match);
             var slot = new Slot { Id = id, Position = position, Kind = kind, Coin = coin };
             slots.Add(slot);
             if (!replica) PublishChange(0, slot);

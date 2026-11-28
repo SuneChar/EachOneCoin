@@ -7,12 +7,14 @@ namespace EachOneCoin.Gameplay
     public sealed class GroundShadow : MonoBehaviour
     {
         private Transform shadow;
+        private MatchCoordinator match;
 
-        public static GroundShadow Create(GameObject owner, float size)
+        public static GroundShadow Create(GameObject owner, float size, MatchCoordinator coordinator = null)
         {
             var sprite = Resources.Load<Sprite>("GroundShadow");
             if (sprite == null) return null;
             var component = owner.AddComponent<GroundShadow>();
+            component.match = coordinator;
             var instance = new GameObject("Ground Shadow", typeof(SpriteRenderer));
             instance.transform.SetParent(owner.transform.parent, false);
             component.shadow = instance.transform;
@@ -37,7 +39,8 @@ namespace EachOneCoin.Gameplay
         {
             if (shadow == null) return;
             var position = transform.position;
-            shadow.position = new Vector3(position.x, 0.04f, position.z);
+            float ground = match != null && match.Grid != null ? match.Grid.SurfaceHeightAt(position) : 0f;
+            shadow.position = new Vector3(position.x, ground + 0.04f, position.z);
         }
 
         private void OnDestroy()

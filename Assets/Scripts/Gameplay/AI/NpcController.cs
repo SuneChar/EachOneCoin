@@ -286,7 +286,7 @@ namespace EachOneCoin.Gameplay
                 for (int i = 0; i < 4; i++)
                 {
                     var candidate = new GridPosition(cell.X + Dx[i], cell.Y + Dy[i]);
-                    if (!match.Model.Grid.Contains(candidate) || visited[candidate.X, candidate.Y] || match.IsOtherSpawn(id, candidate) || match.IsBlocked(candidate)) continue;
+                    if (!match.Model.Grid.Contains(candidate) || visited[candidate.X, candidate.Y] || match.IsOtherSpawn(id, candidate) || !match.CanTraverse(cell, candidate) || match.IsBlocked(candidate)) continue;
                     visited[candidate.X, candidate.Y] = true; parent[candidate.X, candidate.Y] = cell; distance[candidate.X, candidate.Y] = dist + 1; queue.Enqueue(candidate);
                 }
             }
@@ -322,7 +322,7 @@ namespace EachOneCoin.Gameplay
                 for (int i = 0; i < 4; i++)
                 {
                     var candidate = new GridPosition(cell.X + Dx[i], cell.Y + Dy[i]);
-                    if (!match.Model.Grid.Contains(candidate) || visited[candidate.X, candidate.Y] || match.IsOtherSpawn(id, candidate) || match.IsBlocked(candidate)) continue;
+                    if (!match.Model.Grid.Contains(candidate) || visited[candidate.X, candidate.Y] || match.IsOtherSpawn(id, candidate) || !match.CanTraverse(cell, candidate) || match.IsBlocked(candidate)) continue;
                     visited[candidate.X, candidate.Y] = true; parent[candidate.X, candidate.Y] = cell; queue.Enqueue(candidate);
                 }
             }

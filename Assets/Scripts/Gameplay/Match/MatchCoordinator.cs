@@ -187,13 +187,6 @@ namespace EachOneCoin.Gameplay
                     enabled = false;
                     return;
                 }
-                foreach (var cell in mapDefinition.Cells)
-                    if ((cell.terrain != ArenaTerrain.Ground && cell.terrain != ArenaTerrain.Slow && cell.terrain != ArenaTerrain.Wall && cell.terrain != ArenaTerrain.Hole) || cell.height != 0)
-                    {
-                        Debug.LogError("当前竞技场尚不支持地图地形或高度，无法开始对局。", mapDefinition);
-                        enabled = false;
-                        return;
-                    }
                 try
                 {
                     ArenaMapBuilder.BuildTiles(mapDefinition, gameObject.scene);
@@ -207,7 +200,7 @@ namespace EachOneCoin.Gameplay
                     return;
                 }
             }
-            if (mapDefinition != null) grid.ConfigureSize(mapDefinition.Width, mapDefinition.Height);
+            if (mapDefinition != null) grid.ConfigureMap(mapDefinition);
             grid.Initialize();
             Spawns = new GridPosition[4];
             for (int i = 0; i < Spawns.Length; i++)
@@ -224,6 +217,23 @@ namespace EachOneCoin.Gameplay
                 for (int x = 0; x < mapDefinition.Width; x++) for (int y = 0; y < mapDefinition.Height; y++)
                     if (mapDefinition.Cells[x * mapDefinition.Height + y].terrain == ArenaTerrain.Wall || mapDefinition.Cells[x * mapDefinition.Height + y].terrain == ArenaTerrain.Hole) blocked.Add(new GridPosition(x, y));
                 Rules.ConfigureBlockedCells(blocked);
+                var edges = new System.Collections.Generic.List<GridEdge>();
+                for (int x = 0; x < mapDefinition.Width; x++) for (int y = 0; y < mapDefinition.Height; y++)
+                {
+                    var from = new GridPosition(x, y);
+                    if (Model.Grid.IsBlocked(from)) continue;
+                    if (x + 1 < mapDefinition.Width)
+                    {
+                        var to = new GridPosition(x + 1, y);
+                        if (!Model.Grid.IsBlocked(to) && !ArenaMapTopology.CanTraverse(mapDefinition, from, to)) edges.Add(new GridEdge(from, to));
+                    }
+                    if (y + 1 < mapDefinition.Height)
+                    {
+                        var to = new GridPosition(x, y + 1);
+                        if (!Model.Grid.IsBlocked(to) && !ArenaMapTopology.CanTraverse(mapDefinition, from, to)) edges.Add(new GridEdge(from, to));
+                    }
+                }
+                Rules.ConfigureBlockedEdges(edges);
             }
             if (!IsNetworkMovementTest && !IsReplay) Rules.StartMatch();
             Stamina = session.Stamina;
@@ -523,6 +533,11 @@ namespace EachOneCoin.Gameplay
             var spike = collider.GetComponentInParent<TimedSpikeTrap>();
             if (spike != null && !spike.IsActive) return false;
             return collider.GetComponentInParent<LethalContact>() != null || collider.GetComponentInParent<LethalObstacle>() != null || spike != null;
+        }
+
+        public bool CanTraverse(GridPosition from, GridPosition to, bool allowHole = false)
+        {
+            return mapDefinition == null ? Model.Grid.Contains(to) : ArenaMapTopology.CanTraverse(mapDefinition, from, to, allowHole);
         }
 
         public bool IsHole(GridPosition cell)

@@ -16,12 +16,14 @@ namespace EachOneCoin.Gameplay
         private Mesh overlayMesh;
         private Material overlayMaterial;
         private bool[][,] connected = { new bool[Size, Size], new bool[Size, Size], new bool[Size, Size], new bool[Size, Size] };
+        private ArenaMapDefinition map;
         public int Width { get; private set; } = Size;
         public int Height { get; private set; } = Size;
 
         public void ConfigureSize(int width, int height)
         {
             if (width <= 0 || height <= 0) throw new System.ArgumentOutOfRangeException(nameof(width));
+            map = null;
             Width = width; Height = height;
             tiles = new Renderer[width, height];
             displayedState = new int[width, height];
@@ -29,6 +31,15 @@ namespace EachOneCoin.Gameplay
         }
         private readonly Color[] colors = { new Color(0.94f, 0.27f, 0.28f), new Color(0.25f, 0.51f, 0.95f), new Color(0.26f, 0.79f, 0.43f), new Color(0.94f, 0.7f, 0.19f) };
         private MaterialPropertyBlock block;
+
+        public void ConfigureMap(ArenaMapDefinition definition)
+        {
+            if (definition == null) throw new System.ArgumentNullException(nameof(definition));
+            ConfigureSize(definition.Width, definition.Height);
+            map = definition;
+        }
+
+        public float SurfaceHeightAt(Vector3 world) => map != null ? ArenaMapTopology.SurfaceHeight(map, world) : 0f;
 
         public void Initialize()
         {
@@ -54,7 +65,9 @@ namespace EachOneCoin.Gameplay
                 if (original == null) continue;
                 var overlay = new GameObject("Color Overlay " + cell.X + "," + cell.Y, typeof(MeshFilter), typeof(MeshRenderer));
                 overlay.transform.SetParent(overlayRoot, false);
-                overlay.transform.position = new Vector3(tile.position.x, original.bounds.max.y + 0.015f, tile.position.z);
+                bool ramp = map != null && map.Cells[cell.X * map.Height + cell.Y].terrain == ArenaTerrain.Ramp;
+                overlay.transform.position = new Vector3(tile.position.x, ramp ? SurfaceHeightAt(tile.position) + 0.015f : original.bounds.max.y + 0.015f, tile.position.z);
+                if (ramp) overlay.transform.rotation = tile.rotation;
                 overlay.GetComponent<MeshFilter>().sharedMesh = overlayMesh;
                 var renderer = overlay.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial = overlayMaterial;
@@ -78,7 +91,12 @@ namespace EachOneCoin.Gameplay
             var cell = WorldToCellUnclamped(world);
             return new GridPosition(Mathf.Clamp(cell.X, 0, Width - 1), Mathf.Clamp(cell.Y, 0, Height - 1));
         }
-        public Vector3 CellToWorld(GridPosition cell) => new Vector3(cell.X - Width / 2f + 0.5f, 0f, cell.Y - Height / 2f + 0.5f);
+        public Vector3 CellToWorld(GridPosition cell)
+        {
+            var result = new Vector3(cell.X - Width / 2f + 0.5f, 0f, cell.Y - Height / 2f + 0.5f);
+            result.y = SurfaceHeightAt(result);
+            return result;
+        }
         public Color PlayerColor(int id) => visualConfig != null ? visualConfig.PlayerColor(id, colors[id]) : colors[id];
         public bool IsConnected(int id, GridPosition cell) => connected[id][cell.X, cell.Y];
 

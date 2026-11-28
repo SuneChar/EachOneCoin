@@ -20,10 +20,22 @@ namespace EachOneCoin.Gameplay
             if (error != null) return false;
             foreach (var cell in map.Cells)
             {
-                if (!Enum.IsDefined(typeof(ArenaTerrain), cell.terrain) || cell.direction < 0 || cell.direction > 3)
+                if (!Enum.IsDefined(typeof(ArenaTerrain), cell.terrain) || cell.direction < 0 || cell.direction > 3 || cell.height == int.MinValue || (cell.terrain == ArenaTerrain.Ramp && cell.height == int.MaxValue))
                 { error = "地块类型或方向无效"; return false; }
                 if (cell.terrain == ArenaTerrain.Wall && (map.WallPrefab == null || map.WallPrefab.GetComponent<ArenaWall>() == null))
                 { error = "墙地形需要无伤墙 Prefab"; return false; }
+            }
+            var rampDx = new[] { 0, 1, 0, -1 };
+            var rampDy = new[] { 1, 0, -1, 0 };
+            for (int x = 0; x < map.Width; x++) for (int y = 0; y < map.Height; y++)
+            {
+                var cell = map.Cells[x * map.Height + y];
+                if (cell.terrain != ArenaTerrain.Ramp) continue;
+                var position = new GridPosition(x, y);
+                var low = new GridPosition(x - rampDx[cell.direction], y - rampDy[cell.direction]);
+                var high = new GridPosition(x + rampDx[cell.direction], y + rampDy[cell.direction]);
+                if (!ArenaMapTopology.CanTraverse(map, low, position) || !ArenaMapTopology.CanTraverse(map, position, high))
+                { error = $"斜坡 ({x}, {y}) 的高低两端必须连接对应高度的地面"; return false; }
             }
             var occupied = new HashSet<Vector2Int>();
             foreach (var position in map.Spawns)

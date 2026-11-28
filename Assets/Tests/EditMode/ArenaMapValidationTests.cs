@@ -1,5 +1,6 @@
 using System;
 using System.Reflection;
+using EachOneCoin;
 using NUnit.Framework;
 using UnityEditor;
 using UnityEngine;
@@ -65,6 +66,53 @@ public class ArenaMapValidationTests
     {
         var point = serialized.FindProperty("spawns").GetArrayElementAtIndex(0).vector2IntValue;
         serialized.FindProperty("mines").GetArrayElementAtIndex(0).vector2IntValue = point;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        Assert.That(IsValid(out _), Is.False);
+    }
+
+    [Test]
+    public void Ramp_ConnectsAlignedLevelsAndRejectsSideEntry()
+    {
+        var cells = serialized.FindProperty("cells");
+        var ramp = cells.GetArrayElementAtIndex(11 * 21 + 10);
+        ramp.FindPropertyRelative("terrain").enumValueIndex = 4;
+        ramp.FindPropertyRelative("direction").intValue = 1;
+        cells.GetArrayElementAtIndex(12 * 21 + 10).FindPropertyRelative("height").intValue = 1;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        Assert.That(IsValid(out var error), Is.True, error);
+        var topology = Type.GetType("EachOneCoin.Gameplay.ArenaMapTopology, Assembly-CSharp", true);
+        var traverse = topology.GetMethod("CanTraverse");
+        bool Can(GridPosition a, GridPosition b) => (bool)traverse.Invoke(null, new object[] { map, a, b, false });
+        Assert.That(Can(new GridPosition(10, 10), new GridPosition(11, 10)), Is.True);
+        Assert.That(Can(new GridPosition(11, 10), new GridPosition(12, 10)), Is.True);
+        Assert.That(Can(new GridPosition(11, 9), new GridPosition(11, 10)), Is.False);
+        float height = (float)topology.GetMethod("SurfaceHeight").Invoke(null, new object[] { map, new Vector3(1f, 0f, 0f) });
+        Assert.That(height, Is.EqualTo(0.125f).Within(0.001f));
+    }
+
+    [Test]
+    public void Step_ConnectsOneLevelButOrdinaryCliffDoesNot()
+    {
+        var cells = serialized.FindProperty("cells");
+        var step = cells.GetArrayElementAtIndex(11 * 21 + 10);
+        step.FindPropertyRelative("terrain").enumValueIndex = 5;
+        step.FindPropertyRelative("height").intValue = 1;
+        cells.GetArrayElementAtIndex(12 * 21 + 10).FindPropertyRelative("height").intValue = 1;
+        serialized.ApplyModifiedPropertiesWithoutUndo();
+        var topology = Type.GetType("EachOneCoin.Gameplay.ArenaMapTopology, Assembly-CSharp", true);
+        var traverse = topology.GetMethod("CanTraverse");
+        bool Can(GridPosition a, GridPosition b) => (bool)traverse.Invoke(null, new object[] { map, a, b, false });
+        Assert.That(Can(new GridPosition(10, 10), new GridPosition(11, 10)), Is.True);
+        Assert.That(Can(new GridPosition(11, 10), new GridPosition(12, 10)), Is.True);
+        Assert.That(Can(new GridPosition(12, 10), new GridPosition(13, 10)), Is.False);
+    }
+
+    [Test]
+    public void Ramp_WithMissingHighConnection_IsRejected()
+    {
+        var ramp = serialized.FindProperty("cells").GetArrayElementAtIndex(11 * 21 + 10);
+        ramp.FindPropertyRelative("terrain").enumValueIndex = 4;
+        ramp.FindPropertyRelative("direction").intValue = 1;
         serialized.ApplyModifiedPropertiesWithoutUndo();
         Assert.That(IsValid(out _), Is.False);
     }

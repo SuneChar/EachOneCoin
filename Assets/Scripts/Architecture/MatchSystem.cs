@@ -102,6 +102,18 @@ namespace EachOneCoin
             foreach (var position in positions) match.Grid.SetBlocked(position, true);
         }
 
+        public void ConfigureBlockedEdges(IReadOnlyList<GridEdge> edges)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Waiting) throw new InvalidOperationException("Terrain must be configured before starting.");
+            if (edges == null) throw new ArgumentNullException(nameof(edges));
+            foreach (var edge in edges)
+                if (!match.Grid.Contains(edge.From) || !match.Grid.Contains(edge.To) ||
+                    Math.Abs((long)edge.From.X - edge.To.X) + Math.Abs((long)edge.From.Y - edge.To.Y) != 1)
+                    throw new ArgumentException("Blocked edges must join neighbouring cells inside the grid.", nameof(edges));
+            foreach (var edge in edges) match.Grid.SetEdgeBlocked(edge.From, edge.To);
+        }
+
         public void ConfigureMines(IReadOnlyList<GridPosition> positions)
         {
             var match = CurrentMatch;

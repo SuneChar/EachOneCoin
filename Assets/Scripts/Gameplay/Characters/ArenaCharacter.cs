@@ -89,7 +89,7 @@ namespace EachOneCoin.Gameplay
                 if (sprites[i].name == "PlayerSprite") { sprites[i].color = color; characterSprite = sprites[i]; }
                 spriteColors[i] = sprites[i].color;
             }
-            groundShadow = GroundShadow.Create(gameObject, 0.85f);
+            groundShadow = GroundShadow.Create(gameObject, 0.85f, coordinator);
             attackVisual = gameObject.AddComponent<AttackVisual>();
             attackVisual.Initialize(coordinator, visual);
             if (nameplate != null) nameplate.Initialize(coordinator.NameplateFont, controller.height * 0.5f + 1.6f);
@@ -316,11 +316,17 @@ namespace EachOneCoin.Gameplay
         private CollisionFlags MoveOnPlane(Vector3 delta)
         {
             Vector3 before = transform.position;
+            var from = match.Grid.WorldToCellUnclamped(before);
+            var intended = match.Grid.WorldToCellUnclamped(before + delta);
+            if (!match.Model.Grid.Contains(intended) || (!from.Equals(intended) && !match.CanTraverse(from, intended, true))) return CollisionFlags.Sides;
+            float offset = controller.height * 0.5f - controller.center.y + controller.skinWidth;
+            float desiredHeight = match.IsHole(intended) ? before.y : match.Grid.SurfaceHeightAt(before + delta) + offset;
+            if (desiredHeight > before.y) transform.position = new Vector3(before.x, desiredHeight, before.z);
             CollisionFlags flags = controller.Move(delta);
             Vector3 after = transform.position;
-            // Reject a step that collision resolution lifted off the arena plane.
-            if (Mathf.Abs(after.y - before.y) > 0.001f) transform.position = before;
-            else if (after.y != before.y) transform.position = new Vector3(after.x, before.y, after.z);
+            var afterCell = match.Grid.WorldToCellUnclamped(after);
+            float groundHeight = match.IsHole(afterCell) ? before.y : match.Grid.SurfaceHeightAt(after) + offset;
+            transform.position = new Vector3(after.x, groundHeight, after.z);
             return flags;
         }
 

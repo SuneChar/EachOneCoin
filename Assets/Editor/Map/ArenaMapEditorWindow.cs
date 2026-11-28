@@ -44,8 +44,9 @@ namespace EachOneCoin.Editor
             requestedHeight = EditorGUILayout.IntField("新高度", requestedHeight);
             if (GUILayout.Button("调整尺寸")) ResizeMap();
             brush = (ArenaTerrain)EditorGUILayout.EnumPopup("地形画笔", brush);
-            brushHeight = EditorGUILayout.IntField("高度", brushHeight);
-            brushDirection = EditorGUILayout.IntSlider("方向", brushDirection, 0, 3);
+            brushHeight = EditorGUILayout.IntField("高度等级", brushHeight);
+            brushDirection = EditorGUILayout.IntSlider("斜坡方向（0北 1东 2南 3西）", brushDirection, 0, 3);
+            EditorGUILayout.HelpBox("每级高度为 0.25 单位。斜坡沿方向升高一级；台阶连接相邻一级高度。", MessageType.None);
             if (!ArenaMapValidator.TryValidate(map, out string error)) EditorGUILayout.HelpBox(error, MessageType.Error);
             else EditorGUILayout.HelpBox("基础数据校验通过。地形运行时尚未接入。", MessageType.Info);
             DrawGrid();

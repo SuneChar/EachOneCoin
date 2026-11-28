@@ -68,6 +68,34 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void BlockedEdges_StopTerritoryConnectivityAcrossHeightCliff()
+        {
+            var match = session.CreateMatch(3, 3, Spawns, 3, 100f);
+            rules.ConfigureBlockedEdges(new[]
+            {
+                new GridEdge(new GridPosition(0, 0), new GridPosition(1, 0)),
+                new GridEdge(new GridPosition(0, 1), new GridPosition(1, 1)),
+                new GridEdge(new GridPosition(0, 2), new GridPosition(1, 2))
+            });
+            rules.StartMatch();
+            Assert.That(rules.TryPaint(0, new GridPosition(1, 0)), Is.True);
+            Assert.That(match.Grid.IsConnected(0, new GridPosition(1, 0)), Is.False);
+        }
+
+        [Test]
+        public void BlockedEdges_RejectInvalidInputBeforeChangingGrid()
+        {
+            var match = session.CreateMatch(3, 3, Spawns, 3, 100f);
+            uint revision = match.Grid.Revision;
+            Assert.Throws<ArgumentException>(() => rules.ConfigureBlockedEdges(new[]
+            {
+                new GridEdge(new GridPosition(0, 0), new GridPosition(1, 0)),
+                new GridEdge(new GridPosition(0, 0), new GridPosition(2, 0))
+            }));
+            Assert.That(match.Grid.Revision, Is.EqualTo(revision));
+        }
+
+        [Test]
         public void Rules_UseNewMatchAndRejectClearedSession()
         {
             var first = session.CreateMatch(3, 3, Spawns, 3, 100f);
