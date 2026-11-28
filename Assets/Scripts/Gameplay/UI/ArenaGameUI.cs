@@ -12,15 +12,15 @@ namespace EachOneCoin.Gameplay
     {
         private static readonly string[] FallbackMineNames = { "南侧", "北侧", "西侧", "东侧" };
         private const float MinimapStripGap = 8f;
+        private const float MinimapTriggerThreshold = 0.5f;
 
         [SerializeField] private MatchCoordinator match;
         [SerializeField] private GameAudio gameAudio;
         [SerializeField] private GameObject hudPanel, pausePanel, settingsPanel, resultPanel;
-        [SerializeField] private TMP_Text resultText, resultCoinsText, attackPromptText, volumeValueText;
+        [SerializeField] private TMP_Text resultText, resultCoinsText, volumeValueText;
         [SerializeField] private HealthHeartsView healthHeartsView;
         [SerializeField] private ArcStaminaBarView arcStaminaBarView;
         [SerializeField] private ArenaMinimapView minimapView;
-        [SerializeField] private LocalPlayerPortraitView localPortraitView;
         [SerializeField] private ParticipantHudStripView participantStripView;
         [SerializeField] private LocalCoinCounterView localCoinCounterView;
         [SerializeField] private CenterBannerPromptView centerBannerView;
@@ -64,8 +64,8 @@ namespace EachOneCoin.Gameplay
         private bool heartsInitialized;
         private bool staminaBarInitialized;
         private bool minimapInitialized;
-        private MinimapSizeMode minimapSizeMode = MinimapSizeMode.Expanded;
-        private bool localPortraitInitialized;
+        private MinimapSizeMode minimapSizeMode = MinimapSizeMode.Compact;
+        private bool minimapHoldActive;
         private bool participantStripInitialized;
         private bool localCoinCounterInitialized;
         private bool centerBannerInitialized;
@@ -90,7 +90,6 @@ namespace EachOneCoin.Gameplay
         {
             get
             {
-                if (attackPromptText != null && attackPromptText.font != null) return attackPromptText.font;
                 if (resultText != null && resultText.font != null) return resultText.font;
                 return null;
             }
@@ -135,17 +134,43 @@ namespace EachOneCoin.Gameplay
 
         private void HandleMinimapToggleInput()
         {
-            if (!Application.isFocused || IsMinimapToggleBlocked())
+            bool available = Application.isFocused && !IsMinimapToggleBlocked();
+            bool toggle = available && (Input.GetKeyDown(KeyCode.M)
+                || (enableGamepadMinimapToggle && Input.GetKeyDown(KeyCode.JoystickButton6)));
+            // The combined trigger axis is mapped to its positive side for RT; verify per controller.
+            bool hold = available && (Input.GetKey(KeyCode.CapsLock)
+                || (enableGamepadMinimapToggle && Input.GetAxisRaw("GamepadAxis3") > MinimapTriggerThreshold));
+            ProcessMinimapInput(available, toggle, hold);
+        }
+
+        private void ProcessMinimapInput(bool available, bool toggle, bool hold)
+        {
+            if (!available)
             {
+                if (minimapHoldActive)
+                {
+                    minimapHoldActive = false;
+                    SetMinimapSizeMode(MinimapSizeMode.Compact);
+                }
                 return;
             }
 
-            bool pressed = Input.GetKeyDown(KeyCode.M)
-                || (enableGamepadMinimapToggle && Input.GetKeyDown(KeyCode.JoystickButton6));
-            if (pressed)
+            if (hold)
             {
-                ToggleMinimapSize();
+                if (!minimapHoldActive || minimapSizeMode != MinimapSizeMode.Expanded)
+                    SetMinimapSizeMode(MinimapSizeMode.Expanded);
+                minimapHoldActive = true;
+                return;
             }
+
+            if (minimapHoldActive)
+            {
+                minimapHoldActive = false;
+                SetMinimapSizeMode(MinimapSizeMode.Compact);
+                return;
+            }
+
+            if (toggle) ToggleMinimapSize();
         }
 
         private void SyncMinimapAndParticipantStripLayout()
@@ -161,12 +186,10 @@ namespace EachOneCoin.Gameplay
                     ? minimapView.MapSize
                     : (minimapSizeMode == MinimapSizeMode.Compact ? 210f : 368f);
                 float expandedMapSize = minimapView != null ? minimapView.ExpandedMapSize : 368f;
-                Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
-                Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + currentMapSize + MinimapStripGap);
-                ParticipantHudLayoutMode stripMode = minimapSizeMode == MinimapSizeMode.Compact
-                    ? ParticipantHudLayoutMode.VerticalRightAligned
-                    : ParticipantHudLayoutMode.Horizontal;
-                participantStripView.SetLayoutMode(stripMode, expandedMapSize, stripOffset);
+                Vector2 mapOffset = minimapView != null ? minimapView.TopLeftOffset : new Vector2(12f, -12f);
+                Vector2 stripOffset = new Vector2(mapOffset.x + currentMapSize + MinimapStripGap, mapOffset.y);
+                participantStripView.SetTopLeftAnchor(true);
+                participantStripView.SetLayoutMode(ParticipantHudLayoutMode.Horizontal, expandedMapSize, stripOffset);
             }
         }
 
@@ -188,7 +211,6 @@ namespace EachOneCoin.Gameplay
             if (avatarProvider != null) avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
             avatarProvider = next;
             if (isActiveAndEnabled && avatarProvider != null) avatarProvider.AppearanceChanged += OnAvatarAppearanceChanged;
-            if (localPortraitView != null) localPortraitView.SetAppearanceProvider(avatarProvider);
             avatarAppearanceDirty = true;
         }
 
@@ -208,12 +230,6 @@ namespace EachOneCoin.Gameplay
             inputDevice = GetComponent<InputDeviceTracker>();
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
-            if (attackPromptText != null)
-            {
-                var rect = attackPromptText.rectTransform;
-                rect.sizeDelta = new Vector2(Mathf.Max(rect.sizeDelta.x, 300f), Mathf.Max(rect.sizeDelta.y, 60f));
-                rect.anchoredPosition += new Vector2(0f, 33f);
-            }
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
             CreateHitFrame();
             AdjustPauseButtonLayout();
@@ -236,6 +252,7 @@ namespace EachOneCoin.Gameplay
 
         private void OnDisable()
         {
+            ProcessMinimapInput(false, false, false);
             if (match != null)
             {
                 match.ObstacleHit -= OnObstacleHit;
@@ -274,7 +291,6 @@ namespace EachOneCoin.Gameplay
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             UpdateHitFrame();
-            if (localPortraitView != null) localPortraitView.TriggerHitFlash();
         }
 
         private void OnAttackHit(int id)
@@ -282,7 +298,6 @@ namespace EachOneCoin.Gameplay
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             UpdateHitFrame();
-            if (localPortraitView != null) localPortraitView.TriggerHitFlash();
         }
 
         private void OnFeedEventRaised(MatchFeedEvent evt)
@@ -495,7 +510,6 @@ namespace EachOneCoin.Gameplay
                 if (participantCount > 0)
                 {
                     var localSnapshot = snapshotBuffer[0];
-                    if (localPortraitView != null) localPortraitView.SetParticipant(0, localSnapshot.Appearance, localSnapshot.Status);
                     if (healthHeartsView != null) healthHeartsView.SetHealth(localSnapshot.Health, localSnapshot.MaxHealth, !firstRefresh);
                     if (localCoinCounterView != null) localCoinCounterView.SetCoins(localSnapshot.Coins, model.CoinsToWin, !firstRefresh);
                 }
@@ -683,8 +697,6 @@ namespace EachOneCoin.Gameplay
                 }
 
                 if (participantStripView != null) participantStripView.Refresh(snapshotBuffer);
-                if (localPortraitView != null)
-                    localPortraitView.SetParticipant(focusSlot, snapshotBuffer[focusSlot].Appearance, snapshotBuffer[focusSlot].Status);
 
                 lastLocalSlot = slot;
                 lastPortraitSlot = focusSlot;
@@ -819,7 +831,6 @@ namespace EachOneCoin.Gameplay
 
         private void TickHudViews(float deltaTime)
         {
-            if (localPortraitView != null) localPortraitView.Tick(deltaTime);
             if (participantStripView != null) participantStripView.Tick(deltaTime);
             if (localCoinCounterView != null) localCoinCounterView.Tick(deltaTime);
             if (centerBannerView != null) centerBannerView.Tick(deltaTime);
@@ -938,7 +949,6 @@ namespace EachOneCoin.Gameplay
             EnsureArcStaminaBar();
             EnsureMinimap();
             EnsureMatchAvatarProvider();
-            EnsureLocalPortrait();
             EnsureParticipantStrip();
             EnsureLocalCoinCounter();
             EnsureClockAndMine();
@@ -1000,11 +1010,11 @@ namespace EachOneCoin.Gameplay
                 var container = new GameObject("ArenaMinimap", typeof(RectTransform));
                 var rt = (RectTransform)container.transform;
                 rt.SetParent(hudPanel.transform, false);
-                rt.anchorMin = new Vector2(1f, 0f);
-                rt.anchorMax = new Vector2(1f, 0f);
-                rt.pivot = new Vector2(1f, 0f);
+                rt.anchorMin = new Vector2(0f, 1f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
                 minimapView = container.AddComponent<ArenaMinimapView>();
-                rt.anchoredPosition = minimapView.BottomRightOffset;
+                rt.anchoredPosition = minimapView.TopLeftOffset;
             }
             if (minimapView != null && match != null && match.Model != null)
             {
@@ -1014,30 +1024,12 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        private void EnsureLocalPortrait()
-        {
-            if (localPortraitInitialized && localPortraitView != null) return;
-            if (localPortraitView == null && hudPanel != null)
-            {
-                var container = new GameObject("LocalPlayerPortrait", typeof(RectTransform));
-                var rt = (RectTransform)container.transform;
-                rt.SetParent(hudPanel.transform, false);
-                localPortraitView = container.AddComponent<LocalPlayerPortraitView>();
-            }
-            if (localPortraitView != null)
-            {
-                if (avatarProvider == null) avatarProvider = new DefaultAvatarAppearanceProvider();
-                localPortraitView.Initialize(avatarProvider, NameplateFont);
-                localPortraitInitialized = true;
-            }
-        }
-
         private void EnsureParticipantStrip()
         {
             if (participantStripInitialized && participantStripView != null) return;
             float mapSize = minimapView != null ? minimapView.ExpandedMapSize : 368f;
-            Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
-            Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + mapSize + MinimapStripGap);
+            Vector2 mapOffset = minimapView != null ? minimapView.TopLeftOffset : new Vector2(12f, -12f);
+            Vector2 stripOffset = new Vector2(mapOffset.x + mapSize + MinimapStripGap, mapOffset.y);
             if (participantStripView == null && hudPanel != null)
             {
                 var container = new GameObject("ParticipantHudStrip", typeof(RectTransform));
@@ -1047,6 +1039,7 @@ namespace EachOneCoin.Gameplay
             }
             if (participantStripView != null)
             {
+                participantStripView.SetTopLeftAnchor(true);
                 participantStripView.Initialize(4, mapSize, stripOffset, NameplateFont);
                 participantStripInitialized = true;
                 SyncMinimapAndParticipantStripLayout();
@@ -1245,11 +1238,6 @@ namespace EachOneCoin.Gameplay
                 GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
             }
             if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, !paused && !resultShown, paused || settingsOpen);
-            if (attackPromptText != null)
-            {
-                attackPromptText.gameObject.SetActive(showPrompts && !paused && !resultShown);
-                attackPromptText.text = usingGamepad ? "按住 A + 左摇杆瞄准，松开攻击\n按住 B 冲刺" : "按住空格 + 鼠标瞄准，松开攻击\n按住 Shift 冲刺";
-            }
         }
 
         public void Pause() { if (match == null || resultShown) return; if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }

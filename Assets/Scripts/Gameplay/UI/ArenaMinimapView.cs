@@ -127,6 +127,7 @@ namespace EachOneCoin.Gameplay
         private int lastFocusedSlot = -1;
 
         public Vector2 BottomRightOffset => bottomRightOffset;
+        public Vector2 TopLeftOffset => new Vector2(-bottomRightOffset.x, -bottomRightOffset.y);
         public MinimapSizeMode SizeMode => sizeMode;
         public float ExpandedMapSize => Mathf.Max(64f, mapSize);
         public float CompactMapSize => Mathf.Clamp(compactMapSize, 64f, ExpandedMapSize);
@@ -358,7 +359,9 @@ namespace EachOneCoin.Gameplay
             if (mapRect == null) mapRect = gameObject.AddComponent<RectTransform>();
             float currentMapSize = MapSize;
             float minScale = CurrentMinScale;
-            mapRect.anchoredPosition = bottomRightOffset;
+            mapRect.anchorMin = mapRect.anchorMax = new Vector2(0f, 1f);
+            mapRect.pivot = new Vector2(0f, 1f);
+            mapRect.anchoredPosition = TopLeftOffset;
             mapRect.sizeDelta = new Vector2(currentMapSize, currentMapSize);
 
             BuildProceduralSprites();

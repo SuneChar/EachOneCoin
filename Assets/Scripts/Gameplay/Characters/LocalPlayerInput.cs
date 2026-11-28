@@ -61,9 +61,9 @@ namespace EachOneCoin.Gameplay
         }
 
         public bool KeyboardAttackDown => Application.isFocused && Input.GetKeyDown(KeyCode.Space);
-        public bool GamepadAttackDown => Application.isFocused && GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKeyDown(KeyCode.JoystickButton0);
+        public bool GamepadAttackDown => Application.isFocused && GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton2) && Input.GetKeyDown(KeyCode.JoystickButton2);
         public bool AttackHeld(bool gamepad) => Application.isFocused && (gamepad
-            ? GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton0) && Input.GetKey(KeyCode.JoystickButton0)
+            ? GamepadActionAllowed(ref suppressGamepadAttack, KeyCode.JoystickButton2) && Input.GetKey(KeyCode.JoystickButton2)
             : Input.GetKey(KeyCode.Space));
         public Vector2 GamepadAim => Application.isFocused ? new Vector2(Input.GetAxisRaw("GamepadLeftHorizontal"), Input.GetAxisRaw("GamepadLeftVertical")) : Vector2.zero;
 
@@ -92,6 +92,6 @@ namespace EachOneCoin.Gameplay
             return true;
         }
         public bool SprintHeld => Application.isFocused && (Input.GetKey(KeyCode.LeftShift) ||
-            (GamepadActionAllowed(ref suppressGamepadSprint, KeyCode.JoystickButton1) && Input.GetKey(KeyCode.JoystickButton1)));
+            (GamepadActionAllowed(ref suppressGamepadSprint, KeyCode.JoystickButton5) && Input.GetKey(KeyCode.JoystickButton5)));
     }
 }

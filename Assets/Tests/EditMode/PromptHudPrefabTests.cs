@@ -52,8 +52,10 @@ namespace EachOneCoin.Tests
             var type = view.GetType();
             var serialized = new SerializedObject(view);
             serialized.FindProperty("accentBarWidth").floatValue = 5f;
+            serialized.FindProperty("topRightOffset").vector2Value = new Vector2(-20f, -300f);
             serialized.ApplyModifiedPropertiesWithoutUndo();
             type.GetMethod("Initialize").Invoke(view, new object[] { null });
+            Assert.That(((RectTransform)root.transform).anchoredPosition, Is.EqualTo(new Vector2(-20f, -300f)));
             int capacity = (int)type.GetProperty("MaxVisibleEntries").GetValue(view);
             Assert.That(root.transform.childCount, Is.EqualTo(capacity));
             var entryType = Type.GetType("EachOneCoin.Gameplay.MatchEventFeedEntryView, Assembly-CSharp", true);
@@ -83,7 +85,7 @@ namespace EachOneCoin.Tests
             Assert.That(icons.Length, Is.EqualTo(5));
             var row = root.transform.Find("Prompt Row");
             Assert.That(row, Is.Not.Null);
-            Assert.That(row.childCount, Is.EqualTo(12));
+            Assert.That(row.childCount, Is.EqualTo(19));
             var refresh = type.GetMethod("Refresh");
             var imageType = Type.GetType("UnityEngine.UI.RawImage, UnityEngine.UI", true);
             object Texture(object image) => imageType.GetProperty("texture").GetValue(image);
@@ -94,6 +96,8 @@ namespace EachOneCoin.Tests
             Assert.That(Field("minimapLabel"), Is.Not.Null);
             Assert.That(Field("keyboardM"), Is.Not.Null);
             Assert.That(Field("xboxView"), Is.Not.Null);
+            foreach (string name in new[] { "attackIcon", "aimIcon", "sprintIcon", "minimapHoldIcon", "attackLabel", "sprintLabel", "minimapHoldLabel", "keyboardSpace", "keyboardShift", "keyboardCapsLock", "xboxX", "xboxLB", "xboxRT" })
+                Assert.That(Field(name), Is.Not.Null, name);
 
             refresh.Invoke(view, new object[] { true, false, false, true });
             Assert.That(Label("movementLabel"), Is.EqualTo("选择"));
@@ -102,6 +106,7 @@ namespace EachOneCoin.Tests
             Assert.That(((Component)Field("backIcon")).gameObject.activeSelf, Is.True);
             Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.False);
             Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.False);
+            Assert.That(((Component)Field("attackIcon")).gameObject.activeSelf, Is.False);
 
             refresh.Invoke(view, new object[] { true, false, true, false });
             Assert.That(Label("movementLabel"), Is.EqualTo("移动"));
@@ -112,7 +117,10 @@ namespace EachOneCoin.Tests
             Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.True);
             Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.True);
             Assert.That(Texture(Field("minimapIcon")), Is.SameAs(Field("keyboardM")));
-            Assert.That(Label("minimapLabel"), Is.EqualTo("小地图"));
+            Assert.That(Texture(Field("attackIcon")), Is.SameAs(Field("keyboardSpace")));
+            Assert.That(Texture(Field("sprintIcon")), Is.SameAs(Field("keyboardShift")));
+            Assert.That(Texture(Field("minimapHoldIcon")), Is.SameAs(Field("keyboardCapsLock")));
+            Assert.That(Label("minimapLabel"), Is.EqualTo("切换地图"));
 
             refresh.Invoke(view, new object[] { true, true, true, true });
             Assert.That(Texture(icons.GetValue(0)), Is.SameAs(Field("xboxStick")));
@@ -121,7 +129,11 @@ namespace EachOneCoin.Tests
             Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.True);
             Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.True);
             Assert.That(Texture(Field("minimapIcon")), Is.SameAs(Field("xboxView")));
-            Assert.That(Label("minimapLabel"), Is.EqualTo("小地图"));
+            Assert.That(Texture(Field("attackIcon")), Is.SameAs(Field("xboxX")));
+            Assert.That(Texture(Field("aimIcon")), Is.SameAs(Field("xboxStick")));
+            Assert.That(Texture(Field("sprintIcon")), Is.SameAs(Field("xboxLB")));
+            Assert.That(Texture(Field("minimapHoldIcon")), Is.SameAs(Field("xboxRT")));
+            Assert.That(Label("minimapLabel"), Is.EqualTo("切换地图"));
 
             refresh.Invoke(view, new object[] { false, false, false, false });
             Assert.That(root.activeSelf, Is.False);
@@ -131,7 +143,8 @@ namespace EachOneCoin.Tests
             Assert.That(Texture(Field("actionIcon")), Is.SameAs(Field("xboxA")));
             Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.False);
             Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.False);
-            Assert.That(row.childCount, Is.EqualTo(12));
+            Assert.That(((Component)Field("attackIcon")).gameObject.activeSelf, Is.False);
+            Assert.That(row.childCount, Is.EqualTo(19));
             Assert.That(root.transform.childCount, Is.EqualTo(1));
         }
 

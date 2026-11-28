@@ -155,26 +155,30 @@ namespace EachOneCoin.Tests
             object expandedMode = Enum.Parse(minimapSizeModeType, "Expanded");
             object compactMode = Enum.Parse(minimapSizeModeType, "Compact");
             object horizontalMode = Enum.Parse(stripLayoutModeType, "Horizontal");
-            object verticalMode = Enum.Parse(stripLayoutModeType, "VerticalRightAligned");
 
             var mapRect = (RectTransform)minimapView.transform;
             var stripRect = (RectTransform)stripView.transform;
 
             setMode.Invoke(arenaUi, new[] { expandedMode });
             int refreshBefore = (int)textureRefreshProp.GetValue(minimapView);
+            Assert.That(mapRect.anchorMin, Is.EqualTo(new Vector2(0f, 1f)));
+            Assert.That(mapRect.pivot, Is.EqualTo(new Vector2(0f, 1f)));
+            Assert.That(mapRect.anchoredPosition, Is.EqualTo(new Vector2(12f, -12f)));
+            Assert.That(stripRect.anchorMin, Is.EqualTo(new Vector2(0f, 1f)));
+            Assert.That(stripRect.pivot, Is.EqualTo(new Vector2(0f, 1f)));
 
             Assert.That(currentModeProp.GetValue(arenaUi), Is.EqualTo(expandedMode));
             Assert.That(mapRect.sizeDelta, Is.EqualTo(new Vector2(368f, 368f)));
             Assert.That(stripModeProp.GetValue(stripView), Is.EqualTo(horizontalMode));
             Assert.That(stripRect.sizeDelta, Is.EqualTo(new Vector2(368f, 154f)));
-            Assert.That(stripRect.anchoredPosition, Is.EqualTo(new Vector2(-12f, 388f)));
+            Assert.That(stripRect.anchoredPosition, Is.EqualTo(new Vector2(388f, -12f)));
 
             Assert.That((bool)toggle.Invoke(arenaUi, null), Is.True);
             Assert.That(currentModeProp.GetValue(arenaUi), Is.EqualTo(compactMode));
             Assert.That(mapRect.sizeDelta, Is.EqualTo(new Vector2(210f, 210f)));
-            Assert.That(stripModeProp.GetValue(stripView), Is.EqualTo(verticalMode));
-            Assert.That(stripRect.sizeDelta, Is.EqualTo(new Vector2(180f, 306f)));
-            Assert.That(stripRect.anchoredPosition, Is.EqualTo(new Vector2(-12f, 230f)));
+            Assert.That(stripModeProp.GetValue(stripView), Is.EqualTo(horizontalMode));
+            Assert.That(stripRect.sizeDelta, Is.EqualTo(new Vector2(368f, 154f)));
+            Assert.That(stripRect.anchoredPosition, Is.EqualTo(new Vector2(230f, -12f)));
             Assert.That((int)textureRefreshProp.GetValue(minimapView), Is.EqualTo(refreshBefore));
 
             Assert.That((bool)toggle.Invoke(arenaUi, null), Is.True);
@@ -182,7 +186,7 @@ namespace EachOneCoin.Tests
             Assert.That(mapRect.sizeDelta, Is.EqualTo(new Vector2(368f, 368f)));
             Assert.That(stripModeProp.GetValue(stripView), Is.EqualTo(horizontalMode));
             Assert.That(stripRect.sizeDelta, Is.EqualTo(new Vector2(368f, 154f)));
-            Assert.That(stripRect.anchoredPosition, Is.EqualTo(new Vector2(-12f, 388f)));
+            Assert.That(stripRect.anchoredPosition, Is.EqualTo(new Vector2(388f, -12f)));
             Assert.That((int)textureRefreshProp.GetValue(minimapView), Is.EqualTo(refreshBefore));
         }
 
@@ -203,6 +207,8 @@ namespace EachOneCoin.Tests
             object expandedMode = Enum.Parse(minimapSizeModeType, "Expanded");
             object compactMode = Enum.Parse(minimapSizeModeType, "Compact");
 
+            Assert.That(currentModeProp.GetValue(arenaUi), Is.EqualTo(compactMode));
+            arenaGameUiType.GetMethod("SetMinimapSizeMode").Invoke(arenaUi, new[] { expandedMode });
             settingsOpenField.SetValue(arenaUi, true);
             Assert.That((bool)toggle.Invoke(arenaUi, null), Is.False);
             Assert.That(currentModeProp.GetValue(arenaUi), Is.EqualTo(expandedMode));
@@ -225,6 +231,39 @@ namespace EachOneCoin.Tests
             setIsPaused.Invoke(matchCoordinator, new object[] { false });
             Assert.That((bool)toggle.Invoke(arenaUi, null), Is.True);
             Assert.That(currentModeProp.GetValue(arenaUi), Is.EqualTo(compactMode));
+        }
+
+        [Test]
+        public void ArenaGameUI_HoldMap_ExpandsAndReleaseOrBlockedStateCollapses()
+        {
+            BuildWiredHud(out Component arenaUi, out Component minimapView, out Component stripView, out _);
+            MethodInfo process = arenaGameUiType.GetMethod("ProcessMinimapInput", BindingFlags.Instance | BindingFlags.NonPublic);
+            PropertyInfo currentMode = arenaGameUiType.GetProperty("CurrentMinimapSizeMode");
+            object compact = Enum.Parse(minimapSizeModeType, "Compact");
+            object expanded = Enum.Parse(minimapSizeModeType, "Expanded");
+            var stripRect = (RectTransform)stripView.transform;
+
+            process.Invoke(arenaUi, new object[] { true, false, true });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(expanded));
+            Assert.That(((RectTransform)minimapView.transform).sizeDelta.x, Is.EqualTo(368f));
+            Assert.That(stripRect.anchoredPosition.x, Is.EqualTo(388f));
+            process.Invoke(arenaUi, new object[] { true, true, true });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(expanded), "Toggle must be ignored while held.");
+            process.Invoke(arenaUi, new object[] { true, false, false });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(compact));
+            Assert.That(stripRect.anchoredPosition.x, Is.EqualTo(230f));
+
+            process.Invoke(arenaUi, new object[] { true, true, false });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(expanded));
+            process.Invoke(arenaUi, new object[] { true, false, true });
+            process.Invoke(arenaUi, new object[] { true, false, false });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(compact), "Release collapses even if previously toggled open.");
+
+            process.Invoke(arenaUi, new object[] { true, false, true });
+            process.Invoke(arenaUi, new object[] { false, false, false });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(compact), "Focus or menu interruption must clear the hold.");
+            process.Invoke(arenaUi, new object[] { true, true, false });
+            Assert.That(currentMode.GetValue(arenaUi), Is.EqualTo(expanded), "Toggling works after interruption.");
         }
 
         [Test]
@@ -311,13 +350,13 @@ namespace EachOneCoin.Tests
             Assert.That(minimapIcon.gameObject.activeSelf, Is.True);
             Assert.That(minimapLabel.gameObject.activeSelf, Is.True);
             Assert.That(textureProp.GetValue(minimapIcon), Is.SameAs(mTex));
-            Assert.That(textProp.GetValue(minimapLabel), Is.EqualTo("小地图"));
+            Assert.That(textProp.GetValue(minimapLabel), Is.EqualTo("切换地图"));
 
             refresh.Invoke(prompts, new object[] { true, true, true, false });
             Assert.That(minimapIcon.gameObject.activeSelf, Is.True);
             Assert.That(minimapLabel.gameObject.activeSelf, Is.True);
             Assert.That(textureProp.GetValue(minimapIcon), Is.SameAs(xboxViewTex));
-            Assert.That(textProp.GetValue(minimapLabel), Is.EqualTo("小地图"));
+            Assert.That(textProp.GetValue(minimapLabel), Is.EqualTo("切换地图"));
 
             refresh.Invoke(prompts, new object[] { true, false, false, true });
             Assert.That(minimapIcon.gameObject.activeSelf, Is.False);
