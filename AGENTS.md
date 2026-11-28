@@ -34,6 +34,20 @@
 - 保留既有 Inspector 引用、UnityEvent 绑定、存档键和游戏行为；迁移前检查相关序列化引用并制定兼容方案。
 - AudioKit、UIKit、ResKit 等工具按实际需求引入，不因安装框架而强制替换现有系统。
 
+## Prefab 与 ScriptableObject 规范
+
+- 创建可复用、重复生成或需要独立维护的游戏内容时，从一开始优先制作 Prefab，包括角色本体、服装与装备、普通及特殊地块、拾取物、障碍物，以及主页面、暂停页面、游戏 HUD 等 UI 面板和可复用控件。
+- 需要在 Inspector 中编辑、复用或调整的稳定定义和配置，优先使用 ScriptableObject，例如角色属性、装备与地块定义、对局规则、生成配置和资源引用；同一业务数据保持唯一权威来源。
+- 当前血量、玩家输入、对局进度等运行时可变状态由运行时对象管理，不将共享 ScriptableObject 当作每局状态容器；场景专属且无需复用的对象或纯程序化内容不强制制作 Prefab 或 ScriptableObject。
+- 已有 Prefab 或 ScriptableObject 时，涉及多个实例的共同外观、行为或配置，应修改对应源资源，而非只修改场景中的单个实例。修改前检查引用范围、嵌套 Prefab、Variant 和实例覆盖，修改后确认覆盖没有遮住预期结果。
+- 位置、布局、场景对象引用等场景专属信息可以留在场景实例。用户明确只要求某个实例变化时，不得擅自修改源资源扩大影响；应说明影响并确认使用实例覆盖或 Prefab Variant。
+
+## 文本组件规范
+
+- 游戏 UI 文本使用 TextMeshProUGUI 或 TMP_Text，世界空间文本使用 TextMeshPro，输入框使用 TMP_InputField；不新增或继续使用 UnityEngine.UI.Text、UnityEngine.TextMesh 或 UnityEngine.UI.InputField。
+- 既有旧文本组件包括第三方内容均应纳入排查与清理目标。当前第三方存量暂时保留，不代表豁免新内容规则；修改、迁移或删除第三方插件及示例前，先检查实际使用、依赖与升级风险，并取得用户授权。
+- 迁移文本或输入框时保留字体与显示效果、默认值、字符限制、事件、导航和序列化引用，并验证输入与交互；不得仅因新增规范而声称存量已完成迁移。
+
 ## Unity 资源安全
 
 - 项目使用 Unity 2022.3.62f3、Universal Render Pipeline（URP）和旧版 Input Manager；不要在无明确要求时切换管线、输入系统或 Unity 版本。

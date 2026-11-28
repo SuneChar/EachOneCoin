@@ -7,7 +7,7 @@ using UnityEngine.UI;
 public static class GamepadNavigation
 {
     private static bool Eligible(Selectable item)
-        => item != null && item.gameObject.activeInHierarchy && item.IsInteractable() && !(item is InputField) && !(item is TMPro.TMP_InputField);
+        => item != null && item.gameObject.activeInHierarchy && item.IsInteractable() && !(item is TMPro.TMP_InputField);
 
     public static void Configure(GameObject page)
     {
@@ -16,7 +16,7 @@ public static class GamepadNavigation
         foreach (var item in controls)
         {
             var navigation = item.navigation;
-            if (item is InputField || item is TMPro.TMP_InputField)
+            if (item is TMPro.TMP_InputField)
             {
                 navigation.mode = Navigation.Mode.None;
             }

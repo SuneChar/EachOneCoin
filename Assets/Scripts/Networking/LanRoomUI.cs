@@ -19,7 +19,7 @@ public sealed class LanRoomUI : MonoBehaviour
     [SerializeField] private Button startButton;
     [SerializeField] private Button reconnectButton;
     [SerializeField] private TMP_Text fillLabel;
-    [SerializeField] private InputField address;
+    [SerializeField] private TMP_InputField address;
 
     public void Initialize(BootMenu owner)
     {

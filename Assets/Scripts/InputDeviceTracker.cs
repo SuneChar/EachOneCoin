@@ -96,7 +96,7 @@ public class InputDeviceTracker : MonoBehaviour
     {
         if (UsingGamepad || EventSystem.current == null) return;
         var selected = EventSystem.current.currentSelectedGameObject;
-        if (selected == null || selected.GetComponent<UnityEngine.UI.InputField>() != null || selected.GetComponent<TMPro.TMP_InputField>() != null) return;
+        if (selected == null || selected.GetComponent<TMPro.TMP_InputField>() != null) return;
         EventSystem.current.SetSelectedGameObject(null);
     }
 

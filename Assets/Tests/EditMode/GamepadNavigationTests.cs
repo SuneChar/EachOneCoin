@@ -11,7 +11,7 @@ namespace EachOneCoin.Tests
         {
             var navigationType = Type.GetType("GamepadNavigation, Assembly-CSharp", true);
             var buttonType = Type.GetType("UnityEngine.UI.Button, UnityEngine.UI", true);
-            var inputType = Type.GetType("UnityEngine.UI.InputField, UnityEngine.UI", true);
+            var inputType = Type.GetType("TMPro.TMP_InputField, Unity.TextMeshPro", true);
             var page = new GameObject("page", typeof(RectTransform));
             var outside = new GameObject("outside", typeof(RectTransform));
             try
