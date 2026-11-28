@@ -19,8 +19,12 @@ namespace EachOneCoin.Gameplay
             else if (float.IsNaN(map.SlowMultiplier) || float.IsInfinity(map.SlowMultiplier) || map.SlowMultiplier <= 0f || map.SlowMultiplier > 1f) error = "减速倍率无效";
             if (error != null) return false;
             foreach (var cell in map.Cells)
+            {
                 if (!Enum.IsDefined(typeof(ArenaTerrain), cell.terrain) || cell.direction < 0 || cell.direction > 3)
                 { error = "地块类型或方向无效"; return false; }
+                if (cell.terrain == ArenaTerrain.Wall && (map.WallPrefab == null || map.WallPrefab.GetComponent<ArenaWall>() == null))
+                { error = "墙地形需要无伤墙 Prefab"; return false; }
+            }
             var occupied = new HashSet<Vector2Int>();
             foreach (var position in map.Spawns)
                 if (!ValidPoint(map, position) || !occupied.Add(position)) { error = "出生点无效或重复"; return false; }

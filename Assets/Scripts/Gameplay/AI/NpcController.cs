@@ -254,9 +254,9 @@ namespace EachOneCoin.Gameplay
         private bool FindAlternativePath(int id, List<GridPosition> path)
         {
             var start = match.Grid.WorldToCell(match.Characters[id].transform.position);
-            var visited = new bool[ArenaGridView.Size, ArenaGridView.Size];
-            var parent = new GridPosition[ArenaGridView.Size, ArenaGridView.Size];
-            var distance = new int[ArenaGridView.Size, ArenaGridView.Size];
+            var visited = new bool[match.Model.Grid.Width, match.Model.Grid.Height];
+            var parent = new GridPosition[match.Model.Grid.Width, match.Model.Grid.Height];
+            var distance = new int[match.Model.Grid.Width, match.Model.Grid.Height];
             var queue = new Queue<GridPosition>();
             queue.Enqueue(start); visited[start.X, start.Y] = true;
             GridPosition best = start; float bestScore = float.NegativeInfinity;
@@ -305,8 +305,8 @@ namespace EachOneCoin.Gameplay
         {
             path.Clear();
             var start = match.Grid.WorldToCell(match.Characters[id].transform.position);
-            var visited = new bool[ArenaGridView.Size, ArenaGridView.Size];
-            var parent = new GridPosition[ArenaGridView.Size, ArenaGridView.Size];
+            var visited = new bool[match.Model.Grid.Width, match.Model.Grid.Height];
+            var parent = new GridPosition[match.Model.Grid.Width, match.Model.Grid.Height];
             var queue = new Queue<GridPosition>();
             queue.Enqueue(start); visited[start.X, start.Y] = true;
             while (queue.Count > 0)

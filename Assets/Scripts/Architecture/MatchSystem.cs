@@ -87,6 +87,21 @@ namespace EachOneCoin
             match.Status = MatchStatus.Finished;
         }
 
+        public void ConfigureBlockedCells(IReadOnlyList<GridPosition> positions)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Waiting) throw new InvalidOperationException("Terrain must be configured before starting.");
+            if (positions == null) throw new ArgumentNullException(nameof(positions));
+            var seen = new HashSet<GridPosition>();
+            foreach (var position in positions)
+            {
+                if (!match.Grid.Contains(position) || !seen.Add(position)) throw new ArgumentException("Blocked cells must be unique and inside the grid.", nameof(positions));
+                foreach (var participant in match.Participants)
+                    if (participant.Spawn.Equals(position)) throw new ArgumentException("A blocked cell cannot contain a spawn.", nameof(positions));
+            }
+            foreach (var position in positions) match.Grid.SetBlocked(position, true);
+        }
+
         public void ConfigureMines(IReadOnlyList<GridPosition> positions)
         {
             var match = CurrentMatch;
@@ -179,6 +194,11 @@ namespace EachOneCoin
             }
             return true;
         }
+
+        // Falling defeats the participant without reducing their current maximum health.
+        // All carried coins are returned to the caller for placement on safe ground.
+        public bool TryFall(int participantId, out int droppedCoins)
+            => TryDamage(participantId, int.MaxValue, int.MaxValue, out droppedCoins);
 
         public bool TryObstacleContact(int participantId)
         {

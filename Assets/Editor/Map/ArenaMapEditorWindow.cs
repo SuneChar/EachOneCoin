@@ -34,6 +34,7 @@ namespace EachOneCoin.Editor
             EditorGUILayout.PropertyField(data.FindProperty("displayName"), new GUIContent("地图名称"));
             EditorGUILayout.PropertyField(data.FindProperty("slowMultiplier"), new GUIContent("减速倍率"));
             EditorGUILayout.PropertyField(data.FindProperty("defaultTilePrefab"), new GUIContent("默认地块"));
+            EditorGUILayout.PropertyField(data.FindProperty("wallPrefab"), new GUIContent("无伤墙"));
             EditorGUILayout.PropertyField(data.FindProperty("spawns"), new GUIContent("出生点"), true);
             EditorGUILayout.PropertyField(data.FindProperty("mines"), new GUIContent("矿点"), true);
             EditorGUILayout.PropertyField(data.FindProperty("objects"), new GUIContent("障碍物"), true);
@@ -156,6 +157,7 @@ namespace EachOneCoin.Editor
             data.FindProperty("mapId").stringValue = System.Guid.NewGuid().ToString("N");
             data.FindProperty("displayName").stringValue = System.IO.Path.GetFileNameWithoutExtension(path);
             data.FindProperty("defaultTilePrefab").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/World/ArenaTile.prefab");
+            data.FindProperty("wallPrefab").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Gameplay/Obstacles/StaticObstacle.prefab");
             data.ApplyModifiedPropertiesWithoutUndo();
             AssetDatabase.CreateAsset(created, path);
             var catalog = AssetDatabase.LoadAssetAtPath<ArenaMapCatalog>("Assets/Data/Maps/ArenaMapCatalog.asset");

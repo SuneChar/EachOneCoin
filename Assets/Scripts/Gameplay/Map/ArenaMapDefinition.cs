@@ -39,6 +39,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(1)] private int width = 21;
         [SerializeField, Min(1)] private int height = 21;
         [SerializeField] private GameObject defaultTilePrefab;
+        [SerializeField] private GameObject wallPrefab;
         [SerializeField] private ArenaMapCell[] cells = new ArenaMapCell[21 * 21];
         [SerializeField] private Vector2Int[] spawns = { new Vector2Int(1, 1), new Vector2Int(19, 1), new Vector2Int(1, 19), new Vector2Int(19, 19) };
         [SerializeField] private Vector2Int[] mines = { new Vector2Int(10, 5), new Vector2Int(10, 15), new Vector2Int(5, 10), new Vector2Int(15, 10) };
@@ -50,6 +51,7 @@ namespace EachOneCoin.Gameplay
         public int Width => width;
         public int Height => height;
         public GameObject DefaultTilePrefab => defaultTilePrefab;
+        public GameObject WallPrefab => wallPrefab;
         public ArenaMapCell[] Cells => cells;
         public Vector2Int[] Spawns => spawns;
         public Vector2Int[] Mines => mines;

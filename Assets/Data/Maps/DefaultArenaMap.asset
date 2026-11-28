@@ -18,6 +18,8 @@ MonoBehaviour:
   height: 21
   defaultTilePrefab: {fileID: 89311904343358228, guid: 096e5551aa80d89458796fd41285333d,
     type: 3}
+  wallPrefab: {fileID: 6216730844494549634, guid: 2e63ab0c18f90ee43942e7834fd4e9cf,
+    type: 3}
   cells:
   - terrain: 0
     height: 0

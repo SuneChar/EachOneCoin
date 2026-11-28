@@ -173,7 +173,7 @@ namespace EachOneCoin.Gameplay
                 isCustomSinglePlayerMap = ArenaMapSelection.Selected != mapDefinition;
                 mapDefinition = ArenaMapSelection.Selected;
             }
-            if (mapDefinition != null && (!ArenaMapValidator.TryValidate(mapDefinition, out var mapError) || mapDefinition.Width != ArenaGridView.Size || mapDefinition.Height != ArenaGridView.Size))
+            if (mapDefinition != null && !ArenaMapValidator.TryValidate(mapDefinition, out var mapError))
             {
                 Debug.LogError("竞技场地图无效或尺寸尚不受支持：" + mapError, mapDefinition);
                 enabled = false;
@@ -181,8 +181,14 @@ namespace EachOneCoin.Gameplay
             }
             if (mapDefinition != null)
             {
+                if (mapDefinition.Width > SystemInfo.maxTextureSize || mapDefinition.Height > SystemInfo.maxTextureSize)
+                {
+                    Debug.LogError("地图尺寸超出当前设备小地图纹理限制。", mapDefinition);
+                    enabled = false;
+                    return;
+                }
                 foreach (var cell in mapDefinition.Cells)
-                    if (cell.terrain != ArenaTerrain.Ground || cell.height != 0)
+                    if ((cell.terrain != ArenaTerrain.Ground && cell.terrain != ArenaTerrain.Slow && cell.terrain != ArenaTerrain.Wall && cell.terrain != ArenaTerrain.Hole) || cell.height != 0)
                     {
                         Debug.LogError("当前竞技场尚不支持地图地形或高度，无法开始对局。", mapDefinition);
                         enabled = false;
@@ -192,6 +198,7 @@ namespace EachOneCoin.Gameplay
                 {
                     ArenaMapBuilder.BuildTiles(mapDefinition, gameObject.scene);
                     ArenaMapBuilder.BuildObstacles(mapDefinition, gameObject.scene);
+                    ArenaMapBuilder.ResizeBoundary(mapDefinition, gameObject.scene);
                 }
                 catch (System.Exception exception)
                 {
@@ -200,6 +207,7 @@ namespace EachOneCoin.Gameplay
                     return;
                 }
             }
+            if (mapDefinition != null) grid.ConfigureSize(mapDefinition.Width, mapDefinition.Height);
             grid.Initialize();
             Spawns = new GridPosition[4];
             for (int i = 0; i < Spawns.Length; i++)
@@ -209,7 +217,14 @@ namespace EachOneCoin.Gameplay
             NetworkRulesValid = ResolveMatchRules(IsNetworkMovementTest, Mirror.NetworkServer.active, out int coinsToWin, out float durationSeconds);
             if (IsReplay) { coinsToWin = replay.coinsToWin; durationSeconds = replay.duration; }
             InitialDurationSeconds = durationSeconds;
-            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), coinsToWin, durationSeconds);
+            Model = session.CreateMatch(grid.Width, grid.Height, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), coinsToWin, durationSeconds);
+            if (mapDefinition != null)
+            {
+                var blocked = new System.Collections.Generic.List<GridPosition>();
+                for (int x = 0; x < mapDefinition.Width; x++) for (int y = 0; y < mapDefinition.Height; y++)
+                    if (mapDefinition.Cells[x * mapDefinition.Height + y].terrain == ArenaTerrain.Wall || mapDefinition.Cells[x * mapDefinition.Height + y].terrain == ArenaTerrain.Hole) blocked.Add(new GridPosition(x, y));
+                Rules.ConfigureBlockedCells(blocked);
+            }
             if (!IsNetworkMovementTest && !IsReplay) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
@@ -510,6 +525,18 @@ namespace EachOneCoin.Gameplay
             return collider.GetComponentInParent<LethalContact>() != null || collider.GetComponentInParent<LethalObstacle>() != null || spike != null;
         }
 
+        public bool IsHole(GridPosition cell)
+        {
+            return mapDefinition != null && cell.X >= 0 && cell.Y >= 0 && cell.X < mapDefinition.Width && cell.Y < mapDefinition.Height &&
+                   mapDefinition.Cells[cell.X * mapDefinition.Height + cell.Y].terrain == ArenaTerrain.Hole;
+        }
+
+        public float TerrainSpeedMultiplier(GridPosition cell)
+        {
+            if (mapDefinition == null || cell.X < 0 || cell.Y < 0 || cell.X >= mapDefinition.Width || cell.Y >= mapDefinition.Height) return 1f;
+            return mapDefinition.Cells[cell.X * mapDefinition.Height + cell.Y].terrain == ArenaTerrain.Slow ? mapDefinition.SlowMultiplier : 1f;
+        }
+
         public bool IsBlocked(GridPosition cell)
         {
             if (Model != null && Model.Grid.Contains(cell) && Model.Grid.IsBlocked(cell)) return true;
@@ -537,11 +564,24 @@ namespace EachOneCoin.Gameplay
         public bool IsOtherSpawn(int id, GridPosition cell) { for (int i = 0; i < Spawns.Length; i++) if (i != id && Spawns[i].Equals(cell)) return true; return false; }
         public GridPosition FindSafeDrop(GridPosition origin)
         {
-            if (!IsSpawn(origin) && !IsBlocked(origin)) return origin;
-            for (int d = 1; d < ArenaGridView.Size * 2; d++) for (int x = 0; x < ArenaGridView.Size; x++) for (int y = 0; y < ArenaGridView.Size; y++)
+            if (!Model.Grid.Contains(origin)) return origin;
+            var visited = new bool[Model.Grid.Width, Model.Grid.Height];
+            var queue = new System.Collections.Generic.Queue<GridPosition>();
+            queue.Enqueue(origin);
+            visited[origin.X, origin.Y] = true;
+            var dx = new[] { 1, -1, 0, 0 };
+            var dy = new[] { 0, 0, 1, -1 };
+            while (queue.Count > 0)
             {
-                var p = new GridPosition(x, y);
-                if (Mathf.Abs(x - origin.X) + Mathf.Abs(y - origin.Y) == d && !IsSpawn(p) && !IsBlocked(p)) return p;
+                var cell = queue.Dequeue();
+                if (!IsSpawn(cell) && !IsBlocked(cell)) return cell;
+                for (int i = 0; i < 4; i++)
+                {
+                    var next = new GridPosition(cell.X + dx[i], cell.Y + dy[i]);
+                    if (!Model.Grid.Contains(next) || visited[next.X, next.Y]) continue;
+                    visited[next.X, next.Y] = true;
+                    queue.Enqueue(next);
+                }
             }
             return origin;
         }

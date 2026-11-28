@@ -38,6 +38,25 @@ namespace EachOneCoin.Tests
             finally { UnityEngine.Object.DestroyImmediate(root); }
         }
 
+        [Test]
+        public void RectangularGrid_CoordinatesUseWidthAndHeightIndependently()
+        {
+            var root = new GameObject("Rectangular grid test");
+            try
+            {
+                var type = Type.GetType("EachOneCoin.Gameplay.ArenaGridView, Assembly-CSharp", true);
+                var view = root.AddComponent(type);
+                type.GetMethod("ConfigureSize").Invoke(view, new object[] { 25, 23 });
+                var center = (Vector3)type.GetMethod("CellToWorld").Invoke(view, new object[] { new GridPosition(24, 22) });
+                Assert.That(center.x, Is.EqualTo(12f));
+                Assert.That(center.z, Is.EqualTo(11f));
+                var outside = (GridPosition)type.GetMethod("WorldToCellUnclamped").Invoke(view, new object[] { new Vector3(100f, 0f, -100f) });
+                Assert.That(outside.X, Is.GreaterThanOrEqualTo(25));
+                Assert.That(outside.Y, Is.LessThan(0));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(root); }
+        }
+
         [TestCase(-10f, -10f, 0, 0)]
         [TestCase(0f, 0f, 10, 10)]
         [TestCase(10f, 10f, 20, 20)]

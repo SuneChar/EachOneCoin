@@ -15,6 +15,7 @@ namespace EachOneCoin.Gameplay
         private Transform visual;
         private Transform arrow;
         private Vector3 visualScale;
+        private Vector3 visualRestPosition;
         private int facing = 1;
         private int desiredFacing = 1;
         private float turnProgress = 1f;
@@ -46,8 +47,10 @@ namespace EachOneCoin.Gameplay
             {
                 if (match == null || match.Model == null || match.Grid == null) return 1f;
                 if (match.IsNetworkMovementTest && !Mirror.NetworkServer.active) return 1f;
-                var owner = match.Model.Grid.OwnerAt(match.Grid.WorldToCell(transform.position));
-                return !owner.HasValue ? 1f : owner.Value == Id ? match.OwnRegionSpeedMultiplier : match.EnemyRegionSpeedMultiplier;
+                var cell = match.Grid.WorldToCell(transform.position);
+                var owner = match.Model.Grid.OwnerAt(cell);
+                float region = !owner.HasValue ? 1f : owner.Value == Id ? match.OwnRegionSpeedMultiplier : match.EnemyRegionSpeedMultiplier;
+                return region * match.TerrainSpeedMultiplier(cell);
             }
         }
         public bool IsKnockedBack => knockbackTime > 0f || attackKnockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
@@ -64,6 +67,7 @@ namespace EachOneCoin.Gameplay
             if (visual != null)
             {
                 visualScale = visual.localScale;
+                visualRestPosition = visual.localPosition;
                 var accessories = visual.Find("Accessories");
                 if (accessories != null)
                 {
@@ -135,6 +139,28 @@ namespace EachOneCoin.Gameplay
             if (controller != null) controller.enabled = active;
             foreach (var sprite in GetComponentsInChildren<SpriteRenderer>(true)) sprite.enabled = active;
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
+        }
+
+        public void BeginFall()
+        {
+            movementVelocity = Vector3.zero;
+            pendingKnockback = Vector3.zero; knockbackTime = 0f;
+            attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f;
+            if (controller != null) controller.enabled = false;
+            if (groundShadow != null) groundShadow.SetVisible(false);
+            if (nameplate != null) nameplate.SetVisible(false);
+            if (attackVisual != null) attackVisual.Clear();
+            foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = false;
+        }
+
+        public void SetFallProgress(float progress)
+        {
+            if (visual != null) visual.localPosition = visualRestPosition + Vector3.down * (2f * Mathf.Clamp01(progress));
+        }
+
+        public void ResetFallVisual()
+        {
+            if (visual != null) visual.localPosition = visualRestPosition;
         }
 
         public void SetDisplayName(string value)
@@ -272,6 +298,7 @@ namespace EachOneCoin.Gameplay
             {
                 Vector3 before = transform.position;
                 CollisionFlags flags = MoveOnPlane(step);
+                ReportCell();
                 if (match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
                 if (knockbackTime > 0f || (flags & CollisionFlags.Sides) != 0 || Vector3.Dot(transform.position - before, step.normalized) < step.magnitude * 0.5f)
                 {
@@ -300,7 +327,13 @@ namespace EachOneCoin.Gameplay
         private void ReportCell()
         {
             if (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsRunning)) return;
-            var cell = match.Grid.WorldToCell(transform.position);
+            var cell = match.Grid.WorldToCellUnclamped(transform.position);
+            if (!match.Model.Grid.Contains(cell)) return;
+            if (match.IsHole(cell))
+            {
+                match.Combat.TryStartFall(Id, hasCell ? lastCell : match.Spawns[Id]);
+                return;
+            }
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
             if (match.Rules.TryPaint(Id, cell))
