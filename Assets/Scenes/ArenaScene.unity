@@ -32719,6 +32719,11 @@ PrefabInstance:
       propertyPath: m_Name
       value: ReplayControls
       objectReference: {fileID: 0}
+    - target: {fileID: 1402347412695286213, guid: 309697421b6943d459fba7ecd0df083f,
+        type: 3}
+      propertyPath: m_IsActive
+      value: 0
+      objectReference: {fileID: 0}
     - target: {fileID: 8977262300462925381, guid: 309697421b6943d459fba7ecd0df083f,
         type: 3}
       propertyPath: m_Pivot.x
@@ -32797,12 +32802,12 @@ PrefabInstance:
     - target: {fileID: 8977262300462925381, guid: 309697421b6943d459fba7ecd0df083f,
         type: 3}
       propertyPath: m_AnchoredPosition.x
-      value: -500
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 8977262300462925381, guid: 309697421b6943d459fba7ecd0df083f,
         type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: -95
+      value: -888
       objectReference: {fileID: 0}
     - target: {fileID: 8977262300462925381, guid: 309697421b6943d459fba7ecd0df083f,
         type: 3}
