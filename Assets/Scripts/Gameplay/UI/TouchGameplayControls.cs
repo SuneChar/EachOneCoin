@@ -12,35 +12,36 @@ namespace EachOneCoin.Gameplay
     // Runtime-only overlay: the existing scene and its serialized references remain unchanged.
     public sealed class TouchGameplayControls : MonoBehaviour
     {
-        private const string JoystickModeKey = "Touch.JoystickMode";
         private const float StickSize = 200f;
         private const float KnobSize = 90f;
         private const float StickOffsetX = 145f;
         private const float StickOffsetY = 145f;
         internal const float KnobRange = 45f;
+        // The attack stick keeps the sensitivity of the old square button: full aim tilt at 100px.
+        internal const float AimRange = 100f;
 
         private MatchCoordinator match;
         private ArenaGameUI ui;
         private LocalPlayerInput input;
         private GameObject gameplay, spectator;
-        private TouchControl attack, sprint;
-        private VirtualJoystick movement;
-        private RectTransform stick;
+        private TouchControl sprint;
+        private VirtualJoystick movement, attack;
+        private RectTransform moveStick;
 
         public TouchJoystickMode JoystickMode { get; private set; } = TouchJoystickMode.Fixed;
 
         public void Initialize(MatchCoordinator coordinator, ArenaGameUI gameUI, Transform parent, TMP_FontAsset font)
         {
             match = coordinator; ui = gameUI; input = match.LocalInput;
-            JoystickMode = PlayerPrefs.GetInt(JoystickModeKey, (int)TouchJoystickMode.Fixed) == (int)TouchJoystickMode.Floating
-                ? TouchJoystickMode.Floating
-                : TouchJoystickMode.Fixed;
+            JoystickMode = TouchSettings.JoystickMode;
             gameplay = new GameObject("Touch Gameplay", typeof(RectTransform));
             var root = (RectTransform)gameplay.transform;
             root.SetParent(parent, false); root.anchorMin = Vector2.zero; root.anchorMax = Vector2.one;
             root.offsetMin = root.offsetMax = Vector2.zero;
-            movement = CreateJoystick(root, font);
-            attack = CreateControl(root, "Attack", new Vector2(1, 0), new Vector2(-145, 145), new Vector2(200, 200), font, "攻击", 1);
+            movement = CreateJoystick(root, font, 0, new Vector2(0f, 0f), new Vector2(StickOffsetX, StickOffsetY), "移动");
+            moveStick = movement.Stick;
+            // The attack stick always stays in the bottom-right corner, whatever the move mode is.
+            attack = CreateJoystick(root, font, 1, new Vector2(1f, 0f), new Vector2(-StickOffsetX, StickOffsetY), "攻击");
             sprint = CreateControl(root, "Sprint", new Vector2(1, 0), new Vector2(-320, 105), new Vector2(120, 120), font, "冲刺", 2);
             spectator = CreateControl(root, "Spectator", new Vector2(1, 0), new Vector2(-145, 145), new Vector2(200, 100), font, "切换观战", 3).gameObject;
             ApplyJoystickMode();
@@ -52,17 +53,17 @@ namespace EachOneCoin.Gameplay
             if (JoystickMode != mode)
             {
                 JoystickMode = mode;
-                PlayerPrefs.SetInt(JoystickModeKey, (int)mode);
-                PlayerPrefs.Save();
+                TouchSettings.JoystickMode = mode;
             }
             Cancel();
             ApplyJoystickMode();
         }
 
-        private VirtualJoystick CreateJoystick(Transform parent, TMP_FontAsset font)
+        private VirtualJoystick CreateJoystick(Transform parent, TMP_FontAsset font, int kind, Vector2 anchor, Vector2 position, string labelText)
         {
+            string prefix = kind == 0 ? "Move" : "Attack";
             // The visible stick never receives pointer events; the area below does.
-            stick = CreateRect(parent, "Move Stick", new Vector2(0f, 0f), new Vector2(StickOffsetX, StickOffsetY), new Vector2(StickSize, StickSize));
+            var stick = CreateRect(parent, prefix + " Stick", anchor, position, new Vector2(StickSize, StickSize));
             var baseImage = stick.gameObject.AddComponent<Image>();
             baseImage.sprite = CircleSprite();
             baseImage.color = new Color(0.12f, 0.18f, 0.25f, 0.55f);
@@ -74,7 +75,7 @@ namespace EachOneCoin.Gameplay
             knobImage.color = new Color(0.9f, 0.95f, 1f, 0.8f);
             knobImage.raycastTarget = false;
 
-            var label = CreateLabel(stick, "移动", font, 22f);
+            var label = CreateLabel(stick, labelText, font, 22f);
             var labelRect = label.rectTransform;
             labelRect.anchorMin = new Vector2(0f, 1f);
             labelRect.anchorMax = new Vector2(1f, 1f);
@@ -82,18 +83,18 @@ namespace EachOneCoin.Gameplay
             labelRect.anchoredPosition = new Vector2(0f, -6f);
             labelRect.sizeDelta = new Vector2(0f, 28f);
 
-            var area = CreateRect(parent, "Move Area", new Vector2(0f, 0f), new Vector2(StickOffsetX, StickOffsetY), new Vector2(StickSize, StickSize));
+            var area = CreateRect(parent, prefix + " Area", anchor, position, new Vector2(StickSize, StickSize));
             var areaImage = area.gameObject.AddComponent<Image>();
             // Barely visible but still raycastable, so the touch area can be larger than the stick.
             areaImage.color = new Color(0f, 0f, 0f, 0.01f);
             var joystick = area.gameObject.AddComponent<VirtualJoystick>();
-            joystick.Initialize(this, area, stick, knob);
+            joystick.Initialize(this, area, stick, knob, kind);
             return joystick;
         }
 
         private void ApplyJoystickMode()
         {
-            if (movement == null || stick == null) return;
+            if (movement == null || moveStick == null) return;
             var area = (RectTransform)movement.transform;
             bool floating = JoystickMode == TouchJoystickMode.Floating;
             if (floating)
@@ -108,11 +109,11 @@ namespace EachOneCoin.Gameplay
                 area.anchorMin = area.anchorMax = new Vector2(0f, 0f);
                 area.anchoredPosition = new Vector2(StickOffsetX, StickOffsetY);
                 area.sizeDelta = new Vector2(StickSize, StickSize);
-                stick.anchoredPosition = new Vector2(StickOffsetX, StickOffsetY);
+                moveStick.anchoredPosition = new Vector2(StickOffsetX, StickOffsetY);
             }
             movement.Floating = floating;
             movement.ResetStick();
-            stick.gameObject.SetActive(!floating);
+            moveStick.gameObject.SetActive(!floating);
         }
 
         // Built-in UI sprites are not available through Resources at runtime, so the stick uses
@@ -211,7 +212,7 @@ namespace EachOneCoin.Gameplay
             movement.gameObject.SetActive(usable);
             attack.gameObject.SetActive(usable);
             sprint.gameObject.SetActive(usable);
-            if (usable && JoystickMode == TouchJoystickMode.Fixed) stick.gameObject.SetActive(true);
+            if (usable && JoystickMode == TouchJoystickMode.Fixed) moveStick.gameObject.SetActive(true);
             spectator.SetActive(spectating);
         }
 
@@ -219,7 +220,7 @@ namespace EachOneCoin.Gameplay
         {
             if (input != null) input.CancelTouchInput();
             if (movement != null) movement.ResetStick();
-            if (attack != null) attack.ResetPointer();
+            if (attack != null) attack.ResetStick();
             if (sprint != null) sprint.ResetPointer();
         }
         private void OnDisable() { Cancel(); }
@@ -243,14 +244,20 @@ namespace EachOneCoin.Gameplay
         private TouchGameplayControls owner;
         private RectTransform area, stick, knob;
         private int pointer = int.MinValue;
+        private int kind;
         private Vector2 origin;
 
         public bool Floating { get; set; }
+        public RectTransform Stick => stick;
 
-        public void Initialize(TouchGameplayControls controls, RectTransform areaRect, RectTransform stickRect, RectTransform knobRect)
+        public void Initialize(TouchGameplayControls controls, RectTransform areaRect, RectTransform stickRect, RectTransform knobRect, int channel)
         {
-            owner = controls; area = areaRect; stick = stickRect; knob = knobRect;
+            owner = controls; area = areaRect; stick = stickRect; knob = knobRect; kind = channel;
         }
+
+        // The movement stick reports full strength at the end of its visual travel; the attack
+        // stick keeps the wider range the old square button used so aiming feels unchanged.
+        private float InputRange => kind == 0 ? TouchGameplayControls.KnobRange : TouchGameplayControls.AimRange;
 
         public void ResetStick()
         {
@@ -266,17 +273,19 @@ namespace EachOneCoin.Gameplay
             pointer = eventData.pointerId;
             if (Floating)
             {
-                // Keep the whole stick inside the touch area before showing it.
-                var parentRect = (RectTransform)stick.parent;
+                // Clamp in the touch area's local space so the whole stick stays inside it, then
+                // place the stick through world space: the clamp and the direction both live in
+                // area space, so the two coordinate systems can no longer drift apart.
                 float half = Mathf.Max(stick.rect.width, stick.rect.height) * 0.5f;
                 origin = new Vector2(
                     Mathf.Clamp(point.x, area.rect.min.x + half, area.rect.max.x - half),
                     Mathf.Clamp(point.y, area.rect.min.y + half, area.rect.max.y - half));
-                stick.anchoredPosition = origin - parentRect.rect.min;
+                stick.position = area.TransformPoint(origin);
                 stick.gameObject.SetActive(true);
             }
             else origin = Vector2.zero;
             knob.anchoredPosition = Vector2.zero;
+            owner.Press(kind);
             ApplyDirection(point);
         }
 
@@ -289,15 +298,17 @@ namespace EachOneCoin.Gameplay
         public void OnPointerUp(PointerEventData eventData)
         {
             if (eventData.pointerId != pointer) return;
+            bool cancelled = false;
+            for (int i = 0; i < Input.touchCount; i++) if (Input.GetTouch(i).fingerId == pointer && Input.GetTouch(i).phase == TouchPhase.Canceled) cancelled = true;
             ResetStick();
-            if (owner != null) owner.Drag(0, Vector2.zero);
+            if (owner != null) owner.Release(kind, cancelled);
         }
 
         private void ApplyDirection(Vector2 point)
         {
             Vector2 delta = point - origin;
             knob.anchoredPosition = Vector2.ClampMagnitude(delta, TouchGameplayControls.KnobRange);
-            if (owner != null) owner.Drag(0, Vector2.ClampMagnitude(delta / TouchGameplayControls.KnobRange, 1f));
+            if (owner != null) owner.Drag(kind, Vector2.ClampMagnitude(delta / InputRange, 1f));
         }
     }
 

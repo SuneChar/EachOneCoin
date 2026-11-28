@@ -4,6 +4,8 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
 
+using EachOneCoin.Gameplay;
+
 public class BootMenu : MonoBehaviour
 {
     [SerializeField] private GameObject startPanel;
@@ -13,6 +15,7 @@ public class BootMenu : MonoBehaviour
     [SerializeField] private Slider volumeSlider;
     [SerializeField] private TMP_Text volumeValueText;
     [SerializeField] private Toggle promptsToggle;
+    [SerializeField] private Toggle joystickModeToggle;
     [SerializeField] private ControlPromptImages promptImages;
     [SerializeField] private GameAudio gameAudio;
     private InputDeviceTracker inputDevice;
@@ -21,12 +24,14 @@ public class BootMenu : MonoBehaviour
     private bool settingsOpen;
     private bool quitOpen;
     private bool lanRoomOpen;
+    private TMP_Text joystickModeLabel;
     [SerializeField] private LanRoomUI lanRoom;
 
     private void Awake()
     {
         showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
         promptsToggle.SetIsOnWithoutNotify(showPrompts);
+        InitializeJoystickModeOption();
         inputDevice = GetComponent<InputDeviceTracker>();
         usingGamepad = inputDevice.UsingGamepad;
         inputDevice.DeviceChanged += OnDeviceChanged;
@@ -35,6 +40,29 @@ public class BootMenu : MonoBehaviour
     }
 
     private void OnDestroy() { if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged; }
+
+    // The row is authored in the settings panel; only its initial state and label are handled here.
+    private void InitializeJoystickModeOption()
+    {
+        if (joystickModeToggle == null) return;
+        joystickModeToggle.gameObject.SetActive(TouchSettings.TouchControlsAvailable);
+        joystickModeLabel = joystickModeToggle.GetComponentInChildren<TMP_Text>(true);
+        joystickModeToggle.SetIsOnWithoutNotify(TouchSettings.JoystickMode == TouchJoystickMode.Floating);
+        RefreshJoystickModeLabel();
+    }
+
+    // Bound as a persistent scene listener, matching the prompts toggle next to it.
+    public void OnJoystickModeChanged(bool floating)
+    {
+        TouchSettings.JoystickMode = floating ? TouchJoystickMode.Floating : TouchJoystickMode.Fixed;
+        RefreshJoystickModeLabel();
+    }
+
+    private void RefreshJoystickModeLabel()
+    {
+        if (joystickModeLabel != null) joystickModeLabel.text = TouchSettings.JoystickModeLabel(TouchSettings.JoystickMode);
+    }
+
     private void OnDeviceChanged(bool gamepad) { usingGamepad = gamepad; Refresh(); }
     private void Refresh()
     {

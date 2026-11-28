@@ -659,8 +659,13 @@ namespace Locus
                 return;
 
             NativeStartIfEnabled();
-            if (!IsNativeBridgeActive)
-                Debug.LogError("[Locus] Native broker bridge is required but did not start.");
+            // No error when the bridge is still inactive: the desktop writes the
+            // enabling marker out-of-band and can attach to an editor that was
+            // already running, which used to leave the transport dead until the
+            // next domain reload. NativeRetryStartIfPending() keeps retrying from
+            // the per-frame pump, and NativeStartIfEnabled() reports real
+            // load/init failures itself.
+            NativeRetryStartIfPending();
         }
 
         public static void Stop()
@@ -1243,6 +1248,7 @@ namespace Locus
         {
             MarkEditorPump();
             NativePump();
+            NativeRetryStartIfPending();
             PruneYamlPreviewSceneCache(false);
             PumpTickSchedulerEditorUpdate();
 

@@ -20,6 +20,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private ArcStaminaBarView arcStaminaBarView;
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
+        [SerializeField] private Toggle joystickModeToggle;
         [SerializeField] private ControlPromptImages promptImages;
         [SerializeField, Min(0.05f)] private float hitFlashDuration = 0.25f;
         [SerializeField, Range(0f, 1f)] private float hitFrameOpacity = 0.65f;
@@ -27,7 +28,6 @@ namespace EachOneCoin.Gameplay
         // Editor-only preview: show the touch overlay while the active build target is Android.
         [SerializeField] private bool showTouchControlsInEditor = true;
         private readonly Image[] hitFrame = new Image[4];
-        private Toggle joystickModeToggle;
         private TMP_Text joystickModeLabel;
         private float hitFlashRemaining;
         private InputDeviceTracker inputDevice;
@@ -62,8 +62,9 @@ namespace EachOneCoin.Gameplay
             {
                 touchControls = gameObject.AddComponent<TouchGameplayControls>();
                 touchControls.Initialize(match, this, hudPanel.transform, NameplateFont);
-                CreateJoystickModeOption();
+                InitializeJoystickModeOption();
             }
+            else if (joystickModeToggle != null) joystickModeToggle.gameObject.SetActive(false);
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
             if (feedbackText != null) { feedbackText.enableAutoSizing = true; feedbackText.fontSizeMin = 12f; feedbackText.fontSizeMax = 22f; }
@@ -103,23 +104,18 @@ namespace EachOneCoin.Gameplay
 #endif
         }
 
-        // Clones the prompts toggle so the new row matches the existing settings styling.
-        private void CreateJoystickModeOption()
+        // The row is authored in the settings panel; only its initial state and label are handled here.
+        private void InitializeJoystickModeOption()
         {
-            if (touchControls == null || promptsToggle == null || settingsPanel == null) return;
-            var toggle = Instantiate(promptsToggle, promptsToggle.transform.parent);
-            toggle.name = "JoystickModeToggle";
-            var rect = (RectTransform)toggle.transform;
-            rect.anchoredPosition = new Vector2(0f, -105f);
-            joystickModeToggle = toggle;
-            joystickModeLabel = toggle.GetComponentInChildren<TMP_Text>(true);
-            toggle.onValueChanged.RemoveAllListeners();
-            toggle.onValueChanged.AddListener(OnJoystickModeChanged);
-            toggle.SetIsOnWithoutNotify(touchControls.JoystickMode == TouchJoystickMode.Floating);
+            if (touchControls == null || joystickModeToggle == null) return;
+            joystickModeToggle.gameObject.SetActive(true);
+            joystickModeLabel = joystickModeToggle.GetComponentInChildren<TMP_Text>(true);
+            joystickModeToggle.SetIsOnWithoutNotify(touchControls.JoystickMode == TouchJoystickMode.Floating);
             RefreshJoystickModeLabel();
         }
 
-        private void OnJoystickModeChanged(bool floating)
+        // Bound as a persistent scene listener, matching the prompts toggle next to it.
+        public void OnJoystickModeChanged(bool floating)
         {
             if (touchControls != null)
                 touchControls.SetJoystickMode(floating ? TouchJoystickMode.Floating : TouchJoystickMode.Fixed);
@@ -129,7 +125,7 @@ namespace EachOneCoin.Gameplay
         private void RefreshJoystickModeLabel()
         {
             if (joystickModeLabel == null || touchControls == null) return;
-            joystickModeLabel.text = touchControls.JoystickMode == TouchJoystickMode.Floating ? "摇杆：浮动" : "摇杆：固定";
+            joystickModeLabel.text = TouchSettings.JoystickModeLabel(touchControls.JoystickMode);
         }
 
         private void OnEnable() { if (match != null) { match.ObstacleHit += OnObstacleHit; match.AttackHit += OnAttackHit; } }
