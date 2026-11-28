@@ -1,3 +1,6 @@
+# Local-only private documents (never commit)
+/Docs/Local/
+
 # Unity .gitignore Template
 # Source: https://github.com/github/gitignore/blob/main/Unity.gitignore
 # Last synced: 2026-07-02
