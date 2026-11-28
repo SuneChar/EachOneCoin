@@ -30,7 +30,8 @@ namespace EachOneCoin.Gameplay
         private readonly List<int> restMines = new List<int>();
         private static readonly int[] Dx = { 1, -1, 0, 0 };
         private static readonly int[] Dy = { 0, 0, 1, -1 };
-        private static readonly GridPosition[] minePoints = { new GridPosition(10, 5), new GridPosition(10, 15), new GridPosition(5, 10), new GridPosition(15, 10) };
+        private static readonly GridPosition[] DefaultMinePoints = { new GridPosition(10, 5), new GridPosition(10, 15), new GridPosition(5, 10), new GridPosition(15, 10) };
+        private GridPosition[] minePoints = DefaultMinePoints;
         private static readonly string[] MineNames = { "南侧", "北侧", "西侧", "东侧" };
         private static readonly Color BaseMineColor = new Color(0.75f, 0.45f, 0.06f);
         private static readonly Color PulseMineColor = new Color(1f, 0.93f, 0.35f);
@@ -51,9 +52,16 @@ namespace EachOneCoin.Gameplay
         public event Action<int, int> MineCoinsSpawned;
         public string MineName(int mineIndex) => MineNames[mineIndex];
 
-        public void Initialize(MatchCoordinator coordinator)
+        public void Initialize(MatchCoordinator coordinator, Vector2Int[] mapMines = null)
         {
             match = coordinator;
+            if (mapMines != null)
+            {
+                if (mapMines.Length != MineNames.Length) throw new ArgumentException("The current match requires four mines.", nameof(mapMines));
+                minePoints = new GridPosition[mapMines.Length];
+                for (int i = 0; i < mapMines.Length; i++) minePoints[i] = new GridPosition(mapMines[i].x, mapMines[i].y);
+            }
+            else minePoints = DefaultMinePoints;
             int count = match.Model.Participants.Count;
             mineConnected = new bool[minePoints.Length, count];
             connectedRevision = new uint[count];
@@ -505,7 +513,7 @@ namespace EachOneCoin.Gameplay
             coin.transform.position = match.Grid.CellToWorld(position) + Vector3.up * 0.45f;
             if (coinModel == null) coin.transform.localScale = Vector3.one * 0.35f;
             foreach (var collider in coin.GetComponentsInChildren<Collider>()) collider.enabled = false;
-            GroundShadow.Create(coin, 0.55f);
+            GroundShadow.Create(coin, 0.55f, match);
             var slot = new Slot { Id = id, Position = position, Kind = kind, Coin = coin };
             slots.Add(slot);
             if (!replica) PublishChange(0, slot);

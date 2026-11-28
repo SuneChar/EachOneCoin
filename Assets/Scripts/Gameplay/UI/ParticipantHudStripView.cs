@@ -143,6 +143,7 @@ namespace EachOneCoin.Gameplay
         private bool[] slotPopulated;
         private float cachedSlotWidth;
         private float cachedAvatarSize;
+        private bool useTopLeftAnchor;
         private bool initialized;
         private bool hasRefreshed;
         private int lastVisibleMask = -1;
@@ -157,6 +158,13 @@ namespace EachOneCoin.Gameplay
         public ParticipantHudLayoutMode LayoutMode { get; private set; } = ParticipantHudLayoutMode.Horizontal;
         public int Capacity => slots != null ? slots.Length : 0;
         public byte LastLeaderMask { get; private set; }
+
+        public void SetTopLeftAnchor(bool enabled)
+        {
+            if (useTopLeftAnchor == enabled) return;
+            useTopLeftAnchor = enabled;
+            if (initialized) ConfigureRootRect();
+        }
 
         public void SetLayoutMode(ParticipantHudLayoutMode mode)
         {
@@ -536,9 +544,10 @@ namespace EachOneCoin.Gameplay
                 rootRect = gameObject.AddComponent<RectTransform>();
             }
 
-            rootRect.anchorMin = new Vector2(1f, 0f);
-            rootRect.anchorMax = new Vector2(1f, 0f);
-            rootRect.pivot = new Vector2(1f, 0f);
+            Vector2 anchor = useTopLeftAnchor ? new Vector2(0f, 1f) : new Vector2(1f, 0f);
+            rootRect.anchorMin = anchor;
+            rootRect.anchorMax = anchor;
+            rootRect.pivot = anchor;
             rootRect.anchoredPosition = bottomRightOffset;
             rootRect.sizeDelta = LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned
                 ? new Vector2(verticalStripWidth, ComputeVerticalStripHeight())
@@ -946,14 +955,14 @@ namespace EachOneCoin.Gameplay
             slot.CanvasGroup.interactable = false;
             slot.CanvasGroup.blocksRaycasts = false;
 
-            // Layer 1: Leader Crown (topmost, directly above coin count)
+            // Layer 1: Leader crown beside the coin count.
             slot.CrownImage = CreateImage(slot.Root, "CrownIcon", icons.GetCrownSprite(), Color.white);
             slot.CrownRect = slot.CrownImage.rectTransform;
             slot.CrownRect.anchorMin = new Vector2(0.5f, 1f);
             slot.CrownRect.anchorMax = new Vector2(0.5f, 1f);
             slot.CrownRect.pivot = new Vector2(0.5f, 0.5f);
-            slot.HorizontalCrownBasePosition = new Vector2(0f, -15f * scaleY);
-            slot.HorizontalCrownSize = new Vector2(36f * scaleY, 28f * scaleY);
+            slot.HorizontalCrownBasePosition = new Vector2(-35f * scaleY, -14f * scaleY);
+            slot.HorizontalCrownSize = new Vector2(16f * scaleY, 14f * scaleY);
             slot.CrownBasePosition = slot.HorizontalCrownBasePosition;
             slot.CrownRect.anchoredPosition = slot.CrownBasePosition;
             slot.CrownRect.sizeDelta = slot.HorizontalCrownSize;
@@ -966,7 +975,7 @@ namespace EachOneCoin.Gameplay
             metricRect.anchorMin = new Vector2(0f, 1f);
             metricRect.anchorMax = new Vector2(1f, 1f);
             metricRect.pivot = new Vector2(0.5f, 1f);
-            metricRect.anchoredPosition = new Vector2(0f, -31f * scaleY);
+            metricRect.anchoredPosition = new Vector2(0f, -1f * scaleY);
             metricRect.sizeDelta = new Vector2(0f, 28f * scaleY);
             slot.TopMetricRect = metricRect;
             slot.HorizontalMetricAnchoredPos = metricRect.anchoredPosition;
@@ -1044,7 +1053,7 @@ namespace EachOneCoin.Gameplay
             slot.AvatarRoot.anchorMin = new Vector2(0.5f, 1f);
             slot.AvatarRoot.anchorMax = new Vector2(0.5f, 1f);
             slot.AvatarRoot.pivot = new Vector2(0.5f, 0.5f);
-            slot.HorizontalAvatarAnchoredPos = new Vector2(0f, -100f * scaleY);
+            slot.HorizontalAvatarAnchoredPos = new Vector2(0f, -69f * scaleY);
             slot.AvatarRoot.anchoredPosition = slot.HorizontalAvatarAnchoredPos;
             slot.AvatarRoot.sizeDelta = new Vector2(avatarSize, avatarSize);
 
@@ -1129,9 +1138,9 @@ namespace EachOneCoin.Gameplay
                 HealthBarRect = template.healthBarRect,
                 HorizontalCrownBasePosition = crownBasePos,
                 HorizontalCrownSize = crownSize,
-                HorizontalMetricAnchoredPos = topMetricRect != null ? topMetricRect.anchoredPosition : new Vector2(0f, -31f * scaleY),
+                HorizontalMetricAnchoredPos = topMetricRect != null ? topMetricRect.anchoredPosition : new Vector2(0f, -1f * scaleY),
                 HorizontalMetricSizeDelta = topMetricRect != null ? topMetricRect.sizeDelta : new Vector2(0f, 28f * scaleY),
-                HorizontalAvatarAnchoredPos = template.avatarRoot != null ? template.avatarRoot.anchoredPosition : new Vector2(0f, -100f * scaleY)
+                HorizontalAvatarAnchoredPos = template.avatarRoot != null ? template.avatarRoot.anchoredPosition : new Vector2(0f, -69f * scaleY)
             };
             slot.MaskImage.sprite = icons.GetCircleMaskSprite();
             slot.StatusOverlayImage.sprite = icons.GetCircleMaskSprite();

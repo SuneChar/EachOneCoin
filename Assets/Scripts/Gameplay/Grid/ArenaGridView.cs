@@ -11,13 +11,35 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Range(0.1f, 1f)] private float tileBrightness = 0.55f;
         [SerializeField, Range(0f, 1f)] private float paintOpacity = 0.55f;
         public const int Size = 21;
-        private readonly Renderer[,] tiles = new Renderer[Size, Size];
-        private readonly int[,] displayedState = new int[Size, Size];
+        private Renderer[,] tiles = new Renderer[Size, Size];
+        private int[,] displayedState = new int[Size, Size];
         private Mesh overlayMesh;
         private Material overlayMaterial;
-        private readonly bool[][,] connected = { new bool[Size, Size], new bool[Size, Size], new bool[Size, Size], new bool[Size, Size] };
+        private bool[][,] connected = { new bool[Size, Size], new bool[Size, Size], new bool[Size, Size], new bool[Size, Size] };
+        private ArenaMapDefinition map;
+        public int Width { get; private set; } = Size;
+        public int Height { get; private set; } = Size;
+
+        public void ConfigureSize(int width, int height)
+        {
+            if (width <= 0 || height <= 0) throw new System.ArgumentOutOfRangeException(nameof(width));
+            map = null;
+            Width = width; Height = height;
+            tiles = new Renderer[width, height];
+            displayedState = new int[width, height];
+            connected = new[] { new bool[width, height], new bool[width, height], new bool[width, height], new bool[width, height] };
+        }
         private readonly Color[] colors = { new Color(0.94f, 0.27f, 0.28f), new Color(0.25f, 0.51f, 0.95f), new Color(0.26f, 0.79f, 0.43f), new Color(0.94f, 0.7f, 0.19f) };
         private MaterialPropertyBlock block;
+
+        public void ConfigureMap(ArenaMapDefinition definition)
+        {
+            if (definition == null) throw new System.ArgumentNullException(nameof(definition));
+            ConfigureSize(definition.Width, definition.Height);
+            map = definition;
+        }
+
+        public float SurfaceHeightAt(Vector3 world) => map != null ? ArenaMapTopology.SurfaceHeight(map, world) : 0f;
 
         public void Initialize()
         {
@@ -43,7 +65,9 @@ namespace EachOneCoin.Gameplay
                 if (original == null) continue;
                 var overlay = new GameObject("Color Overlay " + cell.X + "," + cell.Y, typeof(MeshFilter), typeof(MeshRenderer));
                 overlay.transform.SetParent(overlayRoot, false);
-                overlay.transform.position = new Vector3(tile.position.x, original.bounds.max.y + 0.015f, tile.position.z);
+                bool ramp = map != null && map.Cells[cell.X * map.Height + cell.Y].terrain == ArenaTerrain.Ramp;
+                overlay.transform.position = new Vector3(tile.position.x, ramp ? SurfaceHeightAt(tile.position) + 0.015f : original.bounds.max.y + 0.015f, tile.position.z);
+                if (ramp) overlay.transform.rotation = tile.rotation;
                 overlay.GetComponent<MeshFilter>().sharedMesh = overlayMesh;
                 var renderer = overlay.GetComponent<MeshRenderer>();
                 renderer.sharedMaterial = overlayMaterial;
@@ -61,8 +85,18 @@ namespace EachOneCoin.Gameplay
             if (overlayMaterial != null) Destroy(overlayMaterial);
         }
 
-        public GridPosition WorldToCell(Vector3 world) => new GridPosition(Mathf.Clamp(Mathf.FloorToInt(world.x + Size / 2f), 0, Size - 1), Mathf.Clamp(Mathf.FloorToInt(world.z + Size / 2f), 0, Size - 1));
-        public Vector3 CellToWorld(GridPosition cell) => new Vector3(cell.X - Size / 2f + 0.5f, 0f, cell.Y - Size / 2f + 0.5f);
+        public GridPosition WorldToCellUnclamped(Vector3 world) => new GridPosition(Mathf.FloorToInt(world.x + Width / 2f), Mathf.FloorToInt(world.z + Height / 2f));
+        public GridPosition WorldToCell(Vector3 world)
+        {
+            var cell = WorldToCellUnclamped(world);
+            return new GridPosition(Mathf.Clamp(cell.X, 0, Width - 1), Mathf.Clamp(cell.Y, 0, Height - 1));
+        }
+        public Vector3 CellToWorld(GridPosition cell)
+        {
+            var result = new Vector3(cell.X - Width / 2f + 0.5f, 0f, cell.Y - Height / 2f + 0.5f);
+            result.y = SurfaceHeightAt(result);
+            return result;
+        }
         public Color PlayerColor(int id) => visualConfig != null ? visualConfig.PlayerColor(id, colors[id]) : colors[id];
         public bool IsConnected(int id, GridPosition cell) => connected[id][cell.X, cell.Y];
 
@@ -72,7 +106,7 @@ namespace EachOneCoin.Gameplay
             float brightness = visualConfig != null ? visualConfig.TileBrightness : tileBrightness;
             float disconnected = visualConfig != null ? visualConfig.DisconnectedBrightness : disconnectedBrightness;
             float opacity = visualConfig != null ? visualConfig.PaintOpacity : paintOpacity;
-            for (int x = 0; x < Size; x++) for (int y = 0; y < Size; y++)
+            for (int x = 0; x < Width; x++) for (int y = 0; y < Height; y++)
             {
                 var renderer = tiles[x, y];
                 if (renderer == null) continue;

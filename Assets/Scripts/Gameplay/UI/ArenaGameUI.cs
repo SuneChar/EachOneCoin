@@ -12,18 +12,15 @@ namespace EachOneCoin.Gameplay
     {
         private static readonly string[] FallbackMineNames = { "南侧", "北侧", "西侧", "东侧" };
         private const float MinimapStripGap = 8f;
+        private const float MinimapTriggerThreshold = 0.5f;
 
         [SerializeField] private MatchCoordinator match;
         [SerializeField] private GameAudio gameAudio;
         [SerializeField] private GameObject hudPanel, pausePanel, settingsPanel, resultPanel;
-        [SerializeField] private TMP_Text timeText, coinText, healthText, resultText, resultCoinsText, participantText, feedbackText, attackPromptText, volumeValueText;
-        [SerializeField] private Image healthFill;
+        [SerializeField] private TMP_Text resultText, resultCoinsText, volumeValueText;
         [SerializeField] private HealthHeartsView healthHeartsView;
-        [SerializeField] private Image staminaFill;
-        [SerializeField] private TMP_Text staminaText;
         [SerializeField] private ArcStaminaBarView arcStaminaBarView;
         [SerializeField] private ArenaMinimapView minimapView;
-        [SerializeField] private LocalPlayerPortraitView localPortraitView;
         [SerializeField] private ParticipantHudStripView participantStripView;
         [SerializeField] private LocalCoinCounterView localCoinCounterView;
         [SerializeField] private CenterBannerPromptView centerBannerView;
@@ -65,20 +62,17 @@ namespace EachOneCoin.Gameplay
         private int lastUpcomingMine = int.MaxValue;
         private bool networkMenuOpen;
         private bool heartsInitialized;
-        private bool legacyHealthHidden;
         private bool staminaBarInitialized;
-        private bool legacyStaminaHidden;
-        private bool legacyHudTextsHidden;
         private bool minimapInitialized;
-        private MinimapSizeMode minimapSizeMode = MinimapSizeMode.Expanded;
-        private bool localPortraitInitialized;
+        private MinimapSizeMode minimapSizeMode = MinimapSizeMode.Compact;
+        private bool minimapHoldActive;
         private bool participantStripInitialized;
         private bool localCoinCounterInitialized;
         private bool centerBannerInitialized;
         private bool clockAndMineInitialized;
         private bool eventFeedInitialized;
         private bool networkStatusBannerInitialized;
-        private bool leftHudAdjusted;
+        private bool replayUiAdjusted;
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
         [SerializeField] private GameObject networkStatusBannerRoot;
@@ -97,11 +91,6 @@ namespace EachOneCoin.Gameplay
         {
             get
             {
-                if (timeText != null && timeText.font != null) return timeText.font;
-                if (coinText != null && coinText.font != null) return coinText.font;
-                if (participantText != null && participantText.font != null) return participantText.font;
-                if (feedbackText != null && feedbackText.font != null) return feedbackText.font;
-                if (attackPromptText != null && attackPromptText.font != null) return attackPromptText.font;
                 if (resultText != null && resultText.font != null) return resultText.font;
                 return null;
             }
@@ -146,17 +135,43 @@ namespace EachOneCoin.Gameplay
 
         private void HandleMinimapToggleInput()
         {
-            if (!Application.isFocused || IsMinimapToggleBlocked())
+            bool available = Application.isFocused && !IsMinimapToggleBlocked();
+            bool toggle = available && (Input.GetKeyDown(KeyCode.M)
+                || (enableGamepadMinimapToggle && Input.GetKeyDown(KeyCode.JoystickButton6)));
+            // The combined trigger axis is mapped to its positive side for RT; verify per controller.
+            bool hold = available && (Input.GetKey(KeyCode.CapsLock)
+                || (enableGamepadMinimapToggle && Input.GetAxisRaw("GamepadAxis3") > MinimapTriggerThreshold));
+            ProcessMinimapInput(available, toggle, hold);
+        }
+
+        private void ProcessMinimapInput(bool available, bool toggle, bool hold)
+        {
+            if (!available)
             {
+                if (minimapHoldActive)
+                {
+                    minimapHoldActive = false;
+                    SetMinimapSizeMode(MinimapSizeMode.Compact);
+                }
                 return;
             }
 
-            bool pressed = Input.GetKeyDown(KeyCode.M)
-                || (enableGamepadMinimapToggle && Input.GetKeyDown(KeyCode.JoystickButton6));
-            if (pressed)
+            if (hold)
             {
-                ToggleMinimapSize();
+                if (!minimapHoldActive || minimapSizeMode != MinimapSizeMode.Expanded)
+                    SetMinimapSizeMode(MinimapSizeMode.Expanded);
+                minimapHoldActive = true;
+                return;
             }
+
+            if (minimapHoldActive)
+            {
+                minimapHoldActive = false;
+                SetMinimapSizeMode(MinimapSizeMode.Compact);
+                return;
+            }
+
+            if (toggle) ToggleMinimapSize();
         }
 
         private void SyncMinimapAndParticipantStripLayout()
@@ -172,12 +187,10 @@ namespace EachOneCoin.Gameplay
                     ? minimapView.MapSize
                     : (minimapSizeMode == MinimapSizeMode.Compact ? 210f : 368f);
                 float expandedMapSize = minimapView != null ? minimapView.ExpandedMapSize : 368f;
-                Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
-                Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + currentMapSize + MinimapStripGap);
-                ParticipantHudLayoutMode stripMode = minimapSizeMode == MinimapSizeMode.Compact
-                    ? ParticipantHudLayoutMode.VerticalRightAligned
-                    : ParticipantHudLayoutMode.Horizontal;
-                participantStripView.SetLayoutMode(stripMode, expandedMapSize, stripOffset);
+                Vector2 mapOffset = minimapView != null ? minimapView.TopLeftOffset : new Vector2(12f, -12f);
+                Vector2 stripOffset = new Vector2(mapOffset.x + currentMapSize + MinimapStripGap, mapOffset.y);
+                participantStripView.SetTopLeftAnchor(true);
+                participantStripView.SetLayoutMode(ParticipantHudLayoutMode.Horizontal, expandedMapSize, stripOffset);
             }
         }
 
@@ -199,7 +212,6 @@ namespace EachOneCoin.Gameplay
             if (avatarProvider != null) avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
             avatarProvider = next;
             if (isActiveAndEnabled && avatarProvider != null) avatarProvider.AppearanceChanged += OnAvatarAppearanceChanged;
-            if (localPortraitView != null) localPortraitView.SetAppearanceProvider(avatarProvider);
             avatarAppearanceDirty = true;
         }
 
@@ -219,21 +231,8 @@ namespace EachOneCoin.Gameplay
             inputDevice = GetComponent<InputDeviceTracker>();
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
-            if (feedbackText != null) { feedbackText.enableAutoSizing = true; feedbackText.fontSizeMin = 12f; feedbackText.fontSizeMax = 22f; }
-            if (attackPromptText != null)
-            {
-                var rect = attackPromptText.rectTransform;
-                rect.sizeDelta = new Vector2(Mathf.Max(rect.sizeDelta.x, 300f), Mathf.Max(rect.sizeDelta.y, 60f));
-                rect.anchoredPosition += new Vector2(0f, 33f);
-            }
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
             CreateHitFrame();
-            HideLegacyHealthUI();
-            legacyHealthHidden = true;
-            HideLegacyStaminaUI();
-            legacyStaminaHidden = true;
-            HideLegacyHudTexts();
-            legacyHudTextsHidden = true;
             AdjustPauseButtonLayout();
             RefreshPanels();
         }
@@ -254,6 +253,7 @@ namespace EachOneCoin.Gameplay
 
         private void OnDisable()
         {
+            ProcessMinimapInput(false, false, false);
             if (match != null)
             {
                 match.ObstacleHit -= OnObstacleHit;
@@ -292,7 +292,6 @@ namespace EachOneCoin.Gameplay
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             UpdateHitFrame();
-            if (localPortraitView != null) localPortraitView.TriggerHitFlash();
         }
 
         private void OnAttackHit(int id)
@@ -300,7 +299,6 @@ namespace EachOneCoin.Gameplay
             if (!IsLocalParticipant(id)) return;
             hitFlashRemaining = Mathf.Max(0.05f, hitFlashDuration);
             UpdateHitFrame();
-            if (localPortraitView != null) localPortraitView.TriggerHitFlash();
         }
 
         private void OnFeedEventRaised(MatchFeedEvent evt)
@@ -384,13 +382,20 @@ namespace EachOneCoin.Gameplay
         private void Update()
         {
             if (match == null || match.Model == null) return;
+            if (match.IsReplay && !replayUiAdjusted)
+            {
+                var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
+                if (pauseButton != null) pauseButton.gameObject.SetActive(false);
+                if (promptImages != null) promptImages.gameObject.SetActive(false);
+                replayUiAdjusted = true;
+            }
             if (match.IsNetworkMovementTest)
             {
                 if (hitFlashRemaining > 0f) { hitFlashRemaining = Mathf.Max(0f, hitFlashRemaining - Time.deltaTime); UpdateHitFrame(); }
                 UpdateNetworkUI();
                 return;
             }
-            if (Application.isFocused && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1))))
+            if (!match.IsReplay && Application.isFocused && (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || ((settingsOpen || match.IsPaused) && Input.GetKeyDown(KeyCode.JoystickButton1))))
             {
                 if (settingsOpen) CloseSettings();
                 else if (match.IsPaused) Resume();
@@ -427,7 +432,7 @@ namespace EachOneCoin.Gameplay
                 if (healthHeartsView != null) healthHeartsView.Tick(Time.deltaTime);
                 TickHudViews(Time.deltaTime);
             }
-            if (model.Status == MatchStatus.Finished && !resultShown)
+            if (!match.IsReplay && model.Status == MatchStatus.Finished && !resultShown)
             {
                 resultShown = true;
                 if (centerBannerView != null) centerBannerView.Clear();
@@ -513,7 +518,6 @@ namespace EachOneCoin.Gameplay
                 if (participantCount > 0)
                 {
                     var localSnapshot = snapshotBuffer[0];
-                    if (localPortraitView != null) localPortraitView.SetParticipant(0, localSnapshot.Appearance, localSnapshot.Status);
                     if (healthHeartsView != null) healthHeartsView.SetHealth(localSnapshot.Health, localSnapshot.MaxHealth, !firstRefresh);
                     if (localCoinCounterView != null) localCoinCounterView.SetCoins(localSnapshot.Coins, model.CoinsToWin, !firstRefresh);
                 }
@@ -701,8 +705,6 @@ namespace EachOneCoin.Gameplay
                 }
 
                 if (participantStripView != null) participantStripView.Refresh(snapshotBuffer);
-                if (localPortraitView != null)
-                    localPortraitView.SetParticipant(focusSlot, snapshotBuffer[focusSlot].Appearance, snapshotBuffer[focusSlot].Status);
 
                 lastLocalSlot = slot;
                 lastPortraitSlot = focusSlot;
@@ -837,7 +839,6 @@ namespace EachOneCoin.Gameplay
 
         private void TickHudViews(float deltaTime)
         {
-            if (localPortraitView != null) localPortraitView.Tick(deltaTime);
             if (participantStripView != null) participantStripView.Tick(deltaTime);
             if (localCoinCounterView != null) localCoinCounterView.Tick(deltaTime);
             if (centerBannerView != null) centerBannerView.Tick(deltaTime);
@@ -930,11 +931,6 @@ namespace EachOneCoin.Gameplay
 
         private void EnsureHealthHearts(int initialMaxHealth)
         {
-            if (!legacyHealthHidden)
-            {
-                legacyHealthHidden = true;
-                HideLegacyHealthUI();
-            }
             if (heartsInitialized && healthHeartsView != null) return;
             if (healthHeartsView == null && hudPanel != null)
             {
@@ -951,23 +947,16 @@ namespace EachOneCoin.Gameplay
             {
                 healthHeartsView.Initialize(initialMaxHealth);
                 heartsInitialized = true;
-                AdjustLeftHudBelowHearts();
             }
         }
 
         private void EnsureHudViews(bool includeNetworkBanner)
         {
-            if (!legacyHudTextsHidden)
-            {
-                legacyHudTextsHidden = true;
-                HideLegacyHudTexts();
-            }
             int initialHealth = match != null ? match.InitialHealth : 3;
             EnsureHealthHearts(initialHealth);
             EnsureArcStaminaBar();
             EnsureMinimap();
             EnsureMatchAvatarProvider();
-            EnsureLocalPortrait();
             EnsureParticipantStrip();
             EnsureLocalCoinCounter();
             EnsureClockAndMine();
@@ -984,19 +973,6 @@ namespace EachOneCoin.Gameplay
                 {
                     centerBannerView.transform.SetAsLastSibling();
                 }
-            }
-        }
-
-        private void HideLegacyHudTexts()
-        {
-            if (timeText != null) timeText.gameObject.SetActive(false);
-            if (coinText != null) coinText.gameObject.SetActive(false);
-            if (participantText != null) participantText.gameObject.SetActive(false);
-            if (feedbackText != null) feedbackText.gameObject.SetActive(false);
-            if (hudPanel != null)
-            {
-                var legacyTimeCard = hudPanel.transform.Find("TimeCard");
-                if (legacyTimeCard != null) legacyTimeCard.gameObject.SetActive(false);
             }
         }
 
@@ -1017,66 +993,8 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        private void AdjustLeftHudBelowHearts()
-        {
-            if (leftHudAdjusted || healthHeartsView == null) return;
-            leftHudAdjusted = true;
-
-            bool coinVisible = coinText != null && coinText.gameObject.activeSelf;
-            bool feedbackVisible = feedbackText != null && feedbackText.gameObject.activeSelf;
-            if (!coinVisible) return;
-
-            var heartsRect = healthHeartsView.transform as RectTransform;
-            var coinRect = coinText.rectTransform;
-            if (heartsRect == null || coinRect == null) return;
-
-            // Visible heart tip sits around 86% down from the top of the heart slot.
-            float heartsVisualBottom = heartsRect.anchoredPosition.y - healthHeartsView.HeartSize * 0.88f;
-            float coinTop = coinRect.anchoredPosition.y + coinRect.sizeDelta.y * (1f - coinRect.pivot.y);
-            const float minGap = 18f;
-            float shiftDown = coinTop - (heartsVisualBottom - minGap);
-            if (shiftDown <= 1f) return;
-
-            coinRect.anchoredPosition -= new Vector2(0f, shiftDown);
-            if (feedbackVisible)
-                feedbackText.rectTransform.anchoredPosition -= new Vector2(0f, shiftDown);
-
-            Transform staminaRoot = null;
-            if (staminaFill != null && staminaFill.transform.parent != null &&
-                (hudPanel == null || staminaFill.transform.parent.gameObject != hudPanel) &&
-                staminaFill.transform.parent.name.IndexOf("Stamina", System.StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                staminaRoot = staminaFill.transform.parent;
-            }
-            if (staminaRoot != null && staminaRoot.gameObject.activeSelf && staminaRoot is RectTransform staminaRect)
-                staminaRect.anchoredPosition -= new Vector2(0f, shiftDown);
-        }
-
-        private void HideLegacyHealthUI()
-        {
-            Transform legacyRoot = null;
-            if (healthFill != null && healthFill.transform.parent != null &&
-                (hudPanel == null || healthFill.transform.parent.gameObject != hudPanel) &&
-                healthFill.transform.parent.name.IndexOf("Health", System.StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                legacyRoot = healthFill.transform.parent;
-            }
-            if (legacyRoot != null)
-            {
-                legacyRoot.gameObject.SetActive(false);
-                return;
-            }
-            if (healthFill != null) healthFill.gameObject.SetActive(false);
-            if (healthText != null) healthText.gameObject.SetActive(false);
-        }
-
         private void EnsureArcStaminaBar()
         {
-            if (!legacyStaminaHidden)
-            {
-                legacyStaminaHidden = true;
-                HideLegacyStaminaUI();
-            }
             if (staminaBarInitialized && arcStaminaBarView != null) return;
             if (arcStaminaBarView == null && hudPanel != null)
             {
@@ -1092,24 +1010,6 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        private void HideLegacyStaminaUI()
-        {
-            Transform legacyRoot = null;
-            if (staminaFill != null && staminaFill.transform.parent != null &&
-                (hudPanel == null || staminaFill.transform.parent.gameObject != hudPanel) &&
-                staminaFill.transform.parent.name.IndexOf("Stamina", System.StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                legacyRoot = staminaFill.transform.parent;
-            }
-            if (legacyRoot != null)
-            {
-                legacyRoot.gameObject.SetActive(false);
-                return;
-            }
-            if (staminaFill != null) staminaFill.gameObject.SetActive(false);
-            if (staminaText != null) staminaText.gameObject.SetActive(false);
-        }
-
         private void EnsureMinimap()
         {
             if (minimapInitialized && minimapView != null) return;
@@ -1118,11 +1018,11 @@ namespace EachOneCoin.Gameplay
                 var container = new GameObject("ArenaMinimap", typeof(RectTransform));
                 var rt = (RectTransform)container.transform;
                 rt.SetParent(hudPanel.transform, false);
-                rt.anchorMin = new Vector2(1f, 0f);
-                rt.anchorMax = new Vector2(1f, 0f);
-                rt.pivot = new Vector2(1f, 0f);
+                rt.anchorMin = new Vector2(0f, 1f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
                 minimapView = container.AddComponent<ArenaMinimapView>();
-                rt.anchoredPosition = minimapView.BottomRightOffset;
+                rt.anchoredPosition = minimapView.TopLeftOffset;
             }
             if (minimapView != null && match != null && match.Model != null)
             {
@@ -1132,30 +1032,12 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        private void EnsureLocalPortrait()
-        {
-            if (localPortraitInitialized && localPortraitView != null) return;
-            if (localPortraitView == null && hudPanel != null)
-            {
-                var container = new GameObject("LocalPlayerPortrait", typeof(RectTransform));
-                var rt = (RectTransform)container.transform;
-                rt.SetParent(hudPanel.transform, false);
-                localPortraitView = container.AddComponent<LocalPlayerPortraitView>();
-            }
-            if (localPortraitView != null)
-            {
-                if (avatarProvider == null) avatarProvider = new DefaultAvatarAppearanceProvider();
-                localPortraitView.Initialize(avatarProvider, NameplateFont);
-                localPortraitInitialized = true;
-            }
-        }
-
         private void EnsureParticipantStrip()
         {
             if (participantStripInitialized && participantStripView != null) return;
             float mapSize = minimapView != null ? minimapView.ExpandedMapSize : 368f;
-            Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
-            Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + mapSize + MinimapStripGap);
+            Vector2 mapOffset = minimapView != null ? minimapView.TopLeftOffset : new Vector2(12f, -12f);
+            Vector2 stripOffset = new Vector2(mapOffset.x + mapSize + MinimapStripGap, mapOffset.y);
             if (participantStripView == null && hudPanel != null)
             {
                 var container = new GameObject("ParticipantHudStrip", typeof(RectTransform));
@@ -1165,6 +1047,7 @@ namespace EachOneCoin.Gameplay
             }
             if (participantStripView != null)
             {
+                participantStripView.SetTopLeftAnchor(true);
                 participantStripView.Initialize(4, mapSize, stripOffset, NameplateFont);
                 participantStripInitialized = true;
                 SyncMinimapAndParticipantStripLayout();
@@ -1363,14 +1246,9 @@ namespace EachOneCoin.Gameplay
                 GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
             }
             if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, !paused && !resultShown, paused || settingsOpen);
-            if (attackPromptText != null)
-            {
-                attackPromptText.gameObject.SetActive(showPrompts && !paused && !resultShown);
-                attackPromptText.text = usingGamepad ? "按住 A + 左摇杆瞄准，松开攻击\n按住 B 冲刺" : "按住空格 + 鼠标瞄准，松开攻击\n按住 Shift 冲刺";
-            }
         }
 
-        public void Pause() { if (match == null || resultShown) return; if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
+        public void Pause() { if (match == null || resultShown) return; if (match.IsReplay) { var replay = match.GetComponent<Replay.ReplayPlayer>(); if (replay != null) replay.TogglePause(); return; } if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
         public void Resume() { if (match == null) return; match.SuppressGamepadActionsUntilReleased(); settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
         public void OpenSettings()
         {

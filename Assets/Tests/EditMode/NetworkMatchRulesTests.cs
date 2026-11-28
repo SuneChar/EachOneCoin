@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace EachOneCoin.Tests
@@ -29,6 +30,9 @@ namespace EachOneCoin.Tests
             type.GetField("protocolVersion").SetValue(value, version);
             type.GetField("coinsToWin").SetValue(value, coins);
             type.GetField("durationSeconds").SetValue(value, duration);
+            var map = AssetDatabase.LoadAssetAtPath<ScriptableObject>("Assets/Data/Maps/DefaultArenaMap.asset");
+            var fingerprintType = Type.GetType("EachOneCoin.Gameplay.ArenaMapFingerprint, Assembly-CSharp", true);
+            type.GetField("mapFingerprint").SetValue(value, fingerprintType.GetMethod("Compute").Invoke(null, new object[] { map }));
             return value;
         }
 
@@ -60,6 +64,9 @@ namespace EachOneCoin.Tests
             Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 2, 6, 60f) }), Is.EqualTo(false));
             Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 1, 6, 120f) }), Is.EqualTo(false));
             Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 3, 6, 120f) }), Is.EqualTo(false));
+            var otherMap = Message(acknowledgementType, 2, 6, 120f);
+            acknowledgementType.GetField("mapFingerprint").SetValue(otherMap, new string('b', 64));
+            Assert.That(matches.Invoke(null, new[] { rules, otherMap }), Is.EqualTo(false));
         }
 
         [Test]
@@ -74,6 +81,7 @@ namespace EachOneCoin.Tests
             var acknowledgement = Message(acknowledgementType, 2, 6, 120f);
             Assert.That(confirm.Invoke(handshake, new[] { (object)7, acknowledgement }), Is.EqualTo(false));
             Assert.That(offer.Invoke(handshake, new[] { (object)7, Message(rulesType, 1, 6, 120f) }), Is.EqualTo(false));
+            Assert.That(offer.Invoke(handshake, new[] { (object)7, Message(rulesType, 3, 6, 120f) }), Is.EqualTo(false));
             Assert.That(offer.Invoke(handshake, new[] { (object)7, rules }), Is.EqualTo(true));
             Assert.That(confirm.Invoke(handshake, new[] { (object)7, Message(acknowledgementType, 2, 7, 120f) }), Is.EqualTo(false));
             Assert.That(pending.Invoke(handshake, new object[] { 7 }), Is.EqualTo(true));
@@ -111,6 +119,7 @@ namespace EachOneCoin.Tests
                 coordinatorType.GetField("<IsNetworkMovementTest>k__BackingField", privateInstance).SetValue(coordinator, true);
                 coordinatorType.GetField("session", privateInstance).SetValue(coordinator, session);
                 coordinatorType.GetField("matchSystem", privateInstance).SetValue(coordinator, system);
+                coordinatorType.GetField("mapDefinition", privateInstance).SetValue(coordinator, AssetDatabase.LoadAssetAtPath<ScriptableObject>("Assets/Data/Maps/DefaultArenaMap.asset"));
                 coordinatorType.GetField("coins", privateInstance).SetValue(coordinator, coins);
                 coinsType.GetField("match", privateInstance).SetValue(coins, coordinator);
                 controllerType.GetField("match", privateInstance).SetValue(controller, coordinator);
@@ -127,6 +136,10 @@ namespace EachOneCoin.Tests
 
                 var receiveRules = controllerType.GetMethod("ReceiveAuthoritativeRules");
                 Assert.That(receiveRules.Invoke(controller, new[] { Message(rulesType, 1, 6, 120f) }), Is.EqualTo(false));
+                Assert.That(receiveRules.Invoke(controller, new[] { Message(rulesType, 3, 6, 120f) }), Is.EqualTo(false));
+                var wrongMapRules = Message(rulesType, 2, 6, 120f);
+                rulesType.GetField("mapFingerprint").SetValue(wrongMapRules, new string('b', 64));
+                Assert.That(receiveRules.Invoke(controller, new[] { wrongMapRules }), Is.EqualTo(false));
                 var rules = Message(rulesType, 2, 6, 120f);
                 Assert.That(receiveRules.Invoke(controller, new[] { rules }), Is.EqualTo(true));
                 Assert.That(receiveRules.Invoke(controller, new[] { rules }), Is.EqualTo(true));

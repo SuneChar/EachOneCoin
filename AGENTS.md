@@ -44,6 +44,7 @@
 
 ## 文本组件规范
 
+- 项目自身的 UI 优先使用预制体和场景静态配置，不在运行时动态生成 UI。
 - 项目自身的 UI 文本使用 TextMeshProUGUI 或 TMP_Text，世界空间文本使用 TextMeshPro，输入框使用 TMP_InputField；不新增或继续使用 UnityEngine.UI.Text、UnityEngine.TextMesh 或 UnityEngine.UI.InputField。
 - 第三方插件及其示例中的既有旧文本组件不要求迁移或清理；不得为统一文本组件而擅自修改或删除第三方内容。项目自身新增或修改的内容仍须遵守 TMPro 规范。
 - 迁移文本或输入框时保留字体与显示效果、默认值、字符限制、事件、导航和序列化引用，并验证输入与交互；不得仅因新增规范而声称存量已完成迁移。

@@ -659,8 +659,8 @@ namespace EachOneCoin.Tests
 
             var crownRect = (RectTransform)root.transform.Find("ParticipantSlot_0/CrownIcon");
             Assert.That(crownRect, Is.Not.Null);
-            Assert.That(crownRect.sizeDelta.x, Is.EqualTo(36f).Within(0.5f));
-            Assert.That(crownRect.sizeDelta.y, Is.EqualTo(28f).Within(0.5f));
+            Assert.That(crownRect.sizeDelta.x, Is.EqualTo(16f).Within(0.5f));
+            Assert.That(crownRect.sizeDelta.y, Is.EqualTo(14f).Within(0.5f));
 
             Assert.That(IsImageEnabled("ParticipantSlot_0/AvatarRoot/HealthBarRoot/HealthSegment_0"), Is.True);
             Assert.That(IsImageEnabled("ParticipantSlot_0/AvatarRoot/HealthBarRoot/HealthSegment_1"), Is.True);
@@ -832,8 +832,10 @@ namespace EachOneCoin.Tests
             Assert.That(avatar0.sizeDelta.x, Is.EqualTo(71.5f).Within(0.5f));
             Assert.That(avatar0.sizeDelta.y, Is.EqualTo(71.5f).Within(0.5f));
             Assert.That(avatar0.anchoredPosition.x, Is.EqualTo(0f).Within(0.01f));
-            Assert.That(crown0.anchoredPosition.x, Is.EqualTo(0f).Within(0.01f));
-            Assert.That(crown0.sizeDelta.x, Is.EqualTo(36f).Within(0.5f));
+            Assert.That(crown0.anchoredPosition.x, Is.EqualTo(-35f).Within(0.01f));
+            Assert.That(crown0.sizeDelta.x, Is.EqualTo(16f).Within(0.5f));
+            Assert.That(metric0.anchoredPosition.y, Is.EqualTo(-1f).Within(0.01f));
+            Assert.That(avatar0.anchoredPosition.y, Is.EqualTo(-69f).Within(0.01f));
             Assert.That(metric0.anchorMin, Is.EqualTo(new Vector2(0f, 1f)));
             Assert.That(metric0.anchorMax, Is.EqualTo(new Vector2(1f, 1f)));
         }

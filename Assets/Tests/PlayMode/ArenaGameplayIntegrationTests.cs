@@ -105,6 +105,147 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator DefaultMap_BuildsTilesAndPreservesObstacleOverrides()
+        {
+            var world = arena.GetRootGameObjects().Single(r => r.name == "---World---").transform;
+            var tiles = world.Find("Arena Models");
+            Assert.That(tiles.childCount, Is.EqualTo(441));
+            Assert.That(tiles.Cast<Transform>().Count(t => t.GetComponentInChildren<MeshFilter>().sharedMesh.name == "tile-spawn"), Is.EqualTo(5));
+            Assert.That(world.Find("Static Obstacles").childCount, Is.EqualTo(4));
+            var moving = world.Find("Moving Obstacles");
+            Assert.That(moving.childCount, Is.EqualTo(2));
+            var patrolType = Type.GetType("LinearPatrolObstacle, Assembly-CSharp", true);
+            var patrol = moving.Find("Moving Obstacle 02").GetComponent(patrolType);
+            Assert.That((float)patrolType.GetField("speed", Private).GetValue(patrol), Is.EqualTo(1.2f).Within(0.001f));
+            var trap = world.Find("Spike Traps/Spike Trap 02").GetComponent(Type.GetType("TimedSpikeTrap, Assembly-CSharp", true));
+            yield return null;
+            Assert.That((bool)trap.GetType().GetProperty("IsActive").GetValue(trap), Is.False);
+        }
+
+        [UnityTest]
+        public IEnumerator Fall_DropsCoinsKeepsCameraHeightAndRespawnsAtCurrentMaximum()
+        {
+            var character = Character(0);
+            var camera = character.GetComponentInChildren<Camera>(true);
+            float cameraHeight = camera.transform.position.y;
+            Assert.That(rules.TryCollectCoin(0, model.Participants[0].Spawn), Is.True);
+            Assert.That(rules.TryCollectCoin(0, model.Participants[0].Spawn), Is.True);
+            Assert.That(rules.TryObstacleContact(0), Is.True);
+            var lastSafe = new GridPosition(2, 1);
+            Assert.That((bool)Call(combat, "TryStartFall", 0, lastSafe), Is.True);
+            Assert.That(model.Participants[0].Health, Is.Zero);
+            Assert.That(model.Participants[0].Coins, Is.Zero);
+            Assert.That(model.Participants[0].Status, Is.EqualTo(ParticipantStatus.Respawning));
+            var coinsOnGround = new System.Collections.Generic.List<GridPosition>();
+            Call(coins, "CopyActiveCoins", coinsOnGround);
+            Assert.That(coinsOnGround.Count, Is.EqualTo(2));
+            Assert.That(coinsOnGround.All(cell => model.Grid.Contains(cell) && !model.Grid.IsBlocked(cell)), Is.True);
+            Call(combat, "Tick", 0.3f);
+            yield return null;
+            Assert.That(camera.transform.position.y, Is.EqualTo(cameraHeight).Within(0.001f));
+            Assert.That(character.transform.Find("Root").localPosition.y, Is.LessThan(0f));
+            Call(combat, "Tick", 0.4f);
+            Call(combat, "Tick", 2f);
+            Assert.That(model.Participants[0].Status, Is.EqualTo(ParticipantStatus.Active));
+            Assert.That(model.Participants[0].Health, Is.EqualTo(2));
+            Assert.That(character.transform.Find("Root").localPosition.y, Is.EqualTo(0f).Within(0.001f));
+        }
+
+        [UnityTest]
+        public IEnumerator HeightTerrain_AllowsRampAndStepButRejectsCliff()
+        {
+            var mapField = match.GetType().GetField("mapDefinition", Private);
+            var original = (ScriptableObject)mapField.GetValue(match);
+            var custom = UnityEngine.Object.Instantiate(original);
+            try
+            {
+                var mapType = custom.GetType();
+                var cellArray = (Array)mapType.GetField("cells", Private).GetValue(custom);
+                var cellType = cellArray.GetType().GetElementType();
+                var terrainField = cellType.GetField("terrain");
+                var heightField = cellType.GetField("height");
+                var directionField = cellType.GetField("direction");
+                void SetCell(int x, int y, int terrain, int height, int direction = 0)
+                {
+                    int index = x * 21 + y;
+                    object cell = cellArray.GetValue(index);
+                    terrainField.SetValue(cell, Enum.ToObject(terrainField.FieldType, terrain));
+                    heightField.SetValue(cell, height);
+                    directionField.SetValue(cell, direction);
+                    cellArray.SetValue(cell, index);
+                }
+                SetCell(11, 10, 4, 0, 1);
+                SetCell(12, 10, 0, 1);
+                SetCell(7, 7, 5, 1);
+                SetCell(8, 7, 0, 1);
+                mapField.SetValue(match, custom);
+                Call(grid, "ConfigureMap", custom);
+                var character = Character(0);
+                Call(character, "Teleport", CellToWorld(new GridPosition(10, 10)));
+                Physics.SyncTransforms();
+                float baseY = character.transform.position.y;
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.y, Is.EqualTo(baseY + 0.125f).Within(0.02f));
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.y, Is.EqualTo(baseY + 0.25f).Within(0.02f));
+                Call(character, "Teleport", CellToWorld(new GridPosition(6, 7)));
+                Physics.SyncTransforms();
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.y, Is.EqualTo(baseY + 0.25f).Within(0.02f));
+                Call(character, "Move", Vector3.right);
+                Vector3 before = character.transform.position;
+                Call(character, "Move", Vector3.right);
+                Assert.That(character.transform.position.x - before.x, Is.LessThan(0.6f));
+                yield return null;
+            }
+            finally
+            {
+                mapField.SetValue(match, original);
+                Call(grid, "ConfigureMap", original);
+                UnityEngine.Object.DestroyImmediate(custom);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator KnockbackIntoHole_DropsAtLastSafeCellWithoutPaintingPath()
+        {
+            var mapField = match.GetType().GetField("mapDefinition", Private);
+            var original = (ScriptableObject)mapField.GetValue(match);
+            var custom = UnityEngine.Object.Instantiate(original);
+            try
+            {
+                var cells = (Array)custom.GetType().GetField("cells", Private).GetValue(custom);
+                var cellType = cells.GetType().GetElementType();
+                var terrainField = cellType.GetField("terrain");
+                int index = 13 * 21 + 10;
+                object hole = cells.GetValue(index);
+                terrainField.SetValue(hole, Enum.ToObject(terrainField.FieldType, 1));
+                cells.SetValue(hole, index);
+                mapField.SetValue(match, custom);
+                Call(grid, "ConfigureMap", custom);
+                var character = Character(1);
+                Call(character, "Teleport", CellToWorld(new GridPosition(10, 10)));
+                Assert.That(rules.TryCollectCoin(1, model.Participants[1].Spawn), Is.True);
+                Physics.SyncTransforms();
+                Call(character, "StartAttackKnockback", Vector3.right * 4f, 0.4f);
+                Call(character, "TickAttackKnockback", 0.4f);
+                Assert.That(model.Participants[1].Status, Is.EqualTo(ParticipantStatus.Respawning));
+                Assert.That(model.Grid.OwnerAt(new GridPosition(11, 10)), Is.Null);
+                var dropped = new System.Collections.Generic.List<GridPosition>();
+                Call(coins, "CopyActiveCoins", dropped);
+                Assert.That(dropped, Has.Count.EqualTo(1));
+                Assert.That(dropped[0], Is.EqualTo(new GridPosition(12, 10)));
+                yield return null;
+            }
+            finally
+            {
+                mapField.SetValue(match, original);
+                Call(grid, "ConfigureMap", original);
+                UnityEngine.Object.DestroyImmediate(custom);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator GroundShadows_FollowAndRespectOwnerLifetime()
         {
             var character = Character(0);
@@ -896,58 +1037,30 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
-        public IEnumerator StaticObstacle_ContactReducesMaxHealthAndAllowsRetry()
+        public IEnumerator StaticObstacle_BlocksWithoutDamage()
         {
             var obstacle = arena.GetRootGameObjects()
                 .SelectMany(r => r.GetComponentsInChildren<Transform>(true))
                 .SingleOrDefault(t => t.name == "Static Obstacle 01");
-            Assert.That(obstacle, Is.Not.Null, "Static Obstacle 01 must exist in ArenaScene.");
-            var lethalObstacleType = Type.GetType("LethalObstacle, Assembly-CSharp", true);
-            Assert.That(obstacle.GetComponent(lethalObstacleType), Is.Not.Null, "Static Obstacle 01 must have LethalObstacle.");
-            var boxCollider = obstacle.GetComponent<BoxCollider>();
-            Assert.That(boxCollider, Is.Not.Null, "Static Obstacle 01 must have BoxCollider.");
-            Assert.That(boxCollider.enabled, Is.True, "Static Obstacle 01 BoxCollider must be enabled.");
-
+            Assert.That(obstacle, Is.Not.Null);
+            var wallType = Type.GetType("EachOneCoin.Gameplay.ArenaWall, Assembly-CSharp", true);
+            Assert.That(obstacle.GetComponent(wallType), Is.Not.Null);
+            var collider = obstacle.GetComponent<BoxCollider>();
+            Assert.That(collider, Is.Not.Null);
+            Assert.That(collider.enabled && !collider.isTrigger, Is.True);
             var character = Character(0);
-            int hits = 0;
-            var obstacleHitEvent = match.GetType().GetEvent("ObstacleHit");
-            Assert.That(obstacleHitEvent, Is.Not.Null, "MatchCoordinator must expose ObstacleHit.");
-            Action<int> handler = id => { if (id == 0) hits++; };
-            obstacleHitEvent.AddEventHandler(match, handler);
-            try
-            {
-                var startPosition = obstacle.position + Vector3.left * 1.2f;
-                startPosition.y = 0f;
-                Call(character, "Teleport", startPosition);
-                Physics.SyncTransforms();
-
-                Call(character, "Move", Vector3.right * 1.2f);
-                Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(2));
-                Assert.That(model.Participants[0].Health, Is.EqualTo(2));
-                Assert.That(hits, Is.EqualTo(1));
-                Assert.That(Get(character, "IsKnockedBack"), Is.EqualTo(true));
-
-                float deadline = Time.realtimeSinceStartup + 2f;
-                while ((bool)Get(character, "IsKnockedBack") && Time.realtimeSinceStartup < deadline) yield return null;
-                Assert.That((bool)Get(character, "IsKnockedBack"), Is.False, "Obstacle knockback did not finish within two seconds.");
-
-                var controller = character.GetComponent<CharacterController>();
-                controller.enabled = false;
-                var detachedPosition = obstacle.position + Vector3.left * 1.5f;
-                detachedPosition.y = character.transform.position.y;
-                character.transform.position = detachedPosition;
-                controller.enabled = true;
-                Physics.SyncTransforms();
-                character.GetType().GetMethod("LateUpdate", Private).Invoke(character, null);
-                character.GetType().GetField("obstacleProtection", Private).SetValue(character, 0f);
-
-                Call(character, "Move", Vector3.right * 1.5f);
-                Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(1));
-                Assert.That(model.Participants[0].Health, Is.EqualTo(1));
-                Assert.That(hits, Is.EqualTo(2));
-            }
-            finally { obstacleHitEvent.RemoveEventHandler(match, handler); }
+            var start = obstacle.position + Vector3.left * 1.2f;
+            start.y = 0f;
+            Call(character, "Teleport", start);
+            Physics.SyncTransforms();
+            var beforeHealth = model.Participants[0].Health;
+            var beforeMaxHealth = model.Participants[0].MaxHealth;
+            Call(character, "Move", Vector3.right * 1.2f);
             yield return null;
+            Assert.That(character.transform.position.x, Is.LessThan(obstacle.position.x - 0.4f));
+            Assert.That(model.Participants[0].Health, Is.EqualTo(beforeHealth));
+            Assert.That(model.Participants[0].MaxHealth, Is.EqualTo(beforeMaxHealth));
+            Assert.That((bool)Get(character, "IsKnockedBack"), Is.False);
         }
 
         [UnityTest]

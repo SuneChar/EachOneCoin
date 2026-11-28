@@ -1,0 +1,2340 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3ac20c950cfb8a24d8489a415ca525c2, type: 3}
+  m_Name: DefaultArenaMap
+  m_EditorClassIdentifier: 
+  mapId: default-arena
+  displayName: "\u9ED8\u8BA4\u7ADE\u6280\u573A"
+  width: 21
+  height: 21
+  defaultTilePrefab: {fileID: 89311904343358228, guid: 096e5551aa80d89458796fd41285333d,
+    type: 3}
+  wallPrefab: {fileID: 6216730844494549634, guid: 2e63ab0c18f90ee43942e7834fd4e9cf,
+    type: 3}
+  cells:
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 8544289576710102094, guid: 3d90f69ccd3f8934c9d21276011929f2,
+      type: 3}
+    meshOverride: {fileID: 921141965265942323, guid: dd686c127100844429d85c1fc1fe439d,
+      type: 3}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 8544289576710102094, guid: 3d90f69ccd3f8934c9d21276011929f2,
+      type: 3}
+    meshOverride: {fileID: 921141965265942323, guid: dd686c127100844429d85c1fc1fe439d,
+      type: 3}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 7670729459461989759, guid: 81fb144a228d4f645b8d84b8be405604,
+      type: 3}
+    meshOverride: {fileID: 921141965265942323, guid: dd686c127100844429d85c1fc1fe439d,
+      type: 3}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 8544289576710102094, guid: 3d90f69ccd3f8934c9d21276011929f2,
+      type: 3}
+    meshOverride: {fileID: 921141965265942323, guid: dd686c127100844429d85c1fc1fe439d,
+      type: 3}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 8544289576710102094, guid: 3d90f69ccd3f8934c9d21276011929f2,
+      type: 3}
+    meshOverride: {fileID: 921141965265942323, guid: dd686c127100844429d85c1fc1fe439d,
+      type: 3}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  - terrain: 0
+    height: 0
+    direction: 0
+    tilePrefabOverride: {fileID: 0}
+    meshOverride: {fileID: 0}
+  spawns:
+  - {x: 1, y: 1}
+  - {x: 19, y: 1}
+  - {x: 1, y: 19}
+  - {x: 19, y: 19}
+  mines:
+  - {x: 10, y: 5}
+  - {x: 10, y: 15}
+  - {x: 5, y: 10}
+  - {x: 15, y: 10}
+  objects:
+  - id: Static Obstacle 01
+    group: 0
+    prefab: {fileID: 6216730844494549634, guid: 2e63ab0c18f90ee43942e7834fd4e9cf,
+      type: 3}
+    position: {x: -3, y: 0.5, z: -2}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 0
+    initiallyVisible: 0
+  - id: Static Obstacle 02
+    group: 0
+    prefab: {fileID: 6216730844494549634, guid: 2e63ab0c18f90ee43942e7834fd4e9cf,
+      type: 3}
+    position: {x: 7, y: 0.5, z: -2}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 0
+    initiallyVisible: 0
+  - id: Static Obstacle 03
+    group: 0
+    prefab: {fileID: 6216730844494549634, guid: 2e63ab0c18f90ee43942e7834fd4e9cf,
+      type: 3}
+    position: {x: -6, y: 0.5, z: 4}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 0
+    initiallyVisible: 0
+  - id: Static Obstacle 04
+    group: 0
+    prefab: {fileID: 6216730844494549634, guid: 2e63ab0c18f90ee43942e7834fd4e9cf,
+      type: 3}
+    position: {x: -3, y: 0.5, z: -9}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 0
+    initiallyVisible: 0
+  - id: Moving Obstacle 01
+    group: 1
+    prefab: {fileID: 7486571843818385204, guid: 71848ce737e689543819ed65e0f486c6,
+      type: 3}
+    position: {x: -5, y: 0, z: -5}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 1
+    patrolSpeed: 1.5
+    overrideInitiallyVisible: 0
+    initiallyVisible: 0
+  - id: Moving Obstacle 02
+    group: 1
+    prefab: {fileID: 7486571843818385204, guid: 71848ce737e689543819ed65e0f486c6,
+      type: 3}
+    position: {x: 2, y: 0, z: 5}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 1
+    patrolSpeed: 1.2
+    overrideInitiallyVisible: 0
+    initiallyVisible: 0
+  - id: Spike Trap 01
+    group: 2
+    prefab: {fileID: 2404373331621956046, guid: 82edf49ca4c222b43b302ef7da6365dc,
+      type: 3}
+    position: {x: -1, y: 0.01, z: -7}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 1
+    initiallyVisible: 1
+  - id: Spike Trap 02
+    group: 2
+    prefab: {fileID: 2404373331621956046, guid: 82edf49ca4c222b43b302ef7da6365dc,
+      type: 3}
+    position: {x: 1, y: 0.01, z: 3}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 1
+    initiallyVisible: 0
+  - id: Spike Trap 03
+    group: 2
+    prefab: {fileID: 2404373331621956046, guid: 82edf49ca4c222b43b302ef7da6365dc,
+      type: 3}
+    position: {x: 9, y: 0.01, z: -5}
+    rotation: {x: 0, y: 0, z: 0}
+    overridePatrolSpeed: 0
+    patrolSpeed: 0
+    overrideInitiallyVisible: 1
+    initiallyVisible: 1
+  slowMultiplier: 0.5

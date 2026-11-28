@@ -22,11 +22,20 @@ public class BootMenu : MonoBehaviour
     private bool quitOpen;
     private bool lanRoomOpen;
     private bool wardrobeOpen;
+    private bool replayOpen;
+    [SerializeField] private EachOneCoin.Gameplay.Replay.ReplayBrowser replayBrowser;
     [SerializeField] private LanRoomUI lanRoom;
     [SerializeField] private WardrobeUI wardrobe;
     [SerializeField] private Button wardrobeButton;
-
     public bool UsingGamepad => usingGamepad;
+    [SerializeField] private EachOneCoin.Gameplay.ArenaMapCatalog mapCatalog;
+    [SerializeField] private EachOneCoin.Gameplay.ArenaMapDefinition replayMap;
+    public EachOneCoin.Gameplay.ArenaMapDefinition ReplayMap => replayMap;
+    private EachOneCoin.Gameplay.ArenaMapDefinition[] singlePlayerMaps => mapCatalog != null ? mapCatalog.Maps : null;
+    [SerializeField] private TMP_Text mapNameText;
+    [SerializeField] private Button previousMapButton;
+    [SerializeField] private Button nextMapButton;
+    private int selectedMap;
 
     private void Awake()
     {
@@ -40,26 +49,31 @@ public class BootMenu : MonoBehaviour
         if (wardrobeButton != null) wardrobeButton.onClick.AddListener(OpenWardrobe);
         if (wardrobe != null) wardrobe.Initialize(this, lanRoom);
         if (lanRoom != null) lanRoom.Initialize(this);
+        if (previousMapButton != null) previousMapButton.onClick.AddListener(PreviousMap);
+        if (nextMapButton != null) nextMapButton.onClick.AddListener(NextMap);
+        RefreshMap();
         Refresh();
+        if (replayBrowser != null) replayBrowser.Initialize(this);
     }
 
     private void OnDestroy()
     {
         if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged;
         if (wardrobeButton != null) wardrobeButton.onClick.RemoveListener(OpenWardrobe);
+        if (previousMapButton != null) previousMapButton.onClick.RemoveListener(PreviousMap);
+        if (nextMapButton != null) nextMapButton.onClick.RemoveListener(NextMap);
     }
-
     private void OnDeviceChanged(bool gamepad) { usingGamepad = gamepad; Refresh(); }
     private void Refresh()
     {
-        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen && !wardrobeOpen);
+        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen && !wardrobeOpen && !replayOpen);
         settingsPanel.SetActive(settingsOpen);
         quitConfirmPanel.SetActive(quitOpen);
         if (EventSystem.current != null)
         {
             EventSystem.current.sendNavigationEvents = usingGamepad && Application.isFocused;
             EventSystem.current.SetSelectedGameObject(null);
-            var active = (lanRoomOpen || wardrobeOpen) ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
+            var active = replayOpen && replayBrowser != null ? replayBrowser.Panel : (lanRoomOpen || wardrobeOpen) ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
             GamepadNavigation.Configure(active);
             GamepadNavigation.EnsureFocus(active, usingGamepad);
         }
@@ -68,36 +82,66 @@ public class BootMenu : MonoBehaviour
     private void LateUpdate()
     {
         if (lanRoomOpen || wardrobeOpen) return;
-        GamepadNavigation.EnsureFocus(quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel, usingGamepad);
+        GamepadNavigation.EnsureFocus(replayOpen && replayBrowser != null ? replayBrowser.Panel : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel, usingGamepad);
     }
     private void Update()
     {
         if (!Application.isFocused) return;
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || Input.GetKeyDown(KeyCode.JoystickButton1))
         {
-            if (wardrobeOpen) { if (wardrobe != null) wardrobe.Close(); }
+            if (replayOpen && replayBrowser != null) replayBrowser.Close();
+            else if (wardrobeOpen) { if (wardrobe != null) wardrobe.Close(); }
             else if (lanRoomOpen) { if (lanRoom != null) lanRoom.Close(); }
             else if (quitOpen) CancelQuit();
             else if (settingsOpen) CloseSettings();
         }
     }
+    public void SetReplayOpen(bool open) { replayOpen = open; Refresh(); }
     public void SetLanRoomOpen(bool open) { lanRoomOpen = open; Refresh(); }
     public void OpenWardrobe()
     {
-        if (settingsOpen || quitOpen || lanRoomOpen || wardrobe == null) return;
+        if (settingsOpen || quitOpen || lanRoomOpen || replayOpen || wardrobe == null) return;
         wardrobe.Open(false);
     }
     public void SetWardrobeOpen(bool open)
     {
         wardrobeOpen = open;
         Refresh();
-        if (!open && !lanRoomOpen && !settingsOpen && !quitOpen && usingGamepad && wardrobeButton != null && EventSystem.current != null)
+        if (!open && !lanRoomOpen && !settingsOpen && !quitOpen && !replayOpen && usingGamepad && wardrobeButton != null && EventSystem.current != null)
             EventSystem.current.SetSelectedGameObject(wardrobeButton.gameObject);
     }
-    public void StartGame() { SceneManager.LoadScene("ArenaScene"); }
+    public void StartGame()
+    {
+        var selected = singlePlayerMaps != null && selectedMap < singlePlayerMaps.Length ? singlePlayerMaps[selectedMap] : null;
+        if (selected != null && !EachOneCoin.Gameplay.ArenaMapValidator.TryValidate(selected, out string error))
+        {
+            if (mapNameText != null) mapNameText.text = "地图无效";
+            Debug.LogWarning("无法开始：" + error, selected);
+            return;
+        }
+        EachOneCoin.Gameplay.ArenaMapSelection.Selected = selected;
+        SceneManager.LoadScene("ArenaScene");
+    }
+    public void PreviousMap() { ChangeMap(-1); }
+    public void NextMap() { ChangeMap(1); }
+    private void ChangeMap(int step)
+    {
+        if (singlePlayerMaps == null || singlePlayerMaps.Length == 0) return;
+        selectedMap = (selectedMap + step + singlePlayerMaps.Length) % singlePlayerMaps.Length;
+        RefreshMap();
+    }
+    private void RefreshMap()
+    {
+        int count = singlePlayerMaps != null ? singlePlayerMaps.Length : 0;
+        if (selectedMap >= count) selectedMap = 0;
+        var selected = count > 0 ? singlePlayerMaps[selectedMap] : null;
+        if (mapNameText != null) mapNameText.text = selected != null ? selected.DisplayName : "默认竞技场";
+        if (previousMapButton != null) previousMapButton.interactable = count > 1;
+        if (nextMapButton != null) nextMapButton.interactable = count > 1;
+    }
     public void OpenSettings()
     {
-        if (quitOpen || wardrobeOpen || lanRoomOpen) return;
+        if (quitOpen || wardrobeOpen || lanRoomOpen || replayOpen) return;
         settingsOpen = true;
         volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
         UpdateVolumeLabel(gameAudio.Volume);
@@ -113,7 +157,7 @@ public class BootMenu : MonoBehaviour
         PlayerPrefs.Save();
         Refresh();
     }
-    public void OpenQuitConfirmation() { if (!settingsOpen && !wardrobeOpen && !lanRoomOpen) { quitOpen = true; Refresh(); } }
+    public void OpenQuitConfirmation() { if (!settingsOpen && !wardrobeOpen && !lanRoomOpen && !replayOpen) { quitOpen = true; Refresh(); } }
     public void CancelQuit()
     {
         quitOpen = false;

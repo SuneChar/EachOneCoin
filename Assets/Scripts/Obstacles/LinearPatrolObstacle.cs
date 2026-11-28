@@ -13,6 +13,8 @@ public class LinearPatrolObstacle : ObstacleBehaviour
     private bool hasReplicaPosition;
     private Vector3 replicaPosition;
     public Vector3 NetworkPosition => body.position;
+    public Vector3 ConfiguredEndOffset => endOffset;
+    public float ConfiguredSpeed => speed;
 
     public void ApplyNetworkPosition(Vector3 position)
     {
@@ -27,6 +29,13 @@ public class LinearPatrolObstacle : ObstacleBehaviour
     private void Update()
     {
         if (hasReplicaPosition) body.position = Vector3.Lerp(body.position, replicaPosition, 1f - Mathf.Exp(-12f * Time.deltaTime));
+    }
+
+    public void ConfigureEndOffsetBeforeActivation(Vector3 value) => endOffset = value;
+
+    public void ConfigureSpeedBeforeActivation(float value)
+    {
+        speed = Mathf.Max(0f, value);
     }
 
     private void Awake()

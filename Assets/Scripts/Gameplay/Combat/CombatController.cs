@@ -11,9 +11,12 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0)] private int droppedCoins = 1;
         [SerializeField, Min(0.1f)] private float respawnSeconds = 2f;
         [SerializeField, Min(0.01f)] private float attackKnockbackSeconds = 0.35f;
+        [SerializeField, Min(0.05f)] private float fallAnimationSeconds = 0.6f;
         private const float AttackKnockbackDistance = 6f;
         private readonly float[] cooldowns = new float[4];
         private readonly float[] respawns = new float[4];
+        private readonly float[] fallElapsed = new float[4];
+        private readonly bool[] falling = new bool[4];
         private MatchCoordinator match;
         public float AttackRange => Mathf.Max(0.1f, attackRange);
         public float AttackAngle => Mathf.Clamp(attackAngle, 1f, 360f);
@@ -28,11 +31,36 @@ namespace EachOneCoin.Gameplay
                 cooldowns[i] = Mathf.Max(0f, cooldowns[i] - deltaTime);
                 if (match.Model.Participants[i].Status != ParticipantStatus.Respawning) continue;
                 respawns[i] = Mathf.Max(0f, respawns[i] - deltaTime);
+                if (falling[i])
+                {
+                    fallElapsed[i] += Mathf.Max(0f, deltaTime);
+                    float duration = Mathf.Max(0.05f, fallAnimationSeconds);
+                    match.Characters[i].SetFallProgress(fallElapsed[i] / duration);
+                    if (fallElapsed[i] >= duration)
+                    {
+                        falling[i] = false;
+                        match.Characters[i].SetActiveState(false);
+                    }
+                }
                 if (respawns[i] > 0f || (match.IsNetworkMovementTest && !match.NetworkController.CanRespawn(i)) || !match.Rules.TryRespawn(i)) continue;
+                match.Characters[i].ResetFallVisual();
                 match.Characters[i].SetActiveState(true);
                 match.Characters[i].Teleport(match.Grid.CellToWorld(match.Spawns[i]));
                 match.NotifyRespawned(i);
             }
+        }
+
+        public bool TryStartFall(int participantId, GridPosition lastSafeCell)
+        {
+            if (match == null || match.IsReplay || match.IsNetworkMovementTest || participantId < 0 || participantId >= respawns.Length ||
+                !match.Rules.TryFall(participantId, out int dropped)) return false;
+            if (dropped > 0) match.Coins.Drop(lastSafeCell, dropped);
+            respawns[participantId] = Mathf.Max(Mathf.Max(0.1f, respawnSeconds), Mathf.Max(0.05f, fallAnimationSeconds));
+            fallElapsed[participantId] = 0f;
+            falling[participantId] = true;
+            match.Characters[participantId].BeginFall();
+            match.Npcs.ResetPath(participantId);
+            return true;
         }
 
         public bool CanAttack(int attacker) => match != null && attacker >= 0 && attacker < cooldowns.Length && match.Model.Status == MatchStatus.Playing && match.Model.Participants[attacker].Status == ParticipantStatus.Active && cooldowns[attacker] <= 0f && (!match.IsNetworkMovementTest || (Mirror.NetworkServer.active && match.NetworkController.IsSlotActive(attacker)));
@@ -49,6 +77,7 @@ namespace EachOneCoin.Gameplay
             cooldowns[attacker] = Mathf.Max(0.1f, attackCooldown);
             var attackerCharacter = match.Characters[attacker];
             attackerCharacter.PlayAttack(aimDirection, AttackRange, AttackAngle);
+            if (match.Recorder != null) match.Recorder.RecordAttack(attacker, aimDirection);
             if (match.IsNetworkMovementTest) match.NetworkController.BroadcastAttack(attacker, aimDirection);
             Vector3 origin = attackerCharacter.transform.position;
             for (int target = 0; target < match.Characters.Length; target++)

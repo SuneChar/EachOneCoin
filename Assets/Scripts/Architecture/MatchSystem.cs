@@ -20,6 +20,33 @@ namespace EachOneCoin
 
         private MatchModel CurrentMatch => session?.Match ?? throw new InvalidOperationException("No active match session is available.");
 
+        public bool ApplyReplayState(float remaining, int status, ReplayParticipantState[] participants)
+        {
+            var match = CurrentMatch;
+            if (float.IsNaN(remaining) || float.IsInfinity(remaining) || remaining < 0f ||
+                status < (int)MatchStatus.Waiting || status > (int)MatchStatus.Finished ||
+                participants == null || participants.Length != match.Participants.Count) return false;
+            for (int i = 0; i < participants.Length; i++)
+            {
+                var p = participants[i];
+                if (p.status < (int)ParticipantStatus.Active || p.status > (int)ParticipantStatus.Lost ||
+                    p.health < 0 || p.maxHealth < 0 || p.health > p.maxHealth || p.coins < 0 || p.finishOrder < 0 ||
+                    p.finishOrder > participants.Length || float.IsNaN(p.stamina) || float.IsInfinity(p.stamina) ||
+                    p.stamina < 0f || p.stamina > session.StaminaAt(i).Maximum) return false;
+            }
+            match.RemainingTime = remaining;
+            match.Status = (MatchStatus)status;
+            for (int i = 0; i < participants.Length; i++)
+            {
+                var source = participants[i]; var target = match.Participants[i];
+                target.IsParticipating = source.participating; target.Health = source.health; target.MaxHealth = source.maxHealth;
+                target.Coins = source.coins; target.FinishOrder = source.finishOrder; target.Status = (ParticipantStatus)source.status;
+                session.StaminaAt(i).Current = source.stamina;
+                session.StaminaAt(i).IsSprinting = false;
+            }
+            return true;
+        }
+
         public bool ConfigureRulesBeforeStart(int coinsToWin, float durationSeconds)
         {
             var match = CurrentMatch;
@@ -58,6 +85,33 @@ namespace EachOneCoin
                 if (participant.IsParticipating && (participant.Status == ParticipantStatus.Active || participant.Status == ParticipantStatus.Respawning))
                     participant.Status = ParticipantStatus.Lost;
             match.Status = MatchStatus.Finished;
+        }
+
+        public void ConfigureBlockedCells(IReadOnlyList<GridPosition> positions)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Waiting) throw new InvalidOperationException("Terrain must be configured before starting.");
+            if (positions == null) throw new ArgumentNullException(nameof(positions));
+            var seen = new HashSet<GridPosition>();
+            foreach (var position in positions)
+            {
+                if (!match.Grid.Contains(position) || !seen.Add(position)) throw new ArgumentException("Blocked cells must be unique and inside the grid.", nameof(positions));
+                foreach (var participant in match.Participants)
+                    if (participant.Spawn.Equals(position)) throw new ArgumentException("A blocked cell cannot contain a spawn.", nameof(positions));
+            }
+            foreach (var position in positions) match.Grid.SetBlocked(position, true);
+        }
+
+        public void ConfigureBlockedEdges(IReadOnlyList<GridEdge> edges)
+        {
+            var match = CurrentMatch;
+            if (match.Status != MatchStatus.Waiting) throw new InvalidOperationException("Terrain must be configured before starting.");
+            if (edges == null) throw new ArgumentNullException(nameof(edges));
+            foreach (var edge in edges)
+                if (!match.Grid.Contains(edge.From) || !match.Grid.Contains(edge.To) ||
+                    Math.Abs((long)edge.From.X - edge.To.X) + Math.Abs((long)edge.From.Y - edge.To.Y) != 1)
+                    throw new ArgumentException("Blocked edges must join neighbouring cells inside the grid.", nameof(edges));
+            foreach (var edge in edges) match.Grid.SetEdgeBlocked(edge.From, edge.To);
         }
 
         public void ConfigureMines(IReadOnlyList<GridPosition> positions)
@@ -152,6 +206,11 @@ namespace EachOneCoin
             }
             return true;
         }
+
+        // Falling defeats the participant without reducing their current maximum health.
+        // All carried coins are returned to the caller for placement on safe ground.
+        public bool TryFall(int participantId, out int droppedCoins)
+            => TryDamage(participantId, int.MaxValue, int.MaxValue, out droppedCoins);
 
         public bool TryObstacleContact(int participantId)
         {

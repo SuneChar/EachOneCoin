@@ -15,12 +15,15 @@ namespace EachOneCoin.Gameplay
         private Transform visual;
         private Transform arrow;
         private Vector3 visualScale;
+        private Vector3 visualRestPosition;
         private int facing = 1;
         private int desiredFacing = 1;
         private float turnProgress = 1f;
         private bool flipped;
         private GridPosition lastCell;
+        private GridPosition lastSafeFallCell;
         private bool hasCell;
+        private bool hasSafeFallCell;
         private float footstepTimer;
         private bool visuallyActive = true;
         private float obstacleProtection;
@@ -49,8 +52,10 @@ namespace EachOneCoin.Gameplay
             {
                 if (match == null || match.Model == null || match.Grid == null) return 1f;
                 if (match.IsNetworkMovementTest && !Mirror.NetworkServer.active) return 1f;
-                var owner = match.Model.Grid.OwnerAt(match.Grid.WorldToCell(transform.position));
-                return !owner.HasValue ? 1f : owner.Value == Id ? match.OwnRegionSpeedMultiplier : match.EnemyRegionSpeedMultiplier;
+                var cell = match.Grid.WorldToCell(transform.position);
+                var owner = match.Model.Grid.OwnerAt(cell);
+                float region = !owner.HasValue ? 1f : owner.Value == Id ? match.OwnRegionSpeedMultiplier : match.EnemyRegionSpeedMultiplier;
+                return region * match.TerrainSpeedMultiplier(cell);
             }
         }
         public bool IsKnockedBack => knockbackTime > 0f || attackKnockbackTime > 0f || lastKnockbackFrame == Time.frameCount;
@@ -67,6 +72,7 @@ namespace EachOneCoin.Gameplay
             if (visual != null)
             {
                 visualScale = visual.localScale;
+                visualRestPosition = visual.localPosition;
                 ApplyAppearance(id);
             }
             sprites = GetComponentsInChildren<SpriteRenderer>(true);
@@ -77,7 +83,7 @@ namespace EachOneCoin.Gameplay
                 if (sprites[i].name == "PlayerSprite") { sprites[i].color = color; characterSprite = sprites[i]; }
                 spriteColors[i] = sprites[i].color;
             }
-            groundShadow = GroundShadow.Create(gameObject, 0.85f);
+            groundShadow = GroundShadow.Create(gameObject, 0.85f, coordinator);
             attackVisual = gameObject.AddComponent<AttackVisual>();
             attackVisual.Initialize(coordinator, visual);
             if (nameplate != null) nameplate.Initialize(coordinator.NameplateFont, controller.height * 0.5f + 1.6f);
@@ -193,6 +199,28 @@ namespace EachOneCoin.Gameplay
             foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = active;
         }
 
+        public void BeginFall()
+        {
+            movementVelocity = Vector3.zero;
+            pendingKnockback = Vector3.zero; knockbackTime = 0f;
+            attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f;
+            if (controller != null) controller.enabled = false;
+            if (groundShadow != null) groundShadow.SetVisible(false);
+            if (nameplate != null) nameplate.SetVisible(false);
+            if (attackVisual != null) attackVisual.Clear();
+            foreach (var line in GetComponentsInChildren<LineRenderer>(true)) line.enabled = false;
+        }
+
+        public void SetFallProgress(float progress)
+        {
+            if (visual != null) visual.localPosition = visualRestPosition + Vector3.down * (2f * Mathf.Clamp01(progress));
+        }
+
+        public void ResetFallVisual()
+        {
+            if (visual != null) visual.localPosition = visualRestPosition;
+        }
+
         public void SetDisplayName(string value)
         {
             if (nameplate != null) nameplate.SetName(value);
@@ -226,7 +254,7 @@ namespace EachOneCoin.Gameplay
             position.y += controller.height * 0.5f - controller.center.y + controller.skinWidth;
             transform.position = position;
             controller.enabled = true;
-            touching.Clear(); hasCell = false;
+            touching.Clear(); hasCell = false; hasSafeFallCell = false;
             movementVelocity = Vector3.zero;
             pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false);
             ReportCell();
@@ -297,6 +325,20 @@ namespace EachOneCoin.Gameplay
             transform.position = position;
         }
 
+        public void ApplyReplayPosition(Vector3 position, Vector3 facing)
+        {
+            if (controller != null) controller.enabled = false;
+            transform.position = position;
+            facing.y = 0f;
+            if (facing.sqrMagnitude > 0.0001f)
+            {
+                FacingDirection = facing.normalized;
+                if (arrow != null) arrow.localRotation = Quaternion.LookRotation(FacingDirection, Vector3.up);
+                if (Mathf.Abs(facing.x) > 0.0001f) desiredFacing = facing.x < 0f ? -1 : 1;
+                UpdateFacing(Time.deltaTime);
+            }
+        }
+
         public void StartAttackKnockback(Vector3 displacement, float duration)
         {
             if (controller == null || !controller.enabled || match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
@@ -324,6 +366,7 @@ namespace EachOneCoin.Gameplay
             {
                 Vector3 before = transform.position;
                 CollisionFlags flags = MoveOnPlane(step);
+                CheckFallDuringKnockback();
                 if (match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
                 if (knockbackTime > 0f || (flags & CollisionFlags.Sides) != 0 || Vector3.Dot(transform.position - before, step.normalized) < step.magnitude * 0.5f)
                 {
@@ -341,18 +384,53 @@ namespace EachOneCoin.Gameplay
         private CollisionFlags MoveOnPlane(Vector3 delta)
         {
             Vector3 before = transform.position;
+            if (match == null || match.Grid == null || match.Model == null)
+            {
+                CollisionFlags planarFlags = controller.Move(delta);
+                Vector3 planarAfter = transform.position;
+                if (Mathf.Abs(planarAfter.y - before.y) > 0.001f) transform.position = before;
+                else if (planarAfter.y != before.y) transform.position = new Vector3(planarAfter.x, before.y, planarAfter.z);
+                return planarFlags;
+            }
+            var from = match.Grid.WorldToCellUnclamped(before);
+            var intended = match.Grid.WorldToCellUnclamped(before + delta);
+            if (!match.Model.Grid.Contains(intended) || (!from.Equals(intended) && !match.CanTraverse(from, intended, true))) return CollisionFlags.Sides;
+            float offset = controller.height * 0.5f - controller.center.y + controller.skinWidth;
+            float desiredHeight = match.IsHole(intended) ? before.y : match.Grid.SurfaceHeightAt(before + delta) + offset;
+            if (desiredHeight > before.y) transform.position = new Vector3(before.x, desiredHeight, before.z);
             CollisionFlags flags = controller.Move(delta);
             Vector3 after = transform.position;
-            // Reject a step that collision resolution lifted off the arena plane.
-            if (Mathf.Abs(after.y - before.y) > 0.001f) transform.position = before;
-            else if (after.y != before.y) transform.position = new Vector3(after.x, before.y, after.z);
+            var afterCell = match.Grid.WorldToCellUnclamped(after);
+            float groundHeight = match.IsHole(afterCell) ? before.y : match.Grid.SurfaceHeightAt(after) + offset;
+            transform.position = new Vector3(after.x, groundHeight, after.z);
             return flags;
+        }
+
+        private void CheckFallDuringKnockback()
+        {
+            var cell = match.Grid.WorldToCellUnclamped(transform.position);
+            if (!match.Model.Grid.Contains(cell)) return;
+            if (match.IsHole(cell))
+            {
+                match.Combat.TryStartFall(Id, hasSafeFallCell ? lastSafeFallCell : match.Spawns[Id]);
+                return;
+            }
+            lastSafeFallCell = cell;
+            hasSafeFallCell = true;
         }
 
         private void ReportCell()
         {
             if (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsRunning)) return;
-            var cell = match.Grid.WorldToCell(transform.position);
+            var cell = match.Grid.WorldToCellUnclamped(transform.position);
+            if (!match.Model.Grid.Contains(cell)) return;
+            if (match.IsHole(cell))
+            {
+                match.Combat.TryStartFall(Id, hasSafeFallCell ? lastSafeFallCell : match.Spawns[Id]);
+                return;
+            }
+            lastSafeFallCell = cell;
+            hasSafeFallCell = true;
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
             if (match.Rules.TryPaint(Id, cell))
@@ -411,7 +489,7 @@ namespace EachOneCoin.Gameplay
 
         private void TryHazard(Collider other)
         {
-            if (match == null || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
+            if (match == null || match.IsReplay || (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsSlotActive(Id))) || other == null || touching.Contains(other) || !match.IsHazard(other)) return;
             if (IsSameHazardTouching(other))
             {
                 touching.Add(other);

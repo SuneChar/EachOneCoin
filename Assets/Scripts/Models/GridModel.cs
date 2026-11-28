@@ -13,10 +13,18 @@ namespace EachOneCoin
         public override int GetHashCode() => unchecked((X * 397) ^ Y);
     }
 
+    public readonly struct GridEdge
+    {
+        public GridPosition From { get; }
+        public GridPosition To { get; }
+        public GridEdge(GridPosition from, GridPosition to) { From = from; To = to; }
+    }
+
     public sealed class GridModel
     {
         private readonly int?[,] owners;
         private readonly bool[,] blocked;
+        private bool[,,] blockedEdges;
         private readonly Dictionary<int, GridPosition> spawns = new Dictionary<int, GridPosition>();
         private readonly bool[,] connected;
         private readonly Queue<GridPosition> queue = new Queue<GridPosition>();
@@ -67,6 +75,20 @@ namespace EachOneCoin
             if (!Contains(position)) throw new ArgumentOutOfRangeException(nameof(position));
             if (blocked[position.X, position.Y] == value) return;
             blocked[position.X, position.Y] = value;
+            unchecked { Revision++; }
+        }
+
+        internal void SetEdgeBlocked(GridPosition from, GridPosition to)
+        {
+            if (!Contains(from) || !Contains(to)) throw new ArgumentOutOfRangeException(nameof(to));
+            int dx = to.X - from.X, dy = to.Y - from.Y;
+            int direction = dx == 1 && dy == 0 ? 0 : dx == -1 && dy == 0 ? 1 : dx == 0 && dy == 1 ? 2 : dx == 0 && dy == -1 ? 3 : -1;
+            if (direction < 0) throw new ArgumentException("Edge endpoints must be cardinal neighbours.", nameof(to));
+            if (blockedEdges == null) blockedEdges = new bool[Width, Height, 4];
+            int opposite = direction ^ 1;
+            if (blockedEdges[from.X, from.Y, direction]) return;
+            blockedEdges[from.X, from.Y, direction] = true;
+            blockedEdges[to.X, to.Y, opposite] = true;
             unchecked { Revision++; }
         }
 
@@ -145,7 +167,7 @@ namespace EachOneCoin
                 for (int i = 0; i < Dx.Length; i++)
                 {
                     var next = new GridPosition(current.X + Dx[i], current.Y + Dy[i]);
-                    if (!Contains(next) || blocked[next.X, next.Y] || connected[next.X, next.Y] || owners[next.X, next.Y] != participantId) continue;
+                    if (!Contains(next) || (blockedEdges != null && blockedEdges[current.X, current.Y, i]) || blocked[next.X, next.Y] || connected[next.X, next.Y] || owners[next.X, next.Y] != participantId) continue;
                     connected[next.X, next.Y] = true;
                     queue.Enqueue(next);
                 }

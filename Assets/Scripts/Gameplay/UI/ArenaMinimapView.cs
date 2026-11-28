@@ -41,6 +41,7 @@ namespace EachOneCoin.Gameplay
         [Header("Colors")]
         [SerializeField] private Color backgroundColor = new Color(0.102f, 0.125f, 0.157f, 0.85f);
         [SerializeField] private Color staticObstacleColor = new Color(0.361f, 0.384f, 0.431f, 0.95f);
+        [SerializeField] private Color holeColor = new Color(0.025f, 0.03f, 0.045f, 1f);
         [SerializeField, Range(0.2f, 1f)] private float connectedBrightness = 0.88f;
         [SerializeField, Range(0.1f, 0.8f)] private float disconnectedBrightness = 0.40f;
         [SerializeField] private Color mineIdleColor = new Color(0.804f, 0.549f, 0.125f, 1f);
@@ -60,15 +61,17 @@ namespace EachOneCoin.Gameplay
 
         private readonly List<Texture2D> runtimeTextures = new List<Texture2D>();
         private readonly List<Sprite> runtimeSprites = new List<Sprite>();
-        private readonly Color32[] pixelBuffer = new Color32[GridSize * GridSize];
-        private readonly bool[][,] connectedBuffers =
+        private Color32[] pixelBuffer = new Color32[GridSize * GridSize];
+        private bool[][,] connectedBuffers =
         {
             new bool[GridSize, GridSize],
             new bool[GridSize, GridSize],
             new bool[GridSize, GridSize],
             new bool[GridSize, GridSize]
         };
-        private readonly bool[,] staticObstacleMask = new bool[GridSize, GridSize];
+        private bool[,] staticObstacleMask = new bool[GridSize, GridSize];
+        private int gridWidth = GridSize;
+        private int gridHeight = GridSize;
         private readonly List<GridPosition> coinScratch = new List<GridPosition>(MaxCoinMarkers);
         private readonly List<GridPosition> warningScratch = new List<GridPosition>(MaxWarningMarkers);
         private readonly Color[] playerColors =
@@ -127,6 +130,7 @@ namespace EachOneCoin.Gameplay
         private int lastFocusedSlot = -1;
 
         public Vector2 BottomRightOffset => bottomRightOffset;
+        public Vector2 TopLeftOffset => new Vector2(-bottomRightOffset.x, -bottomRightOffset.y);
         public MinimapSizeMode SizeMode => sizeMode;
         public float ExpandedMapSize => Mathf.Max(64f, mapSize);
         public float CompactMapSize => Mathf.Clamp(compactMapSize, 64f, ExpandedMapSize);
@@ -177,6 +181,7 @@ namespace EachOneCoin.Gameplay
                 for (int i = 0; i < MaxPlayers; i++) playerColors[i] = coordinator.Grid.PlayerColor(i);
             }
 
+            ConfigureBuffers(coordinator.Model.Grid);
             ScanSceneObstacles(coordinator);
             SetupCore(coordinator.Model.Grid, coordinator.Spawns, coordinator.Model.Mines);
         }
@@ -187,6 +192,7 @@ namespace EachOneCoin.Gameplay
             match = null;
             spikeTraps = System.Array.Empty<TimedSpikeTrap>();
             patrolObstacles = System.Array.Empty<LinearPatrolObstacle>();
+            ConfigureBuffers(grid);
             System.Array.Clear(staticObstacleMask, 0, staticObstacleMask.Length);
             if (customColors != null)
             {
@@ -250,7 +256,7 @@ namespace EachOneCoin.Gameplay
             cachedWarningMineMask = warningMineMask;
             cachedPulseTime = pulseTime;
             float currentMapSize = MapSize;
-            float cellPx = currentMapSize / GridSize;
+            float cellPx = currentMapSize / Mathf.Max(gridWidth, gridHeight);
             float minScale = CurrentMinScale;
 
             float minePulse = 0.5f + 0.5f * Mathf.Sin(pulseTime * 12f);
@@ -291,7 +297,7 @@ namespace EachOneCoin.Gameplay
                     bool active = i < count;
                     coinMarkers[i].enabled = active;
                     if (!active) continue;
-                    Vector2 norm = CellToNormalized(coins[i]);
+                    Vector2 norm = MapCellToNormalized(coins[i]);
                     cachedCoinNormalized[i] = norm;
                     SetNormalizedPosition(coinMarkers[i].rectTransform, norm);
                 }
@@ -314,7 +320,7 @@ namespace EachOneCoin.Gameplay
                     warningMarkers[i].enabled = active;
                     if (!active) continue;
                     var rt = warningMarkers[i].rectTransform;
-                    Vector2 norm = CellToNormalized(warnings[i]);
+                    Vector2 norm = MapCellToNormalized(warnings[i]);
                     cachedWarningNormalized[i] = norm;
                     SetNormalizedPosition(rt, norm);
                     rt.sizeDelta = new Vector2(warnDiameter, warnDiameter);
@@ -333,8 +339,8 @@ namespace EachOneCoin.Gameplay
 
         public Color32 GetMapPixel(int x, int y)
         {
-            if (x < 0 || x >= GridSize || y < 0 || y >= GridSize) return default;
-            return pixelBuffer[y * GridSize + x];
+            if (x < 0 || x >= gridWidth || y < 0 || y >= gridHeight) return default;
+            return pixelBuffer[y * gridWidth + x];
         }
 
         public bool IsPlayerMarkerVisible(int index)
@@ -342,6 +348,31 @@ namespace EachOneCoin.Gameplay
             if (playerMarkers == null || index < 0 || index >= playerMarkers.Length) return false;
             return playerMarkers[index].Root != null && playerMarkers[index].Root.gameObject.activeSelf;
         }
+
+        private void ConfigureBuffers(GridModel grid)
+        {
+            if (grid == null) throw new System.ArgumentNullException(nameof(grid));
+            if (grid.Width == gridWidth && grid.Height == gridHeight) return;
+            gridWidth = grid.Width; gridHeight = grid.Height;
+            pixelBuffer = new Color32[gridWidth * gridHeight];
+            staticObstacleMask = new bool[gridWidth, gridHeight];
+            connectedBuffers = new[] { new bool[gridWidth, gridHeight], new bool[gridWidth, gridHeight], new bool[gridWidth, gridHeight], new bool[gridWidth, gridHeight] };
+            if (gridTexture != null) gridTexture.Reinitialize(gridWidth, gridHeight);
+            if (mapRect != null) mapRect.sizeDelta = MapDimensions();
+            lastGridRevision = uint.MaxValue;
+        }
+
+        private Vector2 MapDimensions()
+        {
+            float max = Mathf.Max(gridWidth, gridHeight);
+            return new Vector2(MapSize * gridWidth / max, MapSize * gridHeight / max);
+        }
+
+        private Vector2 MapWorldToNormalized(Vector3 world) => new Vector2(
+            Mathf.Clamp01((world.x + gridWidth * 0.5f) / gridWidth),
+            Mathf.Clamp01((world.z + gridHeight * 0.5f) / gridHeight));
+        private Vector2 MapCellToNormalized(GridPosition cell) => new Vector2(
+            Mathf.Clamp01((cell.X + 0.5f) / gridWidth), Mathf.Clamp01((cell.Y + 0.5f) / gridHeight));
 
         private void SetupCore(GridModel grid, IReadOnlyList<GridPosition> spawns, IReadOnlyList<GridPosition> mines)
         {
@@ -358,12 +389,14 @@ namespace EachOneCoin.Gameplay
             if (mapRect == null) mapRect = gameObject.AddComponent<RectTransform>();
             float currentMapSize = MapSize;
             float minScale = CurrentMinScale;
-            mapRect.anchoredPosition = bottomRightOffset;
-            mapRect.sizeDelta = new Vector2(currentMapSize, currentMapSize);
+            mapRect.anchorMin = mapRect.anchorMax = new Vector2(0f, 1f);
+            mapRect.pivot = new Vector2(0f, 1f);
+            mapRect.anchoredPosition = TopLeftOffset;
+            mapRect.sizeDelta = MapDimensions();
 
             BuildProceduralSprites();
 
-            gridTexture = new Texture2D(GridSize, GridSize, TextureFormat.RGBA32, false)
+            gridTexture = new Texture2D(gridWidth, gridHeight, TextureFormat.RGBA32, false)
             {
                 filterMode = FilterMode.Point,
                 wrapMode = TextureWrapMode.Clamp,
@@ -385,7 +418,7 @@ namespace EachOneCoin.Gameplay
             gridRawImage.texture = gridTexture;
             gridRawImage.raycastTarget = false;
 
-            float cellPx = currentMapSize / GridSize;
+            float cellPx = currentMapSize / Mathf.Max(gridWidth, gridHeight);
 
             // Layer 1: Spawn cell white outlines
             spawnMarkers = new UnityEngine.UI.Image[MaxPlayers];
@@ -404,7 +437,7 @@ namespace EachOneCoin.Gameplay
                 spikeMarkers[i] = CreateMarkerImage("Spike_" + i, crossSprite, Mathf.Max(6f * minScale, cellPx * 0.72f), spikeInactiveColor);
                 if (spikeTraps[i] != null)
                 {
-                    cachedSpikeNormalized[i] = WorldToNormalized(spikeTraps[i].transform.position);
+                    cachedSpikeNormalized[i] = MapWorldToNormalized(spikeTraps[i].transform.position);
                     SetNormalizedPosition(spikeMarkers[i].rectTransform, cachedSpikeNormalized[i]);
                 }
             }
@@ -468,7 +501,7 @@ namespace EachOneCoin.Gameplay
                     spawnMarkers[i].gameObject.SetActive(active);
                     if (active)
                     {
-                        Vector2 norm = CellToNormalized(spawns[i]);
+                        Vector2 norm = MapCellToNormalized(spawns[i]);
                         cachedSpawnNormalized[i] = norm;
                         SetNormalizedPosition(spawnMarkers[i].rectTransform, norm);
                     }
@@ -487,7 +520,7 @@ namespace EachOneCoin.Gameplay
                     minePulseRings[i].gameObject.SetActive(active);
                     if (active)
                     {
-                        Vector2 pos = CellToNormalized(mines[i]);
+                        Vector2 pos = MapCellToNormalized(mines[i]);
                         cachedMineNormalized[i] = pos;
                         SetNormalizedPosition(mineMarkers[i].rectTransform, pos);
                         SetNormalizedPosition(minePulseRings[i].rectTransform, pos);
@@ -508,6 +541,14 @@ namespace EachOneCoin.Gameplay
                 spikes.AddRange(roots[r].GetComponentsInChildren<TimedSpikeTrap>(true));
                 patrols.AddRange(roots[r].GetComponentsInChildren<LinearPatrolObstacle>(true));
 
+                var walls = roots[r].GetComponentsInChildren<ArenaWall>(true);
+                for (int i = 0; i < walls.Length; i++)
+                {
+                    GridPosition cell = coordinator.Grid.WorldToCell(walls[i].transform.position);
+                    if (cell.X >= 0 && cell.X < gridWidth && cell.Y >= 0 && cell.Y < gridHeight)
+                        staticObstacleMask[cell.X, cell.Y] = true;
+                }
+
                 var lethalObstacles = roots[r].GetComponentsInChildren<LethalObstacle>(true);
                 for (int i = 0; i < lethalObstacles.Length; i++)
                 {
@@ -517,7 +558,7 @@ namespace EachOneCoin.Gameplay
                     if (coordinator.Grid != null)
                     {
                         GridPosition cell = coordinator.Grid.WorldToCell(lo.transform.position);
-                        if (cell.X >= 0 && cell.X < GridSize && cell.Y >= 0 && cell.Y < GridSize)
+                        if (cell.X >= 0 && cell.X < gridWidth && cell.Y >= 0 && cell.Y < gridHeight)
                             staticObstacleMask[cell.X, cell.Y] = true;
                     }
                 }
@@ -546,10 +587,10 @@ namespace EachOneCoin.Gameplay
             Color32 bg32 = backgroundColor;
             Color32 obs32 = staticObstacleColor;
 
-            for (int y = 0; y < GridSize; y++)
+            for (int y = 0; y < gridHeight; y++)
             {
-                int rowOffset = y * GridSize;
-                for (int x = 0; x < GridSize; x++)
+                int rowOffset = y * gridWidth;
+                for (int x = 0; x < gridWidth; x++)
                 {
                     if (showObstacles && staticObstacleMask[x, y])
                     {
@@ -558,6 +599,11 @@ namespace EachOneCoin.Gameplay
                     }
 
                     var cell = new GridPosition(x, y);
+                    if (match != null && match.IsHole(cell))
+                    {
+                        pixelBuffer[rowOffset + x] = holeColor;
+                        continue;
+                    }
                     if (!showTerritory || grid.IsBlocked(cell))
                     {
                         pixelBuffer[rowOffset + x] = bg32;
@@ -622,7 +668,7 @@ namespace EachOneCoin.Gameplay
                     bool active = showObstacles && patrol != null && patrol.gameObject.activeInHierarchy;
                     patrolMarkers[i].enabled = active;
                     if (!active) continue;
-                    SetNormalizedPosition(patrolMarkers[i].rectTransform, WorldToNormalized(patrol.transform.position));
+                    SetNormalizedPosition(patrolMarkers[i].rectTransform, MapWorldToNormalized(patrol.transform.position));
                 }
             }
         }
@@ -640,10 +686,10 @@ namespace EachOneCoin.Gameplay
                 marker.Root.gameObject.SetActive(visible);
             if (!visible) return;
 
-            SetNormalizedPosition(marker.Root, WorldToNormalized(worldPos));
+            SetNormalizedPosition(marker.Root, MapWorldToNormalized(worldPos));
 
             float currentMapSize = MapSize;
-            float cellPx = currentMapSize / GridSize;
+            float cellPx = currentMapSize / Mathf.Max(gridWidth, gridHeight);
             float minScale = CurrentMinScale;
             float dotSize = focused ? Mathf.Max(8f * minScale, cellPx * 0.84f) : Mathf.Max(6.5f * minScale, cellPx * 0.68f);
             float ringSize = focused ? dotSize + 4.5f * minScale : dotSize + 2.8f * minScale;
@@ -671,12 +717,12 @@ namespace EachOneCoin.Gameplay
         private void ApplyCurrentSizeLayout()
         {
             float currentMapSize = MapSize;
-            float cellPx = currentMapSize / GridSize;
+            float cellPx = currentMapSize / Mathf.Max(gridWidth, gridHeight);
             float minScale = CurrentMinScale;
 
             if (mapRect != null)
             {
-                mapRect.sizeDelta = new Vector2(currentMapSize, currentMapSize);
+                mapRect.sizeDelta = MapDimensions();
             }
 
             if (spawnMarkers != null)
@@ -713,7 +759,7 @@ namespace EachOneCoin.Gameplay
                     patrolMarkers[i].rectTransform.sizeDelta = obstacleSize;
                     if (patrolObstacles != null && i < patrolObstacles.Length && patrolObstacles[i] != null)
                     {
-                        SetNormalizedPosition(patrolMarkers[i].rectTransform, WorldToNormalized(patrolObstacles[i].transform.position));
+                        SetNormalizedPosition(patrolMarkers[i].rectTransform, MapWorldToNormalized(patrolObstacles[i].transform.position));
                     }
                 }
             }
@@ -794,8 +840,8 @@ namespace EachOneCoin.Gameplay
 
         private void SetNormalizedPosition(RectTransform rt, Vector2 normalized)
         {
-            float currentMapSize = MapSize;
-            rt.anchoredPosition = new Vector2(normalized.x * currentMapSize, normalized.y * currentMapSize);
+            Vector2 size = MapDimensions();
+            rt.anchoredPosition = new Vector2(normalized.x * size.x, normalized.y * size.y);
         }
 
         private UnityEngine.UI.Image CreateMarkerImage(string objectName, Sprite sprite, float size, Color color)

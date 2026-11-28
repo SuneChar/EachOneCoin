@@ -129,6 +129,20 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void RectangularGrid_UsesActualTextureDimensionsAndAspect()
+        {
+            var positions = new[] { new GridPosition(1, 1), new GridPosition(23, 21) };
+            var rectangular = new GridModel(25, 23, positions);
+            initStandaloneMethod.Invoke(view, new object[] { rectangular, positions, Array.Empty<GridPosition>(), null });
+            var texture = (Texture2D)viewType.GetField("gridTexture", BindingFlags.NonPublic | BindingFlags.Instance).GetValue(view);
+            Assert.That(texture.width, Is.EqualTo(25));
+            Assert.That(texture.height, Is.EqualTo(23));
+            var size = ((RectTransform)root.transform).sizeDelta;
+            Assert.That(size.x / size.y, Is.EqualTo(25f / 23f).Within(0.001f));
+            Assert.DoesNotThrow(() => PixelAt(24, 22));
+        }
+
+        [Test]
         public void GridTexture_DimsDisconnectedTerritoryAndBrightensConnectedTerritory()
         {
             var rules = TestMatchArchitecture.Interface.GetSystem<MatchSystem>();

@@ -6,6 +6,7 @@ namespace EachOneCoin.Gameplay
     public sealed class MatchCoordinator : MonoBehaviour
     {
         [SerializeField] private ArenaGridView grid;
+        [SerializeField] private ArenaMapDefinition mapDefinition;
         [SerializeField] private ArenaCharacter playerTemplate;
         [SerializeField] private Transform[] spawnPoints;
         [SerializeField] private CoinSpawner coins;
@@ -31,9 +32,11 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0f)] private float obstacleKnockbackDistance = 0.6f;
         [SerializeField, Min(0.01f)] private float obstacleKnockbackSeconds = 0.18f;
         [SerializeField] private bool hideHealthBarOnViewTarget = false;
+        private bool isCustomSinglePlayerMap;
         private readonly Collider[] overlap = new Collider[64];
         public MatchModel Model { get; private set; }
         public ArenaGridView Grid => grid;
+        public ArenaMapDefinition MapDefinition => mapDefinition;
         public CoinSpawner Coins => coins;
         public CombatController Combat => combat;
         public NpcController Npcs => npcs;
@@ -72,6 +75,7 @@ namespace EachOneCoin.Gameplay
         }
         public bool IsPaused { get; private set; }
         public bool IsNetworkMovementTest { get; private set; }
+        public bool IsReplay { get; private set; }
         public bool NetworkRulesValid { get; private set; } = true;
         public float InitialDurationSeconds { get; private set; } = MatchModel.DefaultDurationSeconds;
         public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
@@ -100,6 +104,20 @@ namespace EachOneCoin.Gameplay
             }
         }
         internal MovementTelemetry Telemetry { get; private set; }
+        internal Replay.ReplayRecorder Recorder { get; private set; }
+
+        public void BeginReplayRecording(bool network, System.Action<string> onSaved = null)
+        {
+            if (Recorder != null) return;
+            if (isCustomSinglePlayerMap || !ArenaMapFingerprint.IsFixedProtocolCompatible(mapDefinition))
+            {
+                Debug.LogWarning("自定义地图暂不支持录像，已跳过录像录制。", this);
+                return;
+            }
+            Recorder = gameObject.AddComponent<Replay.ReplayRecorder>();
+            try { Recorder.Initialize(this, network, onSaved); }
+            catch (System.Exception e) { Debug.LogWarning("录像初始化失败：" + e.Message); Destroy(Recorder); Recorder = null; }
+        }
 
         public void Pause()
         {
@@ -141,7 +159,8 @@ namespace EachOneCoin.Gameplay
                 {
                     protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version,
                     coinsToWin = configuredCoins,
-                    durationSeconds = configuredDuration
+                    durationSeconds = configuredDuration,
+                    mapFingerprint = isNetwork && mapDefinition != null ? ArenaMapFingerprint.Compute(mapDefinition) : null
                 };
                 if (isNetwork && !EachOneCoin.Networking.MatchRulesProtocol.IsValid(rules)) return false;
                 coinsToWin = configuredCoins;
@@ -158,7 +177,8 @@ namespace EachOneCoin.Gameplay
             if (!IsNetworkMovementTest || Mirror.NetworkServer.active || Model == null ||
                 Model.Status != MatchStatus.Waiting || coins == null) return false;
             if (!EachOneCoin.Networking.MatchRulesProtocol.IsValid(new EachOneCoin.Networking.MatchRulesMessage
-                { protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version, coinsToWin = coinsToWin, durationSeconds = durationSeconds })) return false;
+                { protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version, coinsToWin = coinsToWin, durationSeconds = durationSeconds,
+                  mapFingerprint = mapDefinition != null ? ArenaMapFingerprint.Compute(mapDefinition) : null })) return false;
             if (!coins.ConfigureReplicaDurationBeforeStart(durationSeconds)) return false;
             if (!Rules.ConfigureRulesBeforeStart(coinsToWin, durationSeconds)) return false;
             InitialDurationSeconds = durationSeconds;
@@ -168,16 +188,91 @@ namespace EachOneCoin.Gameplay
         private void Start()
         {
             var network = Mirror.NetworkManager.singleton as EachOneCoin.Networking.LanNetworkManager;
-            IsNetworkMovementTest = network != null && Mirror.NetworkClient.active && network.HasSnapshot;
+            var replay = Replay.ReplaySelection.Pending;
+            Replay.ReplaySelection.Pending = null;
+            IsReplay = replay != null;
+            IsNetworkMovementTest = !IsReplay && network != null && Mirror.NetworkClient.active && network.HasSnapshot;
+            if (!IsReplay && !IsNetworkMovementTest && ArenaMapSelection.Selected != null)
+            {
+                isCustomSinglePlayerMap = ArenaMapSelection.Selected != mapDefinition;
+                mapDefinition = ArenaMapSelection.Selected;
+            }
+            if (IsNetworkMovementTest && !ArenaMapFingerprint.IsFixedProtocolCompatible(mapDefinition))
+            {
+                Debug.LogWarning("当前地图不支持联机，已取消进入对局。", this);
+                enabled = false;
+                network.RejectUnsupportedMap();
+                return;
+            }
+            if (IsReplay && !Replay.ReplayStorage.MatchesMap(replay, mapDefinition, out string replayMapError))
+            {
+                Debug.LogWarning("无法播放录像：" + replayMapError, this);
+                enabled = false;
+                return;
+            }
+            if (mapDefinition != null && !ArenaMapValidator.TryValidate(mapDefinition, out var mapError))
+            {
+                Debug.LogError("竞技场地图无效或尺寸尚不受支持：" + mapError, mapDefinition);
+                enabled = false;
+                return;
+            }
+            if (mapDefinition != null)
+            {
+                if (mapDefinition.Width > SystemInfo.maxTextureSize || mapDefinition.Height > SystemInfo.maxTextureSize)
+                {
+                    Debug.LogError("地图尺寸超出当前设备小地图纹理限制。", mapDefinition);
+                    enabled = false;
+                    return;
+                }
+                try
+                {
+                    ArenaMapBuilder.BuildTiles(mapDefinition, gameObject.scene);
+                    ArenaMapBuilder.BuildObstacles(mapDefinition, gameObject.scene);
+                    ArenaMapBuilder.ResizeBoundary(mapDefinition, gameObject.scene);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, mapDefinition);
+                    enabled = false;
+                    return;
+                }
+            }
+            if (mapDefinition != null) grid.ConfigureMap(mapDefinition);
             grid.Initialize();
             Spawns = new GridPosition[4];
-            for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
+            for (int i = 0; i < Spawns.Length; i++)
+                Spawns[i] = mapDefinition != null ? new GridPosition(mapDefinition.Spawns[i].x, mapDefinition.Spawns[i].y) : grid.WorldToCell(spawnPoints[i].position);
             session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
             matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
             NetworkRulesValid = ResolveMatchRules(IsNetworkMovementTest, Mirror.NetworkServer.active, out int coinsToWin, out float durationSeconds);
+            if (IsReplay) { coinsToWin = replay.coinsToWin; durationSeconds = replay.duration; }
             InitialDurationSeconds = durationSeconds;
-            Model = session.CreateMatch(ArenaGridView.Size, ArenaGridView.Size, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), coinsToWin, durationSeconds);
-            if (!IsNetworkMovementTest) Rules.StartMatch();
+            Model = session.CreateMatch(grid.Width, grid.Height, Spawns, Mathf.Max(1, initialHealth), Mathf.Max(0.1f, maxStamina), coinsToWin, durationSeconds);
+            if (mapDefinition != null)
+            {
+                var blocked = new System.Collections.Generic.List<GridPosition>();
+                for (int x = 0; x < mapDefinition.Width; x++) for (int y = 0; y < mapDefinition.Height; y++)
+                    if (mapDefinition.Cells[x * mapDefinition.Height + y].terrain == ArenaTerrain.Wall || mapDefinition.Cells[x * mapDefinition.Height + y].terrain == ArenaTerrain.Hole) blocked.Add(new GridPosition(x, y));
+                Rules.ConfigureBlockedCells(blocked);
+                var edges = new System.Collections.Generic.List<GridEdge>();
+                for (int x = 0; x < mapDefinition.Width; x++) for (int y = 0; y < mapDefinition.Height; y++)
+                {
+                    var from = new GridPosition(x, y);
+                    if (Model.Grid.IsBlocked(from)) continue;
+                    if (x + 1 < mapDefinition.Width)
+                    {
+                        var to = new GridPosition(x + 1, y);
+                        if (!Model.Grid.IsBlocked(to) && !ArenaMapTopology.CanTraverse(mapDefinition, from, to)) edges.Add(new GridEdge(from, to));
+                    }
+                    if (y + 1 < mapDefinition.Height)
+                    {
+                        var to = new GridPosition(x, y + 1);
+                        if (!Model.Grid.IsBlocked(to) && !ArenaMapTopology.CanTraverse(mapDefinition, from, to)) edges.Add(new GridEdge(from, to));
+                    }
+                }
+                Rules.ConfigureBlockedEdges(edges);
+            }
+            if (!IsNetworkMovementTest && !IsReplay) Rules.StartMatch();
             Stamina = session.Stamina;
             foreach (var root in gameObject.scene.GetRootGameObjects())
             {
@@ -209,7 +304,7 @@ namespace EachOneCoin.Gameplay
                 Debug.LogWarning("MatchCoordinator 尚未绑定 DefaultAppearanceCatalog.asset，已回退至角色预制体默认装扮（可能缺少“无配饰”及头像配饰叠层）。请在 Unity 菜单执行 EachOneCoin/Setup/Apply All 4 Tasks Assets (1+4+2+3) 完成装配。", this);
             }
             grid.Refresh(Model.Grid);
-            coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
+            coins.Initialize(this, mapDefinition != null ? mapDefinition.Mines : null); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
             for (int i = 0; i < nearVictoryAnnounced.Length; i++) nearVictoryAnnounced[i] = false;
             for (int i = 0; i < participantNames.Length; i++) participantNames[i] = null;
             for (int i = 0; i < nameplateLabels.Length; i++) nameplateLabels[i] = null;
@@ -218,7 +313,7 @@ namespace EachOneCoin.Gameplay
                 coins.MineCoinsSpawned -= OnMineCoinsSpawned;
                 coins.MineCoinsSpawned += OnMineCoinsSpawned;
             }
-            if (!IsNetworkMovementTest)
+            if (!IsNetworkMovementTest && !IsReplay)
             {
                 npcs.AssignPersonalities(14);
                 participantNames[0] = "玩家1";
@@ -248,12 +343,34 @@ namespace EachOneCoin.Gameplay
                 SyncOverheadHealthBars(true);
                 return;
             }
+            if (IsReplay)
+            {
+                foreach (var root in gameObject.scene.GetRootGameObjects())
+                    foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.SetRunning(false);
+                gameObject.AddComponent<Replay.ReplayPlayer>().Initialize(this, replay);
+                return;
+            }
+            if (!IsNetworkMovementTest) BeginReplayRecording(false);
             if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
                 System.Array.Exists(System.Environment.GetCommandLineArgs(), arg => arg == "--movement-telemetry"))
             {
                 Telemetry = gameObject.AddComponent<MovementTelemetry>();
                 Telemetry.Initialize(this, localInput);
             }
+        }
+
+        public bool TryGetReplayAim(int slot, out Vector3 direction)
+        {
+            if (IsNetworkMovementTest && NetworkController != null) return NetworkController.TryGetReplayAim(slot, out direction);
+            direction = aimDirection;
+            return slot == 0 && aiming;
+        }
+
+        public void SetReplayParticipantName(int slot, string name)
+        {
+            if (!IsReplay || slot < 0 || slot >= participantNames.Length) return;
+            participantNames[slot] = name;
+            Characters[slot].SetDisplayName(name);
         }
 
         public void SetViewTarget(int slot)
@@ -456,7 +573,7 @@ namespace EachOneCoin.Gameplay
 
         private void Update()
         {
-            if (IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
+            if (IsReplay || IsNetworkMovementTest || IsPaused || Model == null || Model.Status != MatchStatus.Playing) return;
             coins.Tick(Time.deltaTime);
             combat.Tick(Time.deltaTime);
             bool playerActive = Model.Participants[0].Status == ParticipantStatus.Active;
@@ -660,13 +777,30 @@ namespace EachOneCoin.Gameplay
             return collider.GetComponentInParent<LethalContact>() != null || collider.GetComponentInParent<LethalObstacle>() != null || spike != null;
         }
 
+        public bool CanTraverse(GridPosition from, GridPosition to, bool allowHole = false)
+        {
+            return mapDefinition == null ? Model.Grid.Contains(to) : ArenaMapTopology.CanTraverse(mapDefinition, from, to, allowHole);
+        }
+
+        public bool IsHole(GridPosition cell)
+        {
+            return mapDefinition != null && cell.X >= 0 && cell.Y >= 0 && cell.X < mapDefinition.Width && cell.Y < mapDefinition.Height &&
+                   mapDefinition.Cells[cell.X * mapDefinition.Height + cell.Y].terrain == ArenaTerrain.Hole;
+        }
+
+        public float TerrainSpeedMultiplier(GridPosition cell)
+        {
+            if (mapDefinition == null || cell.X < 0 || cell.Y < 0 || cell.X >= mapDefinition.Width || cell.Y >= mapDefinition.Height) return 1f;
+            return mapDefinition.Cells[cell.X * mapDefinition.Height + cell.Y].terrain == ArenaTerrain.Slow ? mapDefinition.SlowMultiplier : 1f;
+        }
+
         public bool IsBlocked(GridPosition cell)
         {
             if (Model != null && Model.Grid.Contains(cell) && Model.Grid.IsBlocked(cell)) return true;
             int count = Physics.OverlapSphereNonAlloc(grid.CellToWorld(cell) + Vector3.up * 0.5f, 0.42f, overlap, ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < count; i++)
             {
-                if (IsHazard(overlap[i])) return true;
+                if (IsHazard(overlap[i]) || (overlap[i] != null && overlap[i].GetComponentInParent<ArenaWall>() != null)) return true;
             }
             return false;
         }
@@ -687,11 +821,24 @@ namespace EachOneCoin.Gameplay
         public bool IsOtherSpawn(int id, GridPosition cell) { for (int i = 0; i < Spawns.Length; i++) if (i != id && Spawns[i].Equals(cell)) return true; return false; }
         public GridPosition FindSafeDrop(GridPosition origin)
         {
-            if (!IsSpawn(origin) && !IsBlocked(origin)) return origin;
-            for (int d = 1; d < ArenaGridView.Size * 2; d++) for (int x = 0; x < ArenaGridView.Size; x++) for (int y = 0; y < ArenaGridView.Size; y++)
+            if (!Model.Grid.Contains(origin)) return origin;
+            var visited = new bool[Model.Grid.Width, Model.Grid.Height];
+            var queue = new System.Collections.Generic.Queue<GridPosition>();
+            queue.Enqueue(origin);
+            visited[origin.X, origin.Y] = true;
+            var dx = new[] { 1, -1, 0, 0 };
+            var dy = new[] { 0, 0, 1, -1 };
+            while (queue.Count > 0)
             {
-                var p = new GridPosition(x, y);
-                if (Mathf.Abs(x - origin.X) + Mathf.Abs(y - origin.Y) == d && !IsSpawn(p) && !IsBlocked(p)) return p;
+                var cell = queue.Dequeue();
+                if (!IsSpawn(cell) && !IsBlocked(cell)) return cell;
+                for (int i = 0; i < 4; i++)
+                {
+                    var next = new GridPosition(cell.X + dx[i], cell.Y + dy[i]);
+                    if (!Model.Grid.Contains(next) || visited[next.X, next.Y]) continue;
+                    visited[next.X, next.Y] = true;
+                    queue.Enqueue(next);
+                }
             }
             return origin;
         }
