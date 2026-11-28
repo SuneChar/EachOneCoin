@@ -203,6 +203,7 @@ MonoBehaviour:
   replayBrowser: {fileID: 30481021}
   lanRoom: {fileID: 30481020}
   mapCatalog: {fileID: 11400000, guid: 4ef7b83ac482c6d478bb1529c7a6c1d2, type: 2}
+  replayMap: {fileID: 11400000, guid: e59ef5e201c857d458ae32148b2a145b, type: 2}
   mapNameText: {fileID: 3328626212595730124}
   previousMapButton: {fileID: 3328626212595730123}
   nextMapButton: {fileID: 3328626212595730122}

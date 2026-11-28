@@ -7,8 +7,9 @@ namespace EachOneCoin.Gameplay.Replay
     [Serializable]
     public sealed class ReplayData
     {
-        public const int CurrentFormat = 1;
+        public const int CurrentFormat = 2;
         public int formatVersion;
+        public string mapFingerprint;
         public string gameVersion;
         public string matchId;
         public string recordedUtc;

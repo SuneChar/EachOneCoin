@@ -26,6 +26,7 @@ namespace EachOneCoin.Tests
             root = new GameObject("ArenaMatchConfigTests");
             root.SetActive(false);
             coordinator = root.AddComponent(coordinatorType);
+            coordinatorType.GetField("mapDefinition", Private).SetValue(coordinator, AssetDatabase.LoadAssetAtPath<ScriptableObject>("Assets/Data/Maps/DefaultArenaMap.asset"));
         }
 
         [TearDown]

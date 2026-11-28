@@ -297,7 +297,7 @@ namespace EachOneCoin.Networking
             {
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller == null || !controller.ReceiveAuthoritativeRules(message)) { RejectLocalRules(); return; }
-                NetworkClient.Send(new MatchRulesAcknowledged { protocolVersion = message.protocolVersion, coinsToWin = message.coinsToWin, durationSeconds = message.durationSeconds });
+                NetworkClient.Send(new MatchRulesAcknowledged { protocolVersion = message.protocolVersion, coinsToWin = message.coinsToWin, durationSeconds = message.durationSeconds, mapFingerprint = message.mapFingerprint });
             });
             NetworkClient.RegisterHandler<MatchRulesRejected>(_ => RejectLocalRules());
             NetworkClient.RegisterHandler<MovementBegin>(message =>
@@ -519,11 +519,19 @@ namespace EachOneCoin.Networking
             if (NetworkClient.active && !leaving) RejectLocalRules();
         }
 
+        public void RejectUnsupportedMap() => StartCoroutine(RejectUnsupportedMapNextFrame());
+
+        private System.Collections.IEnumerator RejectUnsupportedMapNextFrame()
+        {
+            yield return null;
+            if (NetworkClient.active || NetworkServer.active) RejectLocalRules();
+        }
+
         private void RejectLocalRules()
         {
-            Debug.LogWarning("无法确认房主规则或联机协议版本不匹配，已退出对局。");
+            Debug.LogWarning("无法确认房主规则、地图或联机协议版本，已退出对局。");
             ExitMovementTest();
-            Status = "联机规则无效或版本不匹配";
+            Status = "联机规则、地图或版本不匹配";
         }
 
         private void RejectRules(NetworkConnectionToClient connection)

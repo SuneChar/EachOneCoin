@@ -5,7 +5,7 @@ namespace EachOneCoin.Gameplay
     // Heights are integer levels; ramps climb one level in their configured direction.
     public static class ArenaMapTopology
     {
-        public const float HeightUnit = 0.25f;
+        public const float DefaultHeightUnit = 0.25f;
         private static readonly int[] Dx = { 0, 1, 0, -1 };
         private static readonly int[] Dy = { 1, 0, -1, 0 };
 
@@ -17,12 +17,12 @@ namespace EachOneCoin.Gameplay
             var position = WorldToCell(map, world);
             if (!Contains(map, position)) return 0f;
             var cell = map.Cells[position.X * map.Height + position.Y];
-            float height = cell.height * HeightUnit;
+            float height = cell.height * map.HeightUnit;
             if (cell.terrain != ArenaTerrain.Ramp) return height;
             float x = Mathf.Clamp01(world.x + map.Width * 0.5f - position.X);
             float y = Mathf.Clamp01(world.z + map.Height * 0.5f - position.Y);
             float t = cell.direction == 0 ? y : cell.direction == 1 ? x : cell.direction == 2 ? 1f - y : 1f - x;
-            return height + t * HeightUnit;
+            return height + t * map.HeightUnit;
         }
 
         public static bool CanTraverse(ArenaMapDefinition map, GridPosition from, GridPosition to, bool allowHole = false)

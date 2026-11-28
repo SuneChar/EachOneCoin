@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace EachOneCoin.Tests
@@ -26,7 +27,8 @@ namespace EachOneCoin.Tests
         private object ValidData()
         {
             object data = Activator.CreateInstance(dataType);
-            dataType.GetField("formatVersion").SetValue(data, 1);
+            dataType.GetField("formatVersion").SetValue(data, (int)dataType.GetField("CurrentFormat").GetRawConstantValue());
+            dataType.GetField("mapFingerprint").SetValue(data, new string('a', 64));
             dataType.GetField("gameVersion").SetValue(data, Application.version);
             dataType.GetField("recordedUtc").SetValue(data, DateTime.UtcNow.ToString("o"));
             dataType.GetField("duration").SetValue(data, 60f);
@@ -79,6 +81,51 @@ namespace EachOneCoin.Tests
             object copy = JsonUtility.FromJson(json, dataType);
             Assert.That(Validate(copy, Application.version), Is.True);
             Assert.That(dataType.GetField("matchId").GetValue(copy), Is.EqualTo(dataType.GetField("matchId").GetValue(original)));
+        }
+
+        [Test]
+        public void Validate_LegacyRecordingWithoutMapFingerprint_Rejects()
+        {
+            object data = ValidData();
+            dataType.GetField("formatVersion").SetValue(data, 1);
+            dataType.GetField("mapFingerprint").SetValue(data, null);
+            object[] args = { data, Application.version, null };
+            Assert.That((bool)validate.Invoke(null, args), Is.False);
+            Assert.That((string)args[2], Does.Contain("地图"));
+        }
+
+        [Test]
+        public void Validate_MalformedMapFingerprint_Rejects()
+        {
+            object data = ValidData();
+            dataType.GetField("mapFingerprint").SetValue(data, "invalid");
+            Assert.That(Validate(data, Application.version), Is.False);
+        }
+
+        [Test]
+        public void MatchesMap_RejectsChangedMapBeforePlayback()
+        {
+            var type = Type.GetType("EachOneCoin.Gameplay.ArenaMapDefinition, Assembly-CSharp", true);
+            var map = ScriptableObject.CreateInstance(type);
+            try
+            {
+                var serialized = new SerializedObject(map);
+                serialized.FindProperty("mapId").stringValue = "replay-test";
+                serialized.FindProperty("defaultTilePrefab").objectReferenceValue = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/World/ArenaTile.prefab");
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                var fingerprint = Type.GetType("EachOneCoin.Gameplay.ArenaMapFingerprint, Assembly-CSharp", true).GetMethod("Compute");
+                object data = ValidData();
+                dataType.GetField("mapFingerprint").SetValue(data, fingerprint.Invoke(null, new object[] { map }));
+                var matches = storageType.GetMethod("MatchesMap");
+                object[] args = { data, map, null };
+                Assert.That(matches.Invoke(null, args), Is.EqualTo(true), args[2] as string);
+                serialized.Update();
+                serialized.FindProperty("mapId").stringValue = "changed-map";
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                args = new object[] { data, map, null };
+                Assert.That(matches.Invoke(null, args), Is.EqualTo(false));
+            }
+            finally { UnityEngine.Object.DestroyImmediate(map); }
         }
 
         [Test]

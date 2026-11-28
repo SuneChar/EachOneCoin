@@ -73,6 +73,7 @@ namespace EachOneCoin.Gameplay.Replay
                 rows[i].gameObject.SetActive(exists);
                 if (!exists) continue;
                 bool valid = ReplayStorage.TryLoad(paths[index], out var data, out var error);
+                if (valid) valid = ReplayStorage.MatchesMap(data, menu.ReplayMap, out error);
                 rows[i].interactable = valid;
                 string recorded = valid && DateTime.TryParse(data.recordedUtc, out var time) ? time.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") : "";
                 rows[i].GetComponentInChildren<TMP_Text>().text = valid
@@ -85,7 +86,7 @@ namespace EachOneCoin.Gameplay.Replay
         private void Select(int row)
         {
             int index = page * PageSize + row;
-            if (index < 0 || index >= paths.Length || !ReplayStorage.TryLoad(paths[index], out var data, out _)) return;
+            if (index < 0 || index >= paths.Length || !ReplayStorage.TryLoad(paths[index], out var data, out _) || !ReplayStorage.MatchesMap(data, menu.ReplayMap, out _)) return;
             ReplaySelection.Pending = data;
             SceneManager.LoadScene("ArenaScene");
         }

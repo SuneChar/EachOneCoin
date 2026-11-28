@@ -27,6 +27,8 @@ namespace EachOneCoin.Gameplay
         public Vector3 rotation;
         public bool overridePatrolSpeed;
         public float patrolSpeed;
+        public bool overridePatrolEndOffset;
+        public Vector3 patrolEndOffset;
         public bool overrideInitiallyVisible;
         public bool initiallyVisible;
     }
@@ -44,6 +46,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private Vector2Int[] spawns = { new Vector2Int(1, 1), new Vector2Int(19, 1), new Vector2Int(1, 19), new Vector2Int(19, 19) };
         [SerializeField] private Vector2Int[] mines = { new Vector2Int(10, 5), new Vector2Int(10, 15), new Vector2Int(5, 10), new Vector2Int(15, 10) };
         [SerializeField] private ArenaMapObject[] objects = Array.Empty<ArenaMapObject>();
+        [SerializeField, Min(0.01f)] private float heightUnit = ArenaMapTopology.DefaultHeightUnit;
         [SerializeField, Range(0.01f, 1f)] private float slowMultiplier = 0.5f;
 
         public string MapId => mapId;
@@ -56,6 +59,7 @@ namespace EachOneCoin.Gameplay
         public Vector2Int[] Spawns => spawns;
         public Vector2Int[] Mines => mines;
         public ArenaMapObject[] Objects => objects;
+        public float HeightUnit => heightUnit;
         public float SlowMultiplier => slowMultiplier;
     }
 }

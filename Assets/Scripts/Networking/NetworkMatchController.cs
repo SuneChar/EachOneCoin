@@ -83,7 +83,8 @@ namespace EachOneCoin.Networking
             match = coordinator; network = manager; localInput = input;
             if (NetworkServer.active && coordinator.NetworkRulesValid)
             {
-                var rules = new MatchRulesMessage { protocolVersion = MatchRulesProtocol.Version, coinsToWin = coordinator.Model.CoinsToWin, durationSeconds = coordinator.InitialDurationSeconds };
+                var rules = new MatchRulesMessage { protocolVersion = MatchRulesProtocol.Version, coinsToWin = coordinator.Model.CoinsToWin,
+                    durationSeconds = coordinator.InitialDurationSeconds, mapFingerprint = coordinator.MapDefinition != null ? ArenaMapFingerprint.Compute(coordinator.MapDefinition) : null };
                 if (MatchRulesProtocol.IsValid(rules)) { authoritativeRules = rules; hasAuthoritativeRules = true; }
             }
             gameUI = FindObjectOfType<ArenaGameUI>();
@@ -106,10 +107,11 @@ namespace EachOneCoin.Networking
 
         public bool ReceiveAuthoritativeRules(MatchRulesMessage rules)
         {
-            if (!MatchRulesProtocol.IsValid(rules) || match == null) return false;
+            if (!MatchRulesProtocol.IsValid(rules) || match == null || match.MapDefinition == null ||
+                !string.Equals(rules.mapFingerprint, ArenaMapFingerprint.Compute(match.MapDefinition), System.StringComparison.Ordinal)) return false;
             if (hasAuthoritativeRules)
                 return authoritativeRules.protocolVersion == rules.protocolVersion && authoritativeRules.coinsToWin == rules.coinsToWin &&
-                    authoritativeRules.durationSeconds == rules.durationSeconds;
+                    authoritativeRules.durationSeconds == rules.durationSeconds && authoritativeRules.mapFingerprint == rules.mapFingerprint;
             if (NetworkServer.active || started || !match.ApplyAuthoritativeRulesBeforeStart(rules.coinsToWin, rules.durationSeconds)) return false;
             authoritativeRules = rules;
             hasAuthoritativeRules = true;

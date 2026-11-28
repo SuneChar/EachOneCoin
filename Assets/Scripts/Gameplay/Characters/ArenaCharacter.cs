@@ -21,7 +21,9 @@ namespace EachOneCoin.Gameplay
         private float turnProgress = 1f;
         private bool flipped;
         private GridPosition lastCell;
+        private GridPosition lastSafeFallCell;
         private bool hasCell;
+        private bool hasSafeFallCell;
         private float footstepTimer;
         private bool visuallyActive = true;
         private float obstacleProtection;
@@ -186,7 +188,7 @@ namespace EachOneCoin.Gameplay
             position.y += controller.height * 0.5f - controller.center.y + controller.skinWidth;
             transform.position = position;
             controller.enabled = true;
-            touching.Clear(); hasCell = false;
+            touching.Clear(); hasCell = false; hasSafeFallCell = false;
             movementVelocity = Vector3.zero;
             pendingKnockback = Vector3.zero; knockbackTime = 0f; attackKnockbackRemaining = Vector3.zero; attackKnockbackTime = 0f; obstacleProtection = 0f; SetFlash(false);
             ReportCell();
@@ -298,7 +300,7 @@ namespace EachOneCoin.Gameplay
             {
                 Vector3 before = transform.position;
                 CollisionFlags flags = MoveOnPlane(step);
-                ReportCell();
+                CheckFallDuringKnockback();
                 if (match.Model.Participants[Id].Status != ParticipantStatus.Active) return;
                 if (knockbackTime > 0f || (flags & CollisionFlags.Sides) != 0 || Vector3.Dot(transform.position - before, step.normalized) < step.magnitude * 0.5f)
                 {
@@ -316,6 +318,14 @@ namespace EachOneCoin.Gameplay
         private CollisionFlags MoveOnPlane(Vector3 delta)
         {
             Vector3 before = transform.position;
+            if (match == null || match.Grid == null || match.Model == null)
+            {
+                CollisionFlags planarFlags = controller.Move(delta);
+                Vector3 planarAfter = transform.position;
+                if (Mathf.Abs(planarAfter.y - before.y) > 0.001f) transform.position = before;
+                else if (planarAfter.y != before.y) transform.position = new Vector3(planarAfter.x, before.y, planarAfter.z);
+                return planarFlags;
+            }
             var from = match.Grid.WorldToCellUnclamped(before);
             var intended = match.Grid.WorldToCellUnclamped(before + delta);
             if (!match.Model.Grid.Contains(intended) || (!from.Equals(intended) && !match.CanTraverse(from, intended, true))) return CollisionFlags.Sides;
@@ -330,6 +340,19 @@ namespace EachOneCoin.Gameplay
             return flags;
         }
 
+        private void CheckFallDuringKnockback()
+        {
+            var cell = match.Grid.WorldToCellUnclamped(transform.position);
+            if (!match.Model.Grid.Contains(cell)) return;
+            if (match.IsHole(cell))
+            {
+                match.Combat.TryStartFall(Id, hasSafeFallCell ? lastSafeFallCell : match.Spawns[Id]);
+                return;
+            }
+            lastSafeFallCell = cell;
+            hasSafeFallCell = true;
+        }
+
         private void ReportCell()
         {
             if (match.IsNetworkMovementTest && (!Mirror.NetworkServer.active || match.NetworkController == null || !match.NetworkController.IsRunning)) return;
@@ -337,9 +360,11 @@ namespace EachOneCoin.Gameplay
             if (!match.Model.Grid.Contains(cell)) return;
             if (match.IsHole(cell))
             {
-                match.Combat.TryStartFall(Id, hasCell ? lastCell : match.Spawns[Id]);
+                match.Combat.TryStartFall(Id, hasSafeFallCell ? lastSafeFallCell : match.Spawns[Id]);
                 return;
             }
+            lastSafeFallCell = cell;
+            hasSafeFallCell = true;
             if (hasCell && lastCell.Equals(cell)) return;
             hasCell = true; lastCell = cell;
             if (match.Rules.TryPaint(Id, cell))

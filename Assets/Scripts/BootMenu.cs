@@ -25,6 +25,8 @@ public class BootMenu : MonoBehaviour
     [SerializeField] private EachOneCoin.Gameplay.Replay.ReplayBrowser replayBrowser;
     [SerializeField] private LanRoomUI lanRoom;
     [SerializeField] private EachOneCoin.Gameplay.ArenaMapCatalog mapCatalog;
+    [SerializeField] private EachOneCoin.Gameplay.ArenaMapDefinition replayMap;
+    public EachOneCoin.Gameplay.ArenaMapDefinition ReplayMap => replayMap;
     private EachOneCoin.Gameplay.ArenaMapDefinition[] singlePlayerMaps => mapCatalog != null ? mapCatalog.Maps : null;
     [SerializeField] private TMP_Text mapNameText;
     [SerializeField] private Button previousMapButton;

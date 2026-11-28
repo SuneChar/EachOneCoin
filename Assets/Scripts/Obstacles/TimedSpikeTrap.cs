@@ -24,6 +24,12 @@ public class TimedSpikeTrap : ObstacleBehaviour
     private float lastReplicaTime;
     private const float ReplicaTimeout = 0.35f;
     public float NetworkSpikeHeight => spikes != null ? spikes.localPosition.y : 0f;
+    public float ConfiguredVisibleDuration => visibleDuration;
+    public float ConfiguredHiddenDuration => hiddenDuration;
+    public bool ConfiguredInitiallyVisible => initiallyVisible;
+    public float ConfiguredTransitionDuration => transitionDuration;
+    public float ConfiguredRaisedOffset => raisedOffset;
+    public float ConfiguredRetractedOffset => retractedOffset;
 
     public void ApplyNetworkState(bool active, float fraction, float spikeHeight)
     {

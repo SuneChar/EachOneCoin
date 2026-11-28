@@ -20,12 +20,14 @@ namespace EachOneCoin.Gameplay.Replay
         private bool networkMatch, closed;
         private float startTime, nextSample;
         private int sequence;
+        private string mapFingerprint;
         private Action<string> onSaved;
         public string SavedPath { get; private set; }
 
         public void Initialize(MatchCoordinator coordinator, bool network, Action<string> saved)
         {
             match = coordinator;
+            mapFingerprint = ArenaMapFingerprint.Compute(coordinator.MapDefinition);
             networkMatch = network;
             onSaved = saved;
             var patrolList = new List<LinearPatrolObstacle>();
@@ -124,7 +126,7 @@ namespace EachOneCoin.Gameplay.Replay
             closed = true;
             match.FeedEventRaised -= OnFeed;
             var data = new ReplayData { formatVersion = ReplayData.CurrentFormat, gameVersion = Application.version, matchId = Guid.NewGuid().ToString("N"),
-                recordedUtc = DateTime.UtcNow.ToString("o"), networkMatch = networkMatch, complete = true,
+                recordedUtc = DateTime.UtcNow.ToString("o"), networkMatch = networkMatch, complete = true, mapFingerprint = mapFingerprint,
                 coinsToWin = match.Model.CoinsToWin, duration = match.InitialDurationSeconds,
                 frames = frames.ToArray(), events = events.ToArray() };
             if (ReplayStorage.TrySave(data, out var path, out var error)) { SavedPath = path; onSaved?.Invoke(path); }

@@ -207,6 +207,45 @@ namespace EachOneCoin.Tests
         }
 
         [UnityTest]
+        public IEnumerator KnockbackIntoHole_DropsAtLastSafeCellWithoutPaintingPath()
+        {
+            var mapField = match.GetType().GetField("mapDefinition", Private);
+            var original = (ScriptableObject)mapField.GetValue(match);
+            var custom = UnityEngine.Object.Instantiate(original);
+            try
+            {
+                var cells = (Array)custom.GetType().GetField("cells", Private).GetValue(custom);
+                var cellType = cells.GetType().GetElementType();
+                var terrainField = cellType.GetField("terrain");
+                int index = 13 * 21 + 10;
+                object hole = cells.GetValue(index);
+                terrainField.SetValue(hole, Enum.ToObject(terrainField.FieldType, 1));
+                cells.SetValue(hole, index);
+                mapField.SetValue(match, custom);
+                Call(grid, "ConfigureMap", custom);
+                var character = Character(1);
+                Call(character, "Teleport", CellToWorld(new GridPosition(10, 10)));
+                Assert.That(rules.TryCollectCoin(1, model.Participants[1].Spawn), Is.True);
+                Physics.SyncTransforms();
+                Call(character, "StartAttackKnockback", Vector3.right * 4f, 0.4f);
+                Call(character, "TickAttackKnockback", 0.4f);
+                Assert.That(model.Participants[1].Status, Is.EqualTo(ParticipantStatus.Respawning));
+                Assert.That(model.Grid.OwnerAt(new GridPosition(11, 10)), Is.Null);
+                var dropped = new System.Collections.Generic.List<GridPosition>();
+                Call(coins, "CopyActiveCoins", dropped);
+                Assert.That(dropped, Has.Count.EqualTo(1));
+                Assert.That(dropped[0], Is.EqualTo(new GridPosition(12, 10)));
+                yield return null;
+            }
+            finally
+            {
+                mapField.SetValue(match, original);
+                Call(grid, "ConfigureMap", original);
+                UnityEngine.Object.DestroyImmediate(custom);
+            }
+        }
+
+        [UnityTest]
         public IEnumerator GroundShadows_FollowAndRespectOwnerLifetime()
         {
             var character = Character(0);

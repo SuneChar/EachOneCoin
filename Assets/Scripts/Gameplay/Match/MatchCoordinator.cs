@@ -34,6 +34,7 @@ namespace EachOneCoin.Gameplay
         private readonly Collider[] overlap = new Collider[64];
         public MatchModel Model { get; private set; }
         public ArenaGridView Grid => grid;
+        public ArenaMapDefinition MapDefinition => mapDefinition;
         public CoinSpawner Coins => coins;
         public CombatController Combat => combat;
         public NpcController Npcs => npcs;
@@ -87,7 +88,7 @@ namespace EachOneCoin.Gameplay
         public void BeginReplayRecording(bool network, System.Action<string> onSaved = null)
         {
             if (Recorder != null) return;
-            if (isCustomSinglePlayerMap)
+            if (isCustomSinglePlayerMap || !ArenaMapFingerprint.IsFixedProtocolCompatible(mapDefinition))
             {
                 Debug.LogWarning("自定义地图暂不支持录像，已跳过录像录制。", this);
                 return;
@@ -137,7 +138,8 @@ namespace EachOneCoin.Gameplay
                 {
                     protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version,
                     coinsToWin = configuredCoins,
-                    durationSeconds = configuredDuration
+                    durationSeconds = configuredDuration,
+                    mapFingerprint = isNetwork && mapDefinition != null ? ArenaMapFingerprint.Compute(mapDefinition) : null
                 };
                 if (isNetwork && !EachOneCoin.Networking.MatchRulesProtocol.IsValid(rules)) return false;
                 coinsToWin = configuredCoins;
@@ -154,7 +156,8 @@ namespace EachOneCoin.Gameplay
             if (!IsNetworkMovementTest || Mirror.NetworkServer.active || Model == null ||
                 Model.Status != MatchStatus.Waiting || coins == null) return false;
             if (!EachOneCoin.Networking.MatchRulesProtocol.IsValid(new EachOneCoin.Networking.MatchRulesMessage
-                { protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version, coinsToWin = coinsToWin, durationSeconds = durationSeconds })) return false;
+                { protocolVersion = EachOneCoin.Networking.MatchRulesProtocol.Version, coinsToWin = coinsToWin, durationSeconds = durationSeconds,
+                  mapFingerprint = mapDefinition != null ? ArenaMapFingerprint.Compute(mapDefinition) : null })) return false;
             if (!coins.ConfigureReplicaDurationBeforeStart(durationSeconds)) return false;
             if (!Rules.ConfigureRulesBeforeStart(coinsToWin, durationSeconds)) return false;
             InitialDurationSeconds = durationSeconds;
@@ -172,6 +175,19 @@ namespace EachOneCoin.Gameplay
             {
                 isCustomSinglePlayerMap = ArenaMapSelection.Selected != mapDefinition;
                 mapDefinition = ArenaMapSelection.Selected;
+            }
+            if (IsNetworkMovementTest && !ArenaMapFingerprint.IsFixedProtocolCompatible(mapDefinition))
+            {
+                Debug.LogWarning("当前地图不支持联机，已取消进入对局。", this);
+                enabled = false;
+                network.RejectUnsupportedMap();
+                return;
+            }
+            if (IsReplay && !Replay.ReplayStorage.MatchesMap(replay, mapDefinition, out string replayMapError))
+            {
+                Debug.LogWarning("无法播放录像：" + replayMapError, this);
+                enabled = false;
+                return;
             }
             if (mapDefinition != null && !ArenaMapValidator.TryValidate(mapDefinition, out var mapError))
             {

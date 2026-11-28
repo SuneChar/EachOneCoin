@@ -4,13 +4,13 @@ using UnityEngine;
 namespace EachOneCoin.Networking
 {
     public struct MovementReady : NetworkMessage { public ushort protocolVersion; }
-    public struct MatchRulesMessage : NetworkMessage { public ushort protocolVersion; public int coinsToWin; public float durationSeconds; }
-    public struct MatchRulesAcknowledged : NetworkMessage { public ushort protocolVersion; public int coinsToWin; public float durationSeconds; }
+    public struct MatchRulesMessage : NetworkMessage { public ushort protocolVersion; public int coinsToWin; public float durationSeconds; public string mapFingerprint; }
+    public struct MatchRulesAcknowledged : NetworkMessage { public ushort protocolVersion; public int coinsToWin; public float durationSeconds; public string mapFingerprint; }
     public struct MatchRulesRejected : NetworkMessage { }
 
     public static class MatchRulesProtocol
     {
-        public const ushort Version = 1;
+        public const ushort Version = 2;
         public const int MaximumCoinsToWin = 10000;
         public const float MaximumDurationSeconds = 86400f;
 
@@ -18,13 +18,21 @@ namespace EachOneCoin.Networking
         {
             return rules.protocolVersion == Version && rules.coinsToWin > 0 && rules.coinsToWin <= MaximumCoinsToWin &&
                 !float.IsNaN(rules.durationSeconds) && !float.IsInfinity(rules.durationSeconds) &&
-                rules.durationSeconds > 0f && rules.durationSeconds <= MaximumDurationSeconds;
+                rules.durationSeconds > 0f && rules.durationSeconds <= MaximumDurationSeconds && ValidFingerprint(rules.mapFingerprint);
         }
 
         public static bool Matches(MatchRulesMessage rules, MatchRulesAcknowledged acknowledgement)
         {
             return IsValid(rules) && acknowledgement.protocolVersion == rules.protocolVersion &&
-                acknowledgement.coinsToWin == rules.coinsToWin && acknowledgement.durationSeconds == rules.durationSeconds;
+                acknowledgement.coinsToWin == rules.coinsToWin && acknowledgement.durationSeconds == rules.durationSeconds &&
+                acknowledgement.mapFingerprint == rules.mapFingerprint;
+        }
+
+        private static bool ValidFingerprint(string value)
+        {
+            if (value == null || value.Length != 64) return false;
+            foreach (char c in value) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+            return true;
         }
     }
     public struct ReturnRoomRequest : NetworkMessage { }

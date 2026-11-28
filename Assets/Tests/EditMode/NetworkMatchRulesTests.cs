@@ -1,6 +1,7 @@
 using System;
 using System.Reflection;
 using NUnit.Framework;
+using UnityEditor;
 using UnityEngine;
 
 namespace EachOneCoin.Tests
@@ -29,17 +30,20 @@ namespace EachOneCoin.Tests
             type.GetField("protocolVersion").SetValue(value, version);
             type.GetField("coinsToWin").SetValue(value, coins);
             type.GetField("durationSeconds").SetValue(value, duration);
+            var map = AssetDatabase.LoadAssetAtPath<ScriptableObject>("Assets/Data/Maps/DefaultArenaMap.asset");
+            var fingerprintType = Type.GetType("EachOneCoin.Gameplay.ArenaMapFingerprint, Assembly-CSharp", true);
+            type.GetField("mapFingerprint").SetValue(value, fingerprintType.GetMethod("Compute").Invoke(null, new object[] { map }));
             return value;
         }
 
-        [TestCase(1, 10, 60f, true)]
-        [TestCase(1, 6, 120f, true)]
+        [TestCase(2, 10, 60f, true)]
+        [TestCase(2, 6, 120f, true)]
         [TestCase(0, 10, 60f, false)]
-        [TestCase(2, 10, 60f, false)]
-        [TestCase(1, 0, 60f, false)]
-        [TestCase(1, 10001, 60f, false)]
-        [TestCase(1, 10, 0f, false)]
-        [TestCase(1, 10, 86401f, false)]
+        [TestCase(1, 10, 60f, false)]
+        [TestCase(2, 0, 60f, false)]
+        [TestCase(2, 10001, 60f, false)]
+        [TestCase(2, 10, 0f, false)]
+        [TestCase(2, 10, 86401f, false)]
         public void Protocol_ValidatesVersionAndBounds(int version, int coins, float duration, bool expected)
         {
             var rules = Message(rulesType, (ushort)version, coins, duration);
@@ -51,13 +55,16 @@ namespace EachOneCoin.Tests
         {
             var isValid = protocolType.GetMethod("IsValid");
             foreach (float value in new[] { float.NaN, float.PositiveInfinity, float.NegativeInfinity })
-                Assert.That(isValid.Invoke(null, new[] { Message(rulesType, 1, 10, value) }), Is.EqualTo(false));
-            var rules = Message(rulesType, 1, 6, 120f);
+                Assert.That(isValid.Invoke(null, new[] { Message(rulesType, 2, 10, value) }), Is.EqualTo(false));
+            var rules = Message(rulesType, 2, 6, 120f);
             var matches = protocolType.GetMethod("Matches");
-            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 1, 6, 120f) }), Is.EqualTo(true));
-            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 1, 7, 120f) }), Is.EqualTo(false));
-            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 1, 6, 60f) }), Is.EqualTo(false));
-            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 2, 6, 120f) }), Is.EqualTo(false));
+            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 2, 6, 120f) }), Is.EqualTo(true));
+            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 2, 7, 120f) }), Is.EqualTo(false));
+            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 2, 6, 60f) }), Is.EqualTo(false));
+            Assert.That(matches.Invoke(null, new[] { rules, Message(acknowledgementType, 3, 6, 120f) }), Is.EqualTo(false));
+            var otherMap = Message(acknowledgementType, 2, 6, 120f);
+            acknowledgementType.GetField("mapFingerprint").SetValue(otherMap, new string('b', 64));
+            Assert.That(matches.Invoke(null, new[] { rules, otherMap }), Is.EqualTo(false));
         }
 
         [Test]
@@ -68,12 +75,12 @@ namespace EachOneCoin.Tests
             var offer = type.GetMethod("Offer");
             var confirm = type.GetMethod("Confirm");
             var pending = type.GetMethod("IsPending");
-            var rules = Message(rulesType, 1, 6, 120f);
-            var acknowledgement = Message(acknowledgementType, 1, 6, 120f);
+            var rules = Message(rulesType, 2, 6, 120f);
+            var acknowledgement = Message(acknowledgementType, 2, 6, 120f);
             Assert.That(confirm.Invoke(handshake, new[] { (object)7, acknowledgement }), Is.EqualTo(false));
-            Assert.That(offer.Invoke(handshake, new[] { (object)7, Message(rulesType, 2, 6, 120f) }), Is.EqualTo(false));
+            Assert.That(offer.Invoke(handshake, new[] { (object)7, Message(rulesType, 3, 6, 120f) }), Is.EqualTo(false));
             Assert.That(offer.Invoke(handshake, new[] { (object)7, rules }), Is.EqualTo(true));
-            Assert.That(confirm.Invoke(handshake, new[] { (object)7, Message(acknowledgementType, 1, 7, 120f) }), Is.EqualTo(false));
+            Assert.That(confirm.Invoke(handshake, new[] { (object)7, Message(acknowledgementType, 2, 7, 120f) }), Is.EqualTo(false));
             Assert.That(pending.Invoke(handshake, new object[] { 7 }), Is.EqualTo(true));
             Assert.That(confirm.Invoke(handshake, new[] { (object)7, acknowledgement }), Is.EqualTo(true));
             Assert.That(confirm.Invoke(handshake, new[] { (object)7, acknowledgement }), Is.EqualTo(false));
@@ -109,6 +116,7 @@ namespace EachOneCoin.Tests
                 coordinatorType.GetField("<IsNetworkMovementTest>k__BackingField", privateInstance).SetValue(coordinator, true);
                 coordinatorType.GetField("session", privateInstance).SetValue(coordinator, session);
                 coordinatorType.GetField("matchSystem", privateInstance).SetValue(coordinator, system);
+                coordinatorType.GetField("mapDefinition", privateInstance).SetValue(coordinator, AssetDatabase.LoadAssetAtPath<ScriptableObject>("Assets/Data/Maps/DefaultArenaMap.asset"));
                 coordinatorType.GetField("coins", privateInstance).SetValue(coordinator, coins);
                 coinsType.GetField("match", privateInstance).SetValue(coins, coordinator);
                 controllerType.GetField("match", privateInstance).SetValue(controller, coordinator);
@@ -124,11 +132,14 @@ namespace EachOneCoin.Tests
                 Assert.That(controllerType.GetField("hasMatchState", privateInstance).GetValue(controller), Is.EqualTo(false));
 
                 var receiveRules = controllerType.GetMethod("ReceiveAuthoritativeRules");
-                Assert.That(receiveRules.Invoke(controller, new[] { Message(rulesType, 2, 6, 120f) }), Is.EqualTo(false));
-                var rules = Message(rulesType, 1, 6, 120f);
+                Assert.That(receiveRules.Invoke(controller, new[] { Message(rulesType, 3, 6, 120f) }), Is.EqualTo(false));
+                var wrongMapRules = Message(rulesType, 2, 6, 120f);
+                rulesType.GetField("mapFingerprint").SetValue(wrongMapRules, new string('b', 64));
+                Assert.That(receiveRules.Invoke(controller, new[] { wrongMapRules }), Is.EqualTo(false));
+                var rules = Message(rulesType, 2, 6, 120f);
                 Assert.That(receiveRules.Invoke(controller, new[] { rules }), Is.EqualTo(true));
                 Assert.That(receiveRules.Invoke(controller, new[] { rules }), Is.EqualTo(true));
-                Assert.That(receiveRules.Invoke(controller, new[] { Message(rulesType, 1, 7, 120f) }), Is.EqualTo(false));
+                Assert.That(receiveRules.Invoke(controller, new[] { Message(rulesType, 2, 7, 120f) }), Is.EqualTo(false));
                 Assert.That(model.CoinsToWin, Is.EqualTo(6));
                 Assert.That(model.RemainingTime, Is.EqualTo(120f));
                 Assert.That((double)coinsType.GetField("duration", privateInstance).GetValue(coins), Is.EqualTo(120d));

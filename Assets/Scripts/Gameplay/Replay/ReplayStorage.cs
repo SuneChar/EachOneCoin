@@ -14,7 +14,9 @@ namespace EachOneCoin.Gameplay.Replay
         {
             error = null;
             if (data == null || !data.complete) error = "录像不完整";
+            else if (data.formatVersion == 1) error = "旧版录像缺少地图校验信息，无法安全播放";
             else if (data.formatVersion != ReplayData.CurrentFormat || data.gameVersion != gameVersion) error = "录像版本不兼容";
+            else if (!ValidFingerprint(data.mapFingerprint)) error = "录像地图校验信息无效";
             else if (!Guid.TryParseExact(data.matchId, "N", out _) || !DateTime.TryParse(data.recordedUtc, out _) ||
                 data.coinsToWin <= 0 || !Finite(data.duration) || data.duration <= 0f || data.frames == null ||
                 data.frames.Length == 0 || data.frames.Length > 10000 || data.events == null || data.events.Length > 30000) error = "录像数据无效";
@@ -63,6 +65,26 @@ namespace EachOneCoin.Gameplay.Replay
                 }
             }
             return error == null;
+        }
+
+        public static bool MatchesMap(ReplayData data, ArenaMapDefinition map, out string error)
+        {
+            error = null;
+            if (data == null || data.formatVersion != ReplayData.CurrentFormat || !ValidFingerprint(data.mapFingerprint))
+            { error = "录像缺少有效地图校验信息"; return false; }
+            if (map == null) { error = "默认地图未配置"; return false; }
+            if (!ArenaMapValidator.TryValidate(map, out error)) return false;
+            if (!ArenaMapFingerprint.IsFixedProtocolCompatible(map)) { error = "当前地图不受录像格式支持"; return false; }
+            if (!string.Equals(data.mapFingerprint, ArenaMapFingerprint.Compute(map), StringComparison.Ordinal))
+            { error = "录像地图与当前默认地图不一致"; return false; }
+            return true;
+        }
+
+        private static bool ValidFingerprint(string value)
+        {
+            if (value == null || value.Length != 64) return false;
+            foreach (char c in value) if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))) return false;
+            return true;
         }
 
         private static bool Finite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);

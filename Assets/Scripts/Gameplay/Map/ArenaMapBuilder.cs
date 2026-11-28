@@ -34,12 +34,12 @@ namespace EachOneCoin.Gameplay
                     if (cell.terrain == ArenaTerrain.Hole) continue;
                     var tile = UnityEngine.Object.Instantiate(cell.tilePrefabOverride != null ? cell.tilePrefabOverride : map.DefaultTilePrefab, staging.transform);
                     tile.name = "tile";
-                    float surface = cell.height * ArenaMapTopology.HeightUnit;
-                    if (cell.terrain == ArenaTerrain.Ramp) surface += ArenaMapTopology.HeightUnit * 0.5f;
+                    float surface = cell.height * map.HeightUnit;
+                    if (cell.terrain == ArenaTerrain.Ramp) surface += map.HeightUnit * 0.5f;
                     tile.transform.position = new Vector3(x - map.Width / 2f + 0.5f, surface - 0.2f, y - map.Height / 2f + 0.5f);
                     if (cell.terrain == ArenaTerrain.Ramp)
                     {
-                        float angle = Mathf.Atan(ArenaMapTopology.HeightUnit) * Mathf.Rad2Deg;
+                        float angle = Mathf.Atan(map.HeightUnit) * Mathf.Rad2Deg;
                         tile.transform.rotation = cell.direction == 0 ? Quaternion.Euler(-angle, 0f, 0f) :
                             cell.direction == 1 ? Quaternion.Euler(0f, 0f, angle) :
                             cell.direction == 2 ? Quaternion.Euler(angle, 0f, 0f) : Quaternion.Euler(0f, 0f, -angle);
@@ -117,8 +117,8 @@ namespace EachOneCoin.Gameplay
                 }
                 for (int i = boundary.childCount - 1; i >= 0; i--)
                     if (boundary.GetChild(i).GetComponent<MeshRenderer>() != null) UnityEngine.Object.DestroyImmediate(boundary.GetChild(i).gameObject);
-                float bottom = minLevel * ArenaMapTopology.HeightUnit - 0.5f;
-                float top = maxLevel * ArenaMapTopology.HeightUnit + 1.5f;
+                float bottom = minLevel * map.HeightUnit - 0.5f;
+                float top = maxLevel * map.HeightUnit + 1.5f;
                 float centerY = (bottom + top) * 0.5f;
                 float colliderHeight = top - bottom;
                 colliders[0].transform.position = new Vector3(0f, centerY, -map.Height / 2f);
@@ -150,7 +150,7 @@ namespace EachOneCoin.Gameplay
             foreach (var group in groups) if (group == null) throw new InvalidOperationException("An obstacle group was not found.");
             foreach (var entry in map.Objects)
             {
-                if (entry.overridePatrolSpeed && entry.prefab.GetComponent<LinearPatrolObstacle>() == null)
+                if ((entry.overridePatrolSpeed || entry.overridePatrolEndOffset) && entry.prefab.GetComponent<LinearPatrolObstacle>() == null)
                     throw new ArgumentException("A patrol speed override requires a patrol obstacle.");
                 if (entry.overrideInitiallyVisible && entry.prefab.GetComponent<TimedSpikeTrap>() == null)
                     throw new ArgumentException("A visibility override requires a spike trap.");
@@ -169,6 +169,7 @@ namespace EachOneCoin.Gameplay
                     position.y += ArenaMapTopology.SurfaceHeight(map, position);
                     instance.transform.SetPositionAndRotation(position, Quaternion.Euler(entry.rotation));
                     if (entry.overridePatrolSpeed) instance.GetComponent<LinearPatrolObstacle>().ConfigureSpeedBeforeActivation(entry.patrolSpeed);
+                    if (entry.overridePatrolEndOffset) instance.GetComponent<LinearPatrolObstacle>().ConfigureEndOffsetBeforeActivation(entry.patrolEndOffset);
                     if (entry.overrideInitiallyVisible) instance.GetComponent<TimedSpikeTrap>().ConfigureInitialVisibilityBeforeStart(entry.initiallyVisible);
                     created.Add(instance);
                 }
