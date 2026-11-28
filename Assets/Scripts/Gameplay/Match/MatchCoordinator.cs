@@ -38,6 +38,7 @@ namespace EachOneCoin.Gameplay
         public ArenaGridView Grid => grid;
         public ArenaMapDefinition MapDefinition => mapDefinition;
         public CoinSpawner Coins => coins;
+        public LocalPlayerInput LocalInput => localInput;
         public CombatController Combat => combat;
         public NpcController Npcs => npcs;
         public ArenaCharacter[] Characters { get; private set; }
@@ -93,6 +94,8 @@ namespace EachOneCoin.Gameplay
         private MatchSystem matchSystem;
         private bool aiming;
         private bool aimUsesGamepad;
+        private bool aimUsesTouch;
+        private int touchReleaseAtStart;
         private Vector3 aimDirection = Vector3.forward;
         public MatchSystem Rules
         {
@@ -607,17 +610,21 @@ namespace EachOneCoin.Gameplay
 
         private void UpdateAim()
         {
-            if (!aiming && (localInput.KeyboardAttackDown || localInput.GamepadAttackDown))
+            bool touchPress = !aiming && localInput.ConsumeTouchAttackPress();
+            if (!aiming && (localInput.KeyboardAttackDown || localInput.GamepadAttackDown || touchPress))
             {
-                aimUsesGamepad = !localInput.KeyboardAttackDown && localInput.GamepadAttackDown;
+                aimUsesTouch = touchPress;
+                aimUsesGamepad = !aimUsesTouch && !localInput.KeyboardAttackDown && localInput.GamepadAttackDown;
+                touchReleaseAtStart = localInput.TouchAttackReleaseAtPress;
                 aiming = true;
             }
             if (!aiming) return;
-            if (localInput.TryAimDirection(aimUsesGamepad, Characters[0].transform.position, Camera.main, out Vector3 direction)) aimDirection = direction;
-            if (!localInput.AttackHeld(aimUsesGamepad))
+            if (aimUsesTouch ? localInput.TryTouchAimDirection(Camera.main, out Vector3 direction) : localInput.TryAimDirection(aimUsesGamepad, Characters[0].transform.position, Camera.main, out direction)) aimDirection = direction;
+            if (aimUsesTouch ? !localInput.TouchAttackHeld : !localInput.AttackHeld(aimUsesGamepad))
             {
+                bool attack = !aimUsesTouch || localInput.TouchAttackReleaseCount != touchReleaseAtStart;
                 CancelAim();
-                combat.Attack(0, aimDirection);
+                if (attack) combat.Attack(0, aimDirection);
                 return;
             }
             Characters[0].SetAttackAim(true, aimDirection, combat.AttackRange, combat.AttackAngle);

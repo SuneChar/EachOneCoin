@@ -33,6 +33,7 @@ public sealed class LanRoomUI : MonoBehaviour
     [SerializeField] private CharacterAppearanceCatalog appearanceCatalog;
     [SerializeField] private Button wardrobeButton;
     [SerializeField] private WardrobeUI wardrobe;
+    [SerializeField] private LanQrUI qrUI;
 
     public void Initialize(BootMenu owner)
     {
@@ -57,6 +58,7 @@ public sealed class LanRoomUI : MonoBehaviour
 
         if (wardrobeButton != null)
             wardrobeButton.onClick.AddListener(OpenWardrobe);
+        if (qrUI != null) qrUI.Initialize(network);
 
         panel.SetActive(false);
         if ((network.HasRecoverySession && !NetworkClient.active && !NetworkServer.active) || (network.HasSnapshot && NetworkClient.isConnected)) Open();

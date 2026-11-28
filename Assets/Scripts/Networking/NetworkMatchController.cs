@@ -24,7 +24,9 @@ namespace EachOneCoin.Networking
         private readonly double[] respawnCutoff = new double[RoomState.Capacity];
         private readonly bool[] respawnPending = new bool[RoomState.Capacity];
         private uint combatSequence, lastCombatSequence, nextAttackSequence;
-        private bool hasCombatState, aiming, aimUsesGamepad;
+        private bool hasCombatState, aiming, aimUsesGamepad, aimUsesTouch;
+        private int touchReleaseAtStart;
+        private bool touchSpectatorNext;
         private Vector3 aimDirection = Vector3.forward;
         private float nextCombatState;
         public bool HasCombatState => NetworkServer.active || hasCombatState;
@@ -356,18 +358,22 @@ namespace EachOneCoin.Networking
                 aiming = false;
                 return;
             }
-            if (!aiming && (localInput.KeyboardAttackDown || localInput.GamepadAttackDown))
+            bool touchPress = !aiming && localInput.ConsumeTouchAttackPress();
+            if (!aiming && (localInput.KeyboardAttackDown || localInput.GamepadAttackDown || touchPress))
             {
-                aimUsesGamepad = !localInput.KeyboardAttackDown && localInput.GamepadAttackDown;
+                aimUsesTouch = touchPress;
+                aimUsesGamepad = !aimUsesTouch && !localInput.KeyboardAttackDown && localInput.GamepadAttackDown;
+                touchReleaseAtStart = localInput.TouchAttackReleaseAtPress;
                 aiming = true;
             }
             if (!aiming) return;
-            if (localInput.TryAimDirection(aimUsesGamepad, match.Characters[id].transform.position, Camera.main, out var direction)) aimDirection = direction;
-            if (!localInput.AttackHeld(aimUsesGamepad))
+            if (aimUsesTouch ? localInput.TryTouchAimDirection(Camera.main, out var direction) : localInput.TryAimDirection(aimUsesGamepad, match.Characters[id].transform.position, Camera.main, out direction)) aimDirection = direction;
+            if (aimUsesTouch ? !localInput.TouchAttackHeld : !localInput.AttackHeld(aimUsesGamepad))
             {
+                bool attack = !aimUsesTouch || localInput.TouchAttackReleaseCount != touchReleaseAtStart;
                 aiming = false;
                 match.Characters[id].SetAttackAim(false, aimDirection, 0f, 0f);
-                if (NetworkClient.isConnected) NetworkClient.Send(new AttackRequest { sequence = ++nextAttackSequence, direction = aimDirection });
+                if (attack && NetworkClient.isConnected) NetworkClient.Send(new AttackRequest { sequence = ++nextAttackSequence, direction = aimDirection });
                 return;
             }
             match.Characters[id].SetAttackAim(true, aimDirection, match.Combat.AttackRange, match.Combat.AttackAngle);
@@ -561,10 +567,13 @@ namespace EachOneCoin.Networking
         public int SpectateSlot => spectateSlot;
         public bool IsSpectating => started && CurrentMatchStatus == MatchStatus.Playing && StatusAt(network.LocalSlot) == ParticipantStatus.Lost;
 
+        public void NextSpectatorTarget() { touchSpectatorNext = true; }
+
         private void UpdateSpectator()
         {
             if (!IsSpectating) return;
-            bool next = Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.JoystickButton5);
+            bool next = touchSpectatorNext || Input.GetKeyDown(KeyCode.Tab) || Input.GetKeyDown(KeyCode.JoystickButton5);
+            touchSpectatorNext = false;
             bool valid = spectateSlot >= 0 && IsParticipant(spectateSlot) && StatusAt(spectateSlot) == ParticipantStatus.Active && IsSlotActive(spectateSlot);
             if (valid && !next) return;
             int start = spectateSlot < 0 ? network.LocalSlot : spectateSlot;

@@ -34,6 +34,7 @@ namespace Locus
         private const int MaxNativeRequestsPerUpdate = 16;
         private const int MaxNativeActiveManagedRequests = 32;
         private const double NativeBackgroundHookRefreshIntervalSeconds = 1.0;
+        private const double NativeStartRetryIntervalSeconds = 1.0;
         private const string SessionKey_NativeGeneration = "Locus_NativeGeneration";
         private const string NativePipePrefix = @"\\.\pipe\";
 
@@ -59,6 +60,8 @@ namespace Locus
         private static string _nativePublishedAdditionalScenes;
         private static double _lastNativeBackgroundHookCheckAt = -1.0;
         private static bool _nativeBackgroundHookApplied;
+        private static double _nativeStartRetryAt = -1.0;
+        private static bool _nativeStartRetryStopped;
 
         // Reused UTF-8 encode buffers for the high-frequency outbound calls
         // (status heartbeat + editor-update events both fire every 0.25s). Guarded
@@ -164,6 +167,9 @@ namespace Locus
                 return;
             if (!NativeLoadAndInit())
             {
+                // A missing/incompatible DLL or a rejected init does not get better
+                // by retrying in this domain, so stop the retry loop.
+                _nativeStartRetryStopped = true;
                 Debug.LogError("[Locus] Native broker bridge is required and failed to initialize.");
                 return;
             }
@@ -181,6 +187,8 @@ namespace Locus
             NativeSetCapabilities(ManagedCapabilities);
             NativeSetManagedState(ManagedStateReady);
             _nativeBridgeActive = true;
+            _nativeStartRetryStopped = false;
+            _nativeStartRetryAt = -1.0;
             // A freshly loaded broker starts without the register; seed it so
             // native get_compile_result never answers with a stale view.
             string persistedCompileResult = SessionState.GetString(SessionKey_RecompileResult, "");
@@ -250,6 +258,32 @@ namespace Locus
         }
 
         // ───────────────── Per-frame pump (from PumpMainThreadQueue) ─────────────────
+
+        /// <summary>
+        /// Re-attempt the native bridge start while it has not come up yet. The
+        /// desktop writes the enabling marker out-of-band and may attach to an
+        /// editor that is already running, so the single attempt made when the
+        /// domain loaded can miss it and leave the transport dead until the next
+        /// reload. Throttled to one attempt per interval; costs a single marker
+        /// probe per tick while the bridge is inactive.
+        /// </summary>
+        private static void NativeRetryStartIfPending()
+        {
+            if (_nativeBridgeActive || _nativeStartRetryStopped)
+                return;
+
+            double now = EditorApplication.timeSinceStartup;
+            if (_nativeStartRetryAt < 0)
+            {
+                _nativeStartRetryAt = now + NativeStartRetryIntervalSeconds;
+                return;
+            }
+            if (now < _nativeStartRetryAt)
+                return;
+
+            _nativeStartRetryAt = now + NativeStartRetryIntervalSeconds;
+            NativeStartIfEnabled();
+        }
 
         private static void NativePump()
         {

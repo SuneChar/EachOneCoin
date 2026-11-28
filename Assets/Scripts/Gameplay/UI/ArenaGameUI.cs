@@ -28,6 +28,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private MatchEventFeedView eventFeedView;
         [SerializeField] private Slider volumeSlider;
         [SerializeField] private Toggle promptsToggle;
+        [SerializeField] private Toggle joystickModeToggle;
         [SerializeField] private ControlPromptImages promptImages;
         [SerializeField, Min(0.05f)] private float hitFlashDuration = 0.25f;
         [SerializeField, Range(0f, 1f)] private float hitFrameOpacity = 0.65f;
@@ -41,8 +42,11 @@ namespace EachOneCoin.Gameplay
         private Func<int, string> participantNameResolver;
         private Func<int, Color> participantColorResolver;
         private Func<int, string> mineNameResolver;
+        [SerializeField] private bool showTouchControlsInEditor = true;
+        private TMP_Text joystickModeLabel;
         private float hitFlashRemaining;
         private InputDeviceTracker inputDevice;
+        [SerializeField] private TouchGameplayControls touchControls;
         private bool usingGamepad, showPrompts, settingsOpen, resultShown;
         private int lastTime = -1;
         private readonly int[] lastCoins = { -1, -1, -1, -1 };
@@ -229,6 +233,12 @@ namespace EachOneCoin.Gameplay
         private void Awake()
         {
             inputDevice = GetComponent<InputDeviceTracker>();
+            if (WantsTouchControls() && match != null && match.LocalInput != null && touchControls != null)
+            {
+                touchControls.Initialize(match, this, hudPanel.transform, NameplateFont);
+                InitializeJoystickModeOption();
+            }
+            else if (joystickModeToggle != null) joystickModeToggle.gameObject.SetActive(false);
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
@@ -286,6 +296,43 @@ namespace EachOneCoin.Gameplay
         {
             avatarAppearanceDirty = true;
         }
+        // The real device uses Application.platform. Play Mode in the Editor always reports the
+        // host platform, so the Android build target is used as the preview switch instead.
+        private bool WantsTouchControls()
+        {
+            if (Application.platform == RuntimePlatform.Android) return true;
+#if UNITY_EDITOR
+            return showTouchControlsInEditor &&
+                UnityEditor.EditorUserBuildSettings.activeBuildTarget == UnityEditor.BuildTarget.Android;
+#else
+            return false;
+#endif
+        }
+
+        // The row is authored in the settings panel; only its initial state and label are handled here.
+        private void InitializeJoystickModeOption()
+        {
+            if (touchControls == null || joystickModeToggle == null) return;
+            joystickModeToggle.gameObject.SetActive(true);
+            joystickModeLabel = joystickModeToggle.GetComponentInChildren<TMP_Text>(true);
+            joystickModeToggle.SetIsOnWithoutNotify(touchControls.JoystickMode == TouchJoystickMode.Floating);
+            RefreshJoystickModeLabel();
+        }
+
+        // Bound as a persistent scene listener, matching the prompts toggle next to it.
+        public void OnJoystickModeChanged(bool floating)
+        {
+            if (touchControls != null)
+                touchControls.SetJoystickMode(floating ? TouchJoystickMode.Floating : TouchJoystickMode.Fixed);
+            RefreshJoystickModeLabel();
+        }
+
+        private void RefreshJoystickModeLabel()
+        {
+            if (joystickModeLabel == null || touchControls == null) return;
+            joystickModeLabel.text = TouchSettings.JoystickModeLabel(touchControls.JoystickMode);
+        }
+
 
         private void OnObstacleHit(int id)
         {
@@ -1245,10 +1292,10 @@ namespace EachOneCoin.Gameplay
                 GamepadNavigation.Configure(CurrentNavigationPanel());
                 GamepadNavigation.EnsureFocus(CurrentNavigationPanel(), usingGamepad);
             }
-            if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, !paused && !resultShown, paused || settingsOpen);
+            if (promptImages != null) promptImages.Refresh(showPrompts && Application.platform != RuntimePlatform.Android, usingGamepad, !paused && !resultShown, paused || settingsOpen);
         }
 
-        public void Pause() { if (match == null || resultShown) return; if (match.IsReplay) { var replay = match.GetComponent<Replay.ReplayPlayer>(); if (replay != null) replay.TogglePause(); return; } if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
+        public void Pause() { if (match == null || resultShown) return; if (touchControls != null) touchControls.Cancel(); if (match.IsReplay) { var replay = match.GetComponent<Replay.ReplayPlayer>(); if (replay != null) replay.TogglePause(); return; } if (match.IsNetworkMovementTest) networkMenuOpen = true; else match.Pause(); RefreshPanels(); }
         public void Resume() { if (match == null) return; match.SuppressGamepadActionsUntilReleased(); settingsOpen = false; networkMenuOpen = false; match.Resume(); RefreshPanels(); }
         public void OpenSettings()
         {
@@ -1256,6 +1303,9 @@ namespace EachOneCoin.Gameplay
             settingsOpen = true;
             volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
             UpdateVolumeLabel(gameAudio.Volume);
+            if (joystickModeToggle != null && touchControls != null)
+                joystickModeToggle.SetIsOnWithoutNotify(touchControls.JoystickMode == TouchJoystickMode.Floating);
+            RefreshJoystickModeLabel();
             RefreshPanels();
         }
         public void CloseSettings() { settingsOpen = false; RefreshPanels(); }
