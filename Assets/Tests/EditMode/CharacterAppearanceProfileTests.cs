@@ -43,6 +43,41 @@ namespace EachOneCoin.Tests
         }
 
         [Test]
+        public void CharacterPrefab_NameplateIsAuthoredAndReinitializesWithoutDuplicates()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Characters/ArenaCharacter.prefab");
+            Assert.That(prefab, Is.Not.Null);
+            root = UnityEngine.Object.Instantiate(prefab);
+            var characterType = Type.GetType("EachOneCoin.Gameplay.ArenaCharacter, Assembly-CSharp", true);
+            var nameplateType = Type.GetType("EachOneCoin.Gameplay.CharacterNameplate, Assembly-CSharp", true);
+            var character = root.GetComponent(characterType);
+            var nameplate = root.GetComponent(nameplateType);
+            Assert.That(nameplate, Is.Not.Null);
+            Assert.That(new SerializedObject(character).FindProperty("nameplate").objectReferenceValue, Is.SameAs(nameplate));
+            var canvas = root.transform.Find("Character Nameplate");
+            Assert.That(canvas, Is.Not.Null);
+            Assert.That(canvas.parent, Is.SameAs(root.transform));
+            Assert.That(canvas.GetComponent<Canvas>().renderMode, Is.EqualTo(RenderMode.WorldSpace));
+            Assert.That(canvas.Find("Background"), Is.Not.Null);
+            var label = canvas.Find("Name");
+            Assert.That(label, Is.Not.Null);
+            int childCount = root.transform.childCount;
+            var init = nameplateType.GetMethod("Initialize");
+            init.Invoke(nameplate, new object[] { null, 2.1f });
+            init.Invoke(nameplate, new object[] { null, 2.6f });
+            Assert.That(root.transform.childCount, Is.EqualTo(childCount));
+            Assert.That(canvas.localPosition.y, Is.EqualTo(2.6f).Within(0.001f));
+            nameplateType.GetMethod("SetName").Invoke(nameplate, new object[] { "玩家1" });
+            var textType = Type.GetType("TMPro.TMP_Text, Unity.TextMeshPro", true);
+            var text = label.GetComponent(textType);
+            Assert.That(textType.GetProperty("text").GetValue(text), Is.EqualTo("玩家1"));
+            nameplateType.GetMethod("SetVisible").Invoke(nameplate, new object[] { false });
+            Assert.That(canvas.gameObject.activeSelf, Is.False);
+            nameplateType.GetMethod("SetVisible").Invoke(nameplate, new object[] { true });
+            Assert.That(canvas.gameObject.activeSelf, Is.True);
+        }
+
+        [Test]
         public void MissingOrInvalidProfile_FallsBackToSlotForId()
         {
             root = new GameObject("Character", typeof(CharacterController));

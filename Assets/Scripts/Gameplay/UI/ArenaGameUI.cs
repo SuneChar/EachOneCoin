@@ -34,7 +34,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0.05f)] private float hitFlashDuration = 0.25f;
         [SerializeField, Range(0f, 1f)] private float hitFrameOpacity = 0.65f;
         [SerializeField, Min(1f)] private float hitFrameThickness = 24f;
-        private readonly Image[] hitFrame = new Image[4];
+        [SerializeField] private Image[] hitFrame = new Image[4];
         private readonly ParticipantHudSnapshot[] snapshotBuffer = new ParticipantHudSnapshot[4];
         private IAvatarAppearanceProvider avatarProvider = new DefaultAvatarAppearanceProvider();
         private Func<int, string> participantNameResolver;
@@ -255,23 +255,14 @@ namespace EachOneCoin.Gameplay
 
         private void CreateHitFrame()
         {
-            var frame = new GameObject("Obstacle Hit Frame", typeof(RectTransform));
-            var rect = (RectTransform)frame.transform;
-            rect.SetParent(transform, false);
-            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
-            rect.offsetMin = Vector2.zero; rect.offsetMax = Vector2.zero;
             for (int i = 0; i < hitFrame.Length; i++)
             {
-                var edge = new GameObject("Edge " + i, typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-                var edgeRect = (RectTransform)edge.transform;
-                edgeRect.SetParent(rect, false);
-                if (i == 0) { edgeRect.anchorMin = new Vector2(0f, 1f); edgeRect.anchorMax = Vector2.one; edgeRect.pivot = new Vector2(0.5f, 1f); edgeRect.sizeDelta = new Vector2(0f, hitFrameThickness); }
-                else if (i == 1) { edgeRect.anchorMin = Vector2.zero; edgeRect.anchorMax = new Vector2(1f, 0f); edgeRect.pivot = new Vector2(0.5f, 0f); edgeRect.sizeDelta = new Vector2(0f, hitFrameThickness); }
-                else if (i == 2) { edgeRect.anchorMin = Vector2.zero; edgeRect.anchorMax = new Vector2(0f, 1f); edgeRect.pivot = new Vector2(0f, 0.5f); edgeRect.sizeDelta = new Vector2(hitFrameThickness, 0f); }
-                else { edgeRect.anchorMin = new Vector2(1f, 0f); edgeRect.anchorMax = Vector2.one; edgeRect.pivot = new Vector2(1f, 0.5f); edgeRect.sizeDelta = new Vector2(hitFrameThickness, 0f); }
-                edgeRect.anchoredPosition = Vector2.zero;
-                hitFrame[i] = edge.GetComponent<Image>();
-                hitFrame[i].raycastTarget = false;
+                if (hitFrame[i] == null) continue;
+                var edgeRect = hitFrame[i].rectTransform;
+                var size = edgeRect.sizeDelta;
+                if (i < 2) size.y = hitFrameThickness;
+                else size.x = hitFrameThickness;
+                edgeRect.sizeDelta = size;
             }
             UpdateHitFrame();
         }

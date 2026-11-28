@@ -35,7 +35,7 @@ namespace EachOneCoin.Gameplay
         private bool flashing;
         private GroundShadow groundShadow;
         private AttackVisual attackVisual;
-        private CharacterNameplate nameplate;
+        [SerializeField] private CharacterNameplate nameplate;
         public int Id { get; private set; }
         public Vector3 MovementVelocity => movementVelocity;
         public Vector3 FacingDirection { get; private set; } = Vector3.forward;
@@ -88,8 +88,7 @@ namespace EachOneCoin.Gameplay
             groundShadow = GroundShadow.Create(gameObject, 0.85f);
             attackVisual = gameObject.AddComponent<AttackVisual>();
             attackVisual.Initialize(coordinator, visual);
-            nameplate = gameObject.AddComponent<CharacterNameplate>();
-            nameplate.Initialize(coordinator.NameplateFont, controller.height * 0.5f + 1.6f);
+            if (nameplate != null) nameplate.Initialize(coordinator.NameplateFont, controller.height * 0.5f + 1.6f);
             if (characterSprite != null && characterSprite.transform.Find("Outline Outer") == null)
             {
                 CreateOutline(characterSprite, "Outline Outer", new Color(0.07f, 0.08f, 0.1f), 1.22f, -2);
