@@ -16,11 +16,8 @@ namespace EachOneCoin.Gameplay
         [SerializeField] private MatchCoordinator match;
         [SerializeField] private GameAudio gameAudio;
         [SerializeField] private GameObject hudPanel, pausePanel, settingsPanel, resultPanel;
-        [SerializeField] private TMP_Text timeText, coinText, healthText, resultText, resultCoinsText, participantText, feedbackText, attackPromptText, volumeValueText;
-        [SerializeField] private Image healthFill;
+        [SerializeField] private TMP_Text resultText, resultCoinsText, attackPromptText, volumeValueText;
         [SerializeField] private HealthHeartsView healthHeartsView;
-        [SerializeField] private Image staminaFill;
-        [SerializeField] private TMP_Text staminaText;
         [SerializeField] private ArcStaminaBarView arcStaminaBarView;
         [SerializeField] private ArenaMinimapView minimapView;
         [SerializeField] private LocalPlayerPortraitView localPortraitView;
@@ -65,10 +62,7 @@ namespace EachOneCoin.Gameplay
         private int lastUpcomingMine = int.MaxValue;
         private bool networkMenuOpen;
         private bool heartsInitialized;
-        private bool legacyHealthHidden;
         private bool staminaBarInitialized;
-        private bool legacyStaminaHidden;
-        private bool legacyHudTextsHidden;
         private bool minimapInitialized;
         private MinimapSizeMode minimapSizeMode = MinimapSizeMode.Expanded;
         private bool localPortraitInitialized;
@@ -78,7 +72,6 @@ namespace EachOneCoin.Gameplay
         private bool clockAndMineInitialized;
         private bool eventFeedInitialized;
         private bool networkStatusBannerInitialized;
-        private bool leftHudAdjusted;
         private bool networkHealthSynced;
         private bool networkStaminaSynced;
         [SerializeField] private GameObject networkStatusBannerRoot;
@@ -97,10 +90,6 @@ namespace EachOneCoin.Gameplay
         {
             get
             {
-                if (timeText != null && timeText.font != null) return timeText.font;
-                if (coinText != null && coinText.font != null) return coinText.font;
-                if (participantText != null && participantText.font != null) return participantText.font;
-                if (feedbackText != null && feedbackText.font != null) return feedbackText.font;
                 if (attackPromptText != null && attackPromptText.font != null) return attackPromptText.font;
                 if (resultText != null && resultText.font != null) return resultText.font;
                 return null;
@@ -219,7 +208,6 @@ namespace EachOneCoin.Gameplay
             inputDevice = GetComponent<InputDeviceTracker>();
             if (inputDevice != null) { usingGamepad = inputDevice.UsingGamepad; inputDevice.DeviceChanged += OnDeviceChanged; }
             showPrompts = PlayerPrefs.GetInt("GameUI.ShowPrompts", 1) != 0;
-            if (feedbackText != null) { feedbackText.enableAutoSizing = true; feedbackText.fontSizeMin = 12f; feedbackText.fontSizeMax = 22f; }
             if (attackPromptText != null)
             {
                 var rect = attackPromptText.rectTransform;
@@ -228,12 +216,6 @@ namespace EachOneCoin.Gameplay
             }
             if (promptsToggle != null) promptsToggle.SetIsOnWithoutNotify(showPrompts);
             CreateHitFrame();
-            HideLegacyHealthUI();
-            legacyHealthHidden = true;
-            HideLegacyStaminaUI();
-            legacyStaminaHidden = true;
-            HideLegacyHudTexts();
-            legacyHudTextsHidden = true;
             AdjustPauseButtonLayout();
             RefreshPanels();
         }
@@ -930,11 +912,6 @@ namespace EachOneCoin.Gameplay
 
         private void EnsureHealthHearts(int initialMaxHealth)
         {
-            if (!legacyHealthHidden)
-            {
-                legacyHealthHidden = true;
-                HideLegacyHealthUI();
-            }
             if (heartsInitialized && healthHeartsView != null) return;
             if (healthHeartsView == null && hudPanel != null)
             {
@@ -951,17 +928,11 @@ namespace EachOneCoin.Gameplay
             {
                 healthHeartsView.Initialize(initialMaxHealth);
                 heartsInitialized = true;
-                AdjustLeftHudBelowHearts();
             }
         }
 
         private void EnsureHudViews(bool includeNetworkBanner)
         {
-            if (!legacyHudTextsHidden)
-            {
-                legacyHudTextsHidden = true;
-                HideLegacyHudTexts();
-            }
             int initialHealth = match != null ? match.InitialHealth : 3;
             EnsureHealthHearts(initialHealth);
             EnsureArcStaminaBar();
@@ -987,19 +958,6 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        private void HideLegacyHudTexts()
-        {
-            if (timeText != null) timeText.gameObject.SetActive(false);
-            if (coinText != null) coinText.gameObject.SetActive(false);
-            if (participantText != null) participantText.gameObject.SetActive(false);
-            if (feedbackText != null) feedbackText.gameObject.SetActive(false);
-            if (hudPanel != null)
-            {
-                var legacyTimeCard = hudPanel.transform.Find("TimeCard");
-                if (legacyTimeCard != null) legacyTimeCard.gameObject.SetActive(false);
-            }
-        }
-
         private void AdjustPauseButtonLayout()
         {
             var pauseButton = hudPanel != null ? hudPanel.transform.Find("PauseButton") : null;
@@ -1017,66 +975,8 @@ namespace EachOneCoin.Gameplay
             }
         }
 
-        private void AdjustLeftHudBelowHearts()
-        {
-            if (leftHudAdjusted || healthHeartsView == null) return;
-            leftHudAdjusted = true;
-
-            bool coinVisible = coinText != null && coinText.gameObject.activeSelf;
-            bool feedbackVisible = feedbackText != null && feedbackText.gameObject.activeSelf;
-            if (!coinVisible) return;
-
-            var heartsRect = healthHeartsView.transform as RectTransform;
-            var coinRect = coinText.rectTransform;
-            if (heartsRect == null || coinRect == null) return;
-
-            // Visible heart tip sits around 86% down from the top of the heart slot.
-            float heartsVisualBottom = heartsRect.anchoredPosition.y - healthHeartsView.HeartSize * 0.88f;
-            float coinTop = coinRect.anchoredPosition.y + coinRect.sizeDelta.y * (1f - coinRect.pivot.y);
-            const float minGap = 18f;
-            float shiftDown = coinTop - (heartsVisualBottom - minGap);
-            if (shiftDown <= 1f) return;
-
-            coinRect.anchoredPosition -= new Vector2(0f, shiftDown);
-            if (feedbackVisible)
-                feedbackText.rectTransform.anchoredPosition -= new Vector2(0f, shiftDown);
-
-            Transform staminaRoot = null;
-            if (staminaFill != null && staminaFill.transform.parent != null &&
-                (hudPanel == null || staminaFill.transform.parent.gameObject != hudPanel) &&
-                staminaFill.transform.parent.name.IndexOf("Stamina", System.StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                staminaRoot = staminaFill.transform.parent;
-            }
-            if (staminaRoot != null && staminaRoot.gameObject.activeSelf && staminaRoot is RectTransform staminaRect)
-                staminaRect.anchoredPosition -= new Vector2(0f, shiftDown);
-        }
-
-        private void HideLegacyHealthUI()
-        {
-            Transform legacyRoot = null;
-            if (healthFill != null && healthFill.transform.parent != null &&
-                (hudPanel == null || healthFill.transform.parent.gameObject != hudPanel) &&
-                healthFill.transform.parent.name.IndexOf("Health", System.StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                legacyRoot = healthFill.transform.parent;
-            }
-            if (legacyRoot != null)
-            {
-                legacyRoot.gameObject.SetActive(false);
-                return;
-            }
-            if (healthFill != null) healthFill.gameObject.SetActive(false);
-            if (healthText != null) healthText.gameObject.SetActive(false);
-        }
-
         private void EnsureArcStaminaBar()
         {
-            if (!legacyStaminaHidden)
-            {
-                legacyStaminaHidden = true;
-                HideLegacyStaminaUI();
-            }
             if (staminaBarInitialized && arcStaminaBarView != null) return;
             if (arcStaminaBarView == null && hudPanel != null)
             {
@@ -1090,24 +990,6 @@ namespace EachOneCoin.Gameplay
                 arcStaminaBarView.Initialize();
                 staminaBarInitialized = true;
             }
-        }
-
-        private void HideLegacyStaminaUI()
-        {
-            Transform legacyRoot = null;
-            if (staminaFill != null && staminaFill.transform.parent != null &&
-                (hudPanel == null || staminaFill.transform.parent.gameObject != hudPanel) &&
-                staminaFill.transform.parent.name.IndexOf("Stamina", System.StringComparison.OrdinalIgnoreCase) >= 0)
-            {
-                legacyRoot = staminaFill.transform.parent;
-            }
-            if (legacyRoot != null)
-            {
-                legacyRoot.gameObject.SetActive(false);
-                return;
-            }
-            if (staminaFill != null) staminaFill.gameObject.SetActive(false);
-            if (staminaText != null) staminaText.gameObject.SetActive(false);
         }
 
         private void EnsureMinimap()
