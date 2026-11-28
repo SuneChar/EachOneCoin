@@ -106,5 +106,65 @@ namespace EachOneCoin.Tests
             profileSo.ApplyModifiedPropertiesWithoutUndo();
             Assert.That(resolve.Invoke(character, new object[] { accessories, 1 }), Is.EqualTo("Slot 0"));
         }
+
+        [Test]
+        public void ApplyAppearance_SupportsSwitchingAndEmptyOutfitPreservesEye()
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Characters/ArenaCharacter.prefab");
+            Assert.That(prefab, Is.Not.Null);
+            root = UnityEngine.Object.Instantiate(prefab);
+            var characterType = Type.GetType("EachOneCoin.Gameplay.ArenaCharacter, Assembly-CSharp", true);
+            var profileType = Type.GetType("EachOneCoin.Gameplay.CharacterAppearanceProfile, Assembly-CSharp", true);
+            var character = root.GetComponent(characterType);
+            var accessories = root.transform.Find("Root/Accessories");
+            Assert.That(accessories, Is.Not.Null);
+
+            var getFallback = characterType.GetMethod("GetFallbackProfile", new[] { typeof(int) });
+            Assert.That(getFallback.Invoke(character, new object[] { 0 }), Is.Not.Null);
+            Assert.That(getFallback.Invoke(character, new object[] { 3 }), Is.Not.Null);
+            Assert.That(getFallback.Invoke(character, new object[] { 4 }), Is.Null);
+
+            var applyByIndex = characterType.GetMethod("ApplyAppearance", new[] { typeof(int) });
+            var applyByProfile = characterType.GetMethod("ApplyAppearance", new[] { profileType, typeof(int) });
+            var currentIndexProp = characterType.GetProperty("CurrentAppearanceIndex");
+            var currentProfileProp = characterType.GetProperty("CurrentAppearanceProfile");
+
+            applyByIndex.Invoke(character, new object[] { 2 });
+            Assert.That(currentIndexProp.GetValue(character), Is.EqualTo(2));
+            for (int i = 0; i < 4; i++)
+            {
+                Assert.That(accessories.Find("Slot " + i).gameObject.activeSelf, Is.EqualTo(i == 2));
+            }
+            Assert.That(accessories.Find("Eye").gameObject.activeSelf, Is.True);
+            var reference = accessories.Find("Reference Capsule");
+            if (reference != null) Assert.That(reference.gameObject.activeSelf, Is.False);
+
+            // Empty accessorySlotName ("none" outfit) turns off all 4 slots while preserving Eye.
+            temporaryProfile = ScriptableObject.CreateInstance(profileType);
+            var noneSo = new SerializedObject(temporaryProfile);
+            noneSo.FindProperty("appearanceId").stringValue = "none";
+            noneSo.FindProperty("accessorySlotName").stringValue = "";
+            noneSo.FindProperty("displayName").stringValue = "无配饰";
+            noneSo.ApplyModifiedPropertiesWithoutUndo();
+
+            applyByProfile.Invoke(character, new object[] { temporaryProfile, 4 });
+            Assert.That(currentIndexProp.GetValue(character), Is.EqualTo(4));
+            Assert.That(currentProfileProp.GetValue(character), Is.SameAs(temporaryProfile));
+            for (int i = 0; i < 4; i++)
+            {
+                Assert.That(accessories.Find("Slot " + i).gameObject.activeSelf, Is.False);
+            }
+            Assert.That(accessories.Find("Eye").gameObject.activeSelf, Is.True);
+            if (reference != null) Assert.That(reference.gameObject.activeSelf, Is.False);
+
+            // While character is visually inactive, switching outfit keeps SpriteRenderers disabled.
+            characterType.GetMethod("SetActiveState").Invoke(character, new object[] { false });
+            applyByIndex.Invoke(character, new object[] { 1 });
+            Assert.That(accessories.Find("Slot 1").gameObject.activeSelf, Is.True);
+            foreach (var sr in accessories.Find("Slot 1").GetComponentsInChildren<SpriteRenderer>(true))
+            {
+                Assert.That(sr.enabled, Is.False);
+            }
+        }
     }
 }

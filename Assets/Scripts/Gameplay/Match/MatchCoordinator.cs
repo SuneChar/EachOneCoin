@@ -16,6 +16,7 @@ namespace EachOneCoin.Gameplay
         [FormerlySerializedAs("singlePlayerConfig")]
         [SerializeField, Tooltip("单机及联机房主使用；客户端接收房主规则。")]
         private ArenaMatchConfig matchConfig;
+        [SerializeField] private CharacterAppearanceCatalog appearanceCatalog;
         [SerializeField, Min(0.1f)] private float moveSpeed = 10f;
         [SerializeField, Min(0.1f)] private float movementAcceleration = 35f;
         [SerializeField, Min(0.1f)] private float movementDeceleration = 35f;
@@ -29,6 +30,7 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0f)] private float obstacleInvulnerabilitySeconds = 1f;
         [SerializeField, Min(0f)] private float obstacleKnockbackDistance = 0.6f;
         [SerializeField, Min(0.01f)] private float obstacleKnockbackSeconds = 0.18f;
+        [SerializeField] private bool hideHealthBarOnViewTarget = false;
         private readonly Collider[] overlap = new Collider[64];
         public MatchModel Model { get; private set; }
         public ArenaGridView Grid => grid;
@@ -55,14 +57,33 @@ namespace EachOneCoin.Gameplay
         public event System.Action<int> ObstacleHit;
         public event System.Action<int> AttackHit;
         public event System.Action<MatchFeedEvent> FeedEventRaised;
+        public event System.Action<int> ParticipantAppearanceChanged;
+        public CharacterAppearanceCatalog AppearanceCatalog => appearanceCatalog;
+        public int AppearanceCatalogCount
+        {
+            get
+            {
+                if (appearanceCatalog != null && appearanceCatalog.Count > 0) return appearanceCatalog.Count;
+                if (playerTemplate != null && playerTemplate.FallbackAppearanceCount > 0) return playerTemplate.FallbackAppearanceCount;
+                if (Characters != null && Characters.Length > 0 && Characters[0] != null && Characters[0].FallbackAppearanceCount > 0)
+                    return Characters[0].FallbackAppearanceCount;
+                return 4;
+            }
+        }
         public bool IsPaused { get; private set; }
         public bool IsNetworkMovementTest { get; private set; }
         public bool NetworkRulesValid { get; private set; } = true;
         public float InitialDurationSeconds { get; private set; } = MatchModel.DefaultDurationSeconds;
         public EachOneCoin.Networking.NetworkMatchController NetworkController { get; private set; }
+        public int CurrentViewSlot { get; private set; }
         private readonly bool[] nearVictoryAnnounced = new bool[4];
         private readonly string[] participantNames = new string[4];
         private readonly TMPro.TMP_Text[] nameplateLabels = new TMPro.TMP_Text[4];
+        private readonly int[] participantAppearanceIndices = { 0, 1, 2, 3 };
+        private readonly CharacterAppearanceProfile[] participantAppearances = new CharacterAppearanceProfile[4];
+        private readonly int[] lastOverheadHealth = { -1, -1, -1, -1 };
+        private readonly int[] lastOverheadMaxHealth = { -1, -1, -1, -1 };
+        private readonly int[] lastOverheadInitialMaxHealth = { -1, -1, -1, -1 };
         private float timeScaleBeforePause = 1f;
         private MatchSessionModel session;
         private MatchSystem matchSystem;
@@ -180,6 +201,12 @@ namespace EachOneCoin.Gameplay
             {
                 Characters[i].Initialize(this, i, grid.PlayerColor(i));
                 Characters[i].Teleport(grid.CellToWorld(Spawns[i]));
+                participantAppearanceIndices[i] = i;
+                participantAppearances[i] = ResolveAppearanceProfile(i, i);
+            }
+            if (appearanceCatalog == null)
+            {
+                Debug.LogWarning("MatchCoordinator 尚未绑定 DefaultAppearanceCatalog.asset，已回退至角色预制体默认装扮（可能缺少“无配饰”及头像配饰叠层）。请在 Unity 菜单执行 EachOneCoin/Setup/Apply All 4 Tasks Assets (1+4+2+3) 完成装配。", this);
             }
             grid.Refresh(Model.Grid);
             coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
@@ -201,6 +228,10 @@ namespace EachOneCoin.Gameplay
                     participantNames[i] = NpcController.PersonalityName(npcs.PersonalityCode(i));
                     Characters[i].SetDisplayName(participantNames[i]);
                 }
+                ApplySinglePlayerAppearances();
+                CurrentViewSlot = 0;
+                RefreshOverheadHealthBarVisibility();
+                SyncOverheadHealthBars(true);
             }
             if (IsNetworkMovementTest)
             {
@@ -209,8 +240,12 @@ namespace EachOneCoin.Gameplay
                 if (!Mirror.NetworkServer.active)
                     foreach (var root in gameObject.scene.GetRootGameObjects())
                         foreach (var obstacle in root.GetComponentsInChildren<ObstacleBehaviour>(true)) obstacle.SetRunning(false);
+                ApplyNetworkInitialAppearances(network);
                 NetworkController = gameObject.AddComponent<EachOneCoin.Networking.NetworkMatchController>();
                 NetworkController.Initialize(this, network, localInput);
+                CurrentViewSlot = network.LocalSlot;
+                RefreshOverheadHealthBarVisibility();
+                SyncOverheadHealthBars(true);
                 return;
             }
             if (System.Environment.GetEnvironmentVariable("EACHONECOIN_MOVEMENT_TELEMETRY") == "1" ||
@@ -223,9 +258,200 @@ namespace EachOneCoin.Gameplay
 
         public void SetViewTarget(int slot)
         {
+            CurrentViewSlot = slot;
             if (Characters == null) return;
             for (int i = 0; i < Characters.Length; i++)
                 foreach (var camera in Characters[i].GetComponentsInChildren<Camera>(true)) camera.gameObject.SetActive(i == slot);
+            RefreshOverheadHealthBarVisibility();
+        }
+
+        private void LateUpdate()
+        {
+            if (Model == null || Characters == null) return;
+            SyncOverheadHealthBars(false);
+        }
+
+        private int ResolveHiddenHealthBarSlot()
+        {
+            return hideHealthBarOnViewTarget ? CurrentViewSlot : -1;
+        }
+
+        private void RefreshOverheadHealthBarVisibility()
+        {
+            if (Characters == null) return;
+            int hiddenSlot = ResolveHiddenHealthBarSlot();
+            for (int i = 0; i < Characters.Length; i++)
+            {
+                if (Characters[i] != null) Characters[i].SetOverheadHealthBarVisible(i != hiddenSlot);
+            }
+        }
+
+        private void SyncOverheadHealthBars(bool force)
+        {
+            if (Model == null || Characters == null) return;
+            int initialMax = InitialHealth;
+            bool useNetworkReplica = IsNetworkMovementTest && !Mirror.NetworkServer.active;
+            bool replicaReady = useNetworkReplica && NetworkController != null && NetworkController.HasCombatState;
+            int count = Mathf.Min(Characters.Length, Model.Participants.Count);
+            for (int i = 0; i < count; i++)
+            {
+                if (Characters[i] == null) continue;
+                int health;
+                int maxHealth;
+                if (useNetworkReplica)
+                {
+                    if (replicaReady)
+                    {
+                        health = NetworkController.HealthAt(i);
+                        maxHealth = NetworkController.MaxHealthAt(i);
+                    }
+                    else
+                    {
+                        health = initialMax;
+                        maxHealth = initialMax;
+                    }
+                }
+                else
+                {
+                    var participant = Model.Participants[i];
+                    health = participant.Health;
+                    maxHealth = participant.MaxHealth;
+                }
+
+                if (!force &&
+                    lastOverheadHealth[i] == health &&
+                    lastOverheadMaxHealth[i] == maxHealth &&
+                    lastOverheadInitialMaxHealth[i] == initialMax)
+                {
+                    continue;
+                }
+
+                lastOverheadHealth[i] = health;
+                lastOverheadMaxHealth[i] = maxHealth;
+                lastOverheadInitialMaxHealth[i] = initialMax;
+                Characters[i].SetOverheadHealth(health, maxHealth, initialMax, force);
+            }
+        }
+
+        public int GetParticipantAppearanceIndex(int slot)
+        {
+            if (slot < 0 || slot >= participantAppearanceIndices.Length) return 0;
+            return participantAppearanceIndices[slot];
+        }
+
+        public CharacterAppearanceProfile GetParticipantAppearance(int slot)
+        {
+            if (slot < 0 || slot >= participantAppearances.Length) return null;
+            if (participantAppearances[slot] != null) return participantAppearances[slot];
+            return ResolveAppearanceProfile(participantAppearanceIndices[slot], slot);
+        }
+
+        public string GetParticipantAppearanceId(int slot)
+        {
+            var profile = GetParticipantAppearance(slot);
+            if (profile != null && !string.IsNullOrEmpty(profile.AppearanceId)) return profile.AppearanceId;
+            int index = GetParticipantAppearanceIndex(slot);
+            if (appearanceCatalog != null)
+            {
+                string catalogId = appearanceCatalog.GetId(index);
+                if (!string.IsNullOrEmpty(catalogId)) return catalogId;
+            }
+            return "slot_" + index;
+        }
+
+        public void ApplyParticipantAppearance(int slot, int appearanceIndex)
+        {
+            if (slot < 0 || slot >= participantAppearanceIndices.Length) return;
+            int count = AppearanceCatalogCount;
+            byte requested = appearanceIndex >= 0 && appearanceIndex <= byte.MaxValue
+                ? (byte)appearanceIndex
+                : CosmeticAssignmentPolicy.UnspecifiedIndex;
+            byte sanitized = CosmeticAssignmentPolicy.SanitizeIndex(requested, count, slot);
+            var profile = ResolveAppearanceProfile(sanitized, slot);
+            participantAppearanceIndices[slot] = sanitized;
+            participantAppearances[slot] = profile;
+            if (Characters != null && slot < Characters.Length && Characters[slot] != null)
+            {
+                Characters[slot].ApplyAppearance(profile, sanitized);
+            }
+            ParticipantAppearanceChanged?.Invoke(slot);
+        }
+
+        private void ApplySinglePlayerAppearances()
+        {
+            int count = AppearanceCatalogCount;
+            string savedId = CosmeticPreferenceStore.LoadSelectedAppearanceId();
+            int localIndex = ResolveAppearanceIndexForId(savedId, 0);
+            var humanRequested = new byte[]
+            {
+                (byte)Mathf.Clamp(localIndex, 0, byte.MaxValue),
+                CosmeticAssignmentPolicy.UnspecifiedIndex,
+                CosmeticAssignmentPolicy.UnspecifiedIndex,
+                CosmeticAssignmentPolicy.UnspecifiedIndex
+            };
+            var resolved = new byte[4];
+            CosmeticAssignmentPolicy.ResolveMatchAppearances(count, 1, 15, humanRequested, resolved, true);
+            for (int i = 0; i < resolved.Length; i++)
+            {
+                ApplyParticipantAppearance(i, resolved[i]);
+            }
+        }
+
+        private void ApplyNetworkInitialAppearances(EachOneCoin.Networking.LanNetworkManager network)
+        {
+            if (network == null || !network.HasSnapshot || Characters == null) return;
+            var snapshot = network.Snapshot;
+            int catalogCount = AppearanceCatalogCount;
+            int count = Mathf.Min(Characters.Length, participantAppearanceIndices.Length);
+            for (int i = 0; i < count; i++)
+            {
+                byte snapAppearance = snapshot.AppearanceAt(i);
+                if (snapAppearance < catalogCount)
+                {
+                    ApplyParticipantAppearance(i, snapAppearance);
+                }
+            }
+        }
+
+        private int ResolveAppearanceIndexForId(string appearanceId, int fallbackIndex)
+        {
+            if (appearanceCatalog != null && appearanceCatalog.Count > 0)
+            {
+                return appearanceCatalog.ResolveIndexOrDefault(appearanceId, fallbackIndex);
+            }
+            var template = Characters != null && Characters.Length > 0 && Characters[0] != null ? Characters[0] : playerTemplate;
+            int count = AppearanceCatalogCount;
+            if (template != null && !string.IsNullOrWhiteSpace(appearanceId))
+            {
+                string trimmed = appearanceId.Trim();
+                int fallbackCount = template.FallbackAppearanceCount;
+                for (int i = 0; i < fallbackCount; i++)
+                {
+                    var profile = template.GetFallbackProfile(i);
+                    if (profile != null && string.Equals(profile.AppearanceId, trimmed, System.StringComparison.Ordinal))
+                    {
+                        return i;
+                    }
+                }
+            }
+            return count > 0 && fallbackIndex >= 0 && fallbackIndex < count ? fallbackIndex : 0;
+        }
+
+        private CharacterAppearanceProfile ResolveAppearanceProfile(int appearanceIndex, int fallbackSlot)
+        {
+            if (appearanceCatalog != null && appearanceCatalog.Count > 0)
+            {
+                var fromCatalog = appearanceCatalog.GetProfile(appearanceIndex);
+                if (fromCatalog != null) return fromCatalog;
+            }
+            var template = Characters != null && Characters.Length > 0 && Characters[0] != null ? Characters[0] : playerTemplate;
+            if (template != null)
+            {
+                var fallback = template.GetFallbackProfile(appearanceIndex);
+                if (fallback != null) return fallback;
+                return template.GetFallbackProfile(fallbackSlot);
+            }
+            return null;
         }
 
         private void Update()

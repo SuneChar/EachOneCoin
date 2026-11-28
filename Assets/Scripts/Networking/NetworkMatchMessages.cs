@@ -10,7 +10,7 @@ namespace EachOneCoin.Networking
 
     public static class MatchRulesProtocol
     {
-        public const ushort Version = 1;
+        public const ushort Version = 2;
         public const int MaximumCoinsToWin = 10000;
         public const float MaximumDurationSeconds = 86400f;
 
@@ -27,9 +27,16 @@ namespace EachOneCoin.Networking
                 acknowledgement.coinsToWin == rules.coinsToWin && acknowledgement.durationSeconds == rules.durationSeconds;
         }
     }
+    public struct SelectAppearanceRequest : NetworkMessage { public byte appearanceIndex; }
     public struct ReturnRoomRequest : NetworkMessage { }
     public struct ReturnRoomState : NetworkMessage { public byte returnedMask; }
-    public struct MovementBegin : NetworkMessage { public byte occupied; public bool fillNpcs; }
+    public struct MovementBegin : NetworkMessage
+    {
+        public byte occupied;
+        public bool fillNpcs;
+        public byte appearance0, appearance1, appearance2, appearance3;
+        public byte AppearanceAt(int slot) => slot == 0 ? appearance0 : slot == 1 ? appearance1 : slot == 2 ? appearance2 : appearance3;
+    }
     public struct MovementInput : NetworkMessage { public Vector2 direction; public bool sprint; }
     public struct MovementSnapshot : NetworkMessage
     {

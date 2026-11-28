@@ -27,6 +27,7 @@ namespace EachOneCoin.Networking
         private bool hasCombatState, aiming, aimUsesGamepad;
         private Vector3 aimDirection = Vector3.forward;
         private float nextCombatState;
+        public bool HasCombatState => NetworkServer.active || hasCombatState;
         public int HealthAt(int id) => NetworkServer.active ? match.Model.Participants[id].Health : replicaCombat[id].health;
         public int MaxHealthAt(int id) => NetworkServer.active ? match.Model.Participants[id].MaxHealth : replicaCombat[id].maxHealth;
         public float StaminaAt(int id) => NetworkServer.active ? match.StaminaAt(id).Current : replicaCombat[id].stamina;
@@ -71,12 +72,24 @@ namespace EachOneCoin.Networking
         private bool hasCoinSnapshot;
         private bool coinResyncPending;
         private readonly int[] replicaScores = new int[RoomState.Capacity];
+        private readonly byte[] appearanceIndices = { 0, 1, 2, 3 };
         private uint mineStatusSequence, lastMineStatusSequence;
         private bool hasMineStatus;
         private float nextMineStatus;
+        public int AppearanceCatalogCount => match != null ? match.AppearanceCatalogCount : RoomState.DefaultAppearanceCount;
+        public int AppearanceIndexAt(int slot) => slot >= 0 && slot < RoomState.Capacity ? appearanceIndices[slot] : 0;
         public int ScoreAt(int slot) => NetworkServer.active ? match.Model.Participants[slot].Coins : hasMatchState ? replicaMatchState.ScoreAt(slot) : replicaScores[slot];
         public int FinishOrderAt(int slot) => NetworkServer.active ? match.Model.Participants[slot].FinishOrder : hasMatchState ? replicaMatchState.OrderAt(slot) : 0;
         public bool IsHuman(int slot) => slot >= 0 && slot < RoomState.Capacity && (network.MatchOccupied & (1 << slot)) != 0;
+
+        public void SetAuthoritativeAppearances(byte a0, byte a1, byte a2, byte a3)
+        {
+            int catalogCount = AppearanceCatalogCount;
+            appearanceIndices[0] = CosmeticAssignmentPolicy.SanitizeIndex(a0, catalogCount, 0);
+            appearanceIndices[1] = CosmeticAssignmentPolicy.SanitizeIndex(a1, catalogCount, 1);
+            appearanceIndices[2] = CosmeticAssignmentPolicy.SanitizeIndex(a2, catalogCount, 2);
+            appearanceIndices[3] = CosmeticAssignmentPolicy.SanitizeIndex(a3, catalogCount, 3);
+        }
 
         public void Initialize(MatchCoordinator coordinator, LanNetworkManager manager, LocalPlayerInput input)
         {
@@ -126,8 +139,11 @@ namespace EachOneCoin.Networking
             match.Rules.ConfigureParticipants(visible);
             if (NetworkServer.active) match.Npcs.AssignPersonalities((byte)(visible & ~humans));
             match.Rules.StartMatch();
+            int catalogCount = AppearanceCatalogCount;
             for (int i = 0; i < RoomState.Capacity; i++)
             {
+                appearanceIndices[i] = CosmeticAssignmentPolicy.SanitizeIndex(appearanceIndices[i], catalogCount, i);
+                match.ApplyParticipantAppearance(i, appearanceIndices[i]);
                 bool human = (humans & (1 << i)) != 0;
                 byte personality = NetworkServer.active ? match.Npcs.PersonalityCode(i) : hasCombatState ? replicaCombat[i].npcPersonality : (byte)0;
                 match.Characters[i].SetDisplayName(human ? "玩家" + (i + 1) : NpcController.PersonalityName(personality));

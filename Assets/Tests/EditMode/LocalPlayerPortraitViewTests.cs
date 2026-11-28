@@ -18,6 +18,7 @@ namespace EachOneCoin.Tests
 
         private Type viewType;
         private Type appearanceType;
+        private Type layerType;
         private Type providerInterfaceType;
         private Type defaultProviderType;
         private Type imageType;
@@ -39,18 +40,27 @@ namespace EachOneCoin.Tests
         private PropertyInfo imageSpriteProp;
         private PropertyInfo imageColorProp;
         private PropertyInfo imageEnabledProp;
+        private PropertyInfo imagePreserveAspectProp;
 
         private FieldInfo appearanceBasePortraitField;
         private FieldInfo appearanceTintColorField;
         private FieldInfo appearanceFrameSpriteField;
         private FieldInfo appearanceOverlaySpritesField;
+        private FieldInfo appearanceOverlayLayersField;
         private FieldInfo appearanceCosmeticIdField;
+
+        private FieldInfo layerSpriteField;
+        private FieldInfo layerCenterField;
+        private FieldInfo layerSizeField;
+        private FieldInfo layerRotationField;
+        private FieldInfo layerUseFactionTintField;
 
         [SetUp]
         public void SetUp()
         {
             viewType = Type.GetType("EachOneCoin.Gameplay.LocalPlayerPortraitView, Assembly-CSharp", true);
             appearanceType = Type.GetType("EachOneCoin.Gameplay.AvatarAppearanceData, Assembly-CSharp", true);
+            layerType = Type.GetType("EachOneCoin.Gameplay.PortraitOverlayLayer, Assembly-CSharp", true);
             providerInterfaceType = Type.GetType("EachOneCoin.Gameplay.IAvatarAppearanceProvider, Assembly-CSharp", true);
             defaultProviderType = Type.GetType("EachOneCoin.Gameplay.DefaultAvatarAppearanceProvider, Assembly-CSharp", true);
             imageType = Type.GetType("UnityEngine.UI.Image, UnityEngine.UI", true);
@@ -75,12 +85,20 @@ namespace EachOneCoin.Tests
             imageSpriteProp = imageType.GetProperty("sprite", BindingFlags.Public | BindingFlags.Instance);
             imageColorProp = imageType.GetProperty("color", BindingFlags.Public | BindingFlags.Instance);
             imageEnabledProp = imageType.GetProperty("enabled", BindingFlags.Public | BindingFlags.Instance);
+            imagePreserveAspectProp = imageType.GetProperty("preserveAspect", BindingFlags.Public | BindingFlags.Instance);
 
             appearanceBasePortraitField = appearanceType.GetField("BasePortrait", BindingFlags.Public | BindingFlags.Instance);
             appearanceTintColorField = appearanceType.GetField("TintColor", BindingFlags.Public | BindingFlags.Instance);
             appearanceFrameSpriteField = appearanceType.GetField("FrameSprite", BindingFlags.Public | BindingFlags.Instance);
             appearanceOverlaySpritesField = appearanceType.GetField("OverlaySprites", BindingFlags.Public | BindingFlags.Instance);
+            appearanceOverlayLayersField = appearanceType.GetField("OverlayLayers", BindingFlags.Public | BindingFlags.Instance);
             appearanceCosmeticIdField = appearanceType.GetField("CosmeticId", BindingFlags.Public | BindingFlags.Instance);
+
+            layerSpriteField = layerType.GetField("Sprite", BindingFlags.Public | BindingFlags.Instance);
+            layerCenterField = layerType.GetField("NormalizedCenter", BindingFlags.Public | BindingFlags.Instance);
+            layerSizeField = layerType.GetField("NormalizedSize", BindingFlags.Public | BindingFlags.Instance);
+            layerRotationField = layerType.GetField("RotationZ", BindingFlags.Public | BindingFlags.Instance);
+            layerUseFactionTintField = layerType.GetField("UseFactionTint", BindingFlags.Public | BindingFlags.Instance);
 
             Assert.That(providerInterfaceType.IsAssignableFrom(defaultProviderType), Is.True);
 
@@ -382,6 +400,130 @@ namespace EachOneCoin.Tests
             var rootRect = (RectTransform)root.transform;
             Assert.That(rootRect.sizeDelta.x, Is.EqualTo(378f).Within(0.001f));
             Assert.That(rootRect.sizeDelta.y, Is.EqualTo(378f).Within(0.001f));
+        }
+
+        private object CreateOverlayLayer(
+            Sprite sprite,
+            Vector2 center,
+            Vector2 size,
+            float rotationZ = 0f,
+            bool useFactionTint = false)
+        {
+            object boxed = Activator.CreateInstance(layerType);
+            layerSpriteField.SetValue(boxed, sprite);
+            layerCenterField.SetValue(boxed, center);
+            layerSizeField.SetValue(boxed, size);
+            layerRotationField.SetValue(boxed, rotationZ);
+            layerUseFactionTintField.SetValue(boxed, useFactionTint);
+            return boxed;
+        }
+
+        private object CreateLayeredAppearance(Color tintColor, string cosmeticId, params object[] layers)
+        {
+            Array layerArray = Array.CreateInstance(layerType, layers != null ? layers.Length : 0);
+            if (layers != null)
+            {
+                for (int i = 0; i < layers.Length; i++) layerArray.SetValue(layers[i], i);
+            }
+
+            object boxed = CreateAppearance(tintColor, basePortrait: defaultPortraitSprite, cosmeticId: cosmeticId);
+            appearanceOverlayLayersField.SetValue(boxed, layerArray);
+            return boxed;
+        }
+
+        [Test]
+        public void SetParticipant_AppliesNormalizedOverlayLayersAnchorsRotationAndEmptyNone()
+        {
+            Sprite scarf = CreateRuntimeSprite("LayerScarf", Color.red);
+            Sprite cap = CreateRuntimeSprite("LayerCap", Color.blue);
+
+            object layered = CreateLayeredAppearance(
+                Color.cyan,
+                "slot_0",
+                CreateOverlayLayer(scarf, new Vector2(0.382f, 0.292f), new Vector2(1.389f, 0.463f), rotationZ: 0f),
+                CreateOverlayLayer(cap, new Vector2(0.552f, 0.856f), new Vector2(1.205f, 0.803f), rotationZ: -12f));
+
+            SetParticipant(0, layered, ParticipantStatus.Active);
+
+            var overlayContainer = (RectTransform)root.transform.Find("ContentRoot/CircleMaskRoot/OverlayContainer");
+            Assert.That(overlayContainer.anchorMin, Is.EqualTo(new Vector2(0.04f, 0f)));
+            Assert.That(overlayContainer.anchorMax, Is.EqualTo(new Vector2(0.96f, 0.96f)));
+            Assert.That(CurrentCosmeticId, Is.EqualTo("slot_0"));
+            Assert.That(ActiveOverlayCount, Is.EqualTo(2));
+
+            var overlay0Rect = (RectTransform)overlayContainer.Find("Overlay_0");
+            var overlay1Rect = (RectTransform)overlayContainer.Find("Overlay_1");
+            Assert.That(overlay0Rect.anchorMin.x, Is.EqualTo(0.382f - 1.389f * 0.5f).Within(0.001f));
+            Assert.That(overlay0Rect.anchorMax.y, Is.EqualTo(0.292f + 0.463f * 0.5f).Within(0.001f));
+            Assert.That(overlay1Rect.anchorMin.x, Is.EqualTo(0.552f - 1.205f * 0.5f).Within(0.001f));
+            Assert.That(overlay1Rect.anchorMax.y, Is.EqualTo(0.856f + 0.803f * 0.5f).Within(0.001f));
+            Assert.That(Mathf.DeltaAngle(overlay1Rect.localEulerAngles.z, -12f), Is.EqualTo(0f).Within(0.1f));
+            Assert.That((bool)imagePreserveAspectProp.GetValue(FindImageComponent("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_0")), Is.False);
+            Assert.That(GetImageSprite("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_0"), Is.SameAs(scarf));
+            Assert.That(GetImageSprite("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_1"), Is.SameAs(cap));
+
+            // Switching to "none" outfit with empty OverlayLayers hides all overlay children cleanly.
+            object noneOutfit = CreateLayeredAppearance(Color.cyan, "none");
+            SetParticipant(0, noneOutfit, ParticipantStatus.Active);
+
+            Assert.That(CurrentCosmeticId, Is.EqualTo("none"));
+            Assert.That(ActiveOverlayCount, Is.EqualTo(0));
+            Assert.That(overlay0Rect.gameObject.activeSelf, Is.False);
+            Assert.That(overlay1Rect.gameObject.activeSelf, Is.False);
+        }
+
+        [Test]
+        public void SetParticipant_StatusDimAppliesToOverlayLayersAndRespectsUseFactionTint()
+        {
+            Sprite plainAccessory = CreateRuntimeSprite("PlainAccessory", Color.white);
+            Sprite tintedAccessory = CreateRuntimeSprite("TintedAccessory", Color.white);
+            Color factionColor = new Color(0.94f, 0.27f, 0.28f, 1f);
+
+            object appearance = CreateLayeredAppearance(
+                factionColor,
+                "slot_tinted",
+                CreateOverlayLayer(plainAccessory, new Vector2(0.5f, 0.7f), new Vector2(1f, 0.5f), useFactionTint: false),
+                CreateOverlayLayer(tintedAccessory, new Vector2(0.5f, 0.3f), new Vector2(1f, 0.5f), useFactionTint: true));
+
+            SetParticipant(0, appearance, ParticipantStatus.Active);
+            Color activePlain = GetImageColor("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_0");
+            Color activeTinted = GetImageColor("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_1");
+            Assert.That(activePlain, Is.EqualTo(Color.white));
+            Assert.That(activeTinted.r, Is.EqualTo(factionColor.r).Within(0.01f));
+            Assert.That(activeTinted.g, Is.EqualTo(factionColor.g).Within(0.01f));
+
+            SetParticipant(0, appearance, ParticipantStatus.Respawning);
+            Color respawningPlain = GetImageColor("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_0");
+            Color respawningTinted = GetImageColor("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_1");
+            Assert.That(respawningPlain.a, Is.LessThan(1f));
+            Assert.That(respawningTinted.r, Is.LessThan(activeTinted.r));
+
+            SetParticipant(0, appearance, ParticipantStatus.Lost);
+            Color lostPlain = GetImageColor("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_0");
+            Color lostTinted = GetImageColor("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_1");
+            Assert.That(lostPlain.r, Is.LessThan(respawningPlain.r));
+            Assert.That(lostTinted.r, Is.EqualTo(lostTinted.g).Within(0.02f));
+        }
+
+        [Test]
+        public void SetParticipant_SwitchingSlotUpdatesOverlaysAndClearsPendingHitFlash()
+        {
+            Sprite cap = CreateRuntimeSprite("Cap", Color.blue);
+            Sprite headset = CreateRuntimeSprite("Headset", Color.cyan);
+
+            object slot0 = CreateLayeredAppearance(Color.red, "slot_0", CreateOverlayLayer(cap, new Vector2(0.5f, 0.8f), new Vector2(1.1f, 0.7f)));
+            object slot2 = CreateLayeredAppearance(Color.green, "slot_2", CreateOverlayLayer(headset, new Vector2(0.5f, 0.65f), new Vector2(1.1f, 0.7f)));
+
+            SetParticipant(0, slot0, ParticipantStatus.Lost);
+            TriggerHitFlash();
+            Assert.That(IsHitFlashing, Is.True);
+
+            SetParticipant(2, slot2, ParticipantStatus.Active);
+            Assert.That(CurrentSlotId, Is.EqualTo(2));
+            Assert.That(CurrentCosmeticId, Is.EqualTo("slot_2"));
+            Assert.That(CurrentStatus, Is.EqualTo(ParticipantStatus.Active));
+            Assert.That(IsHitFlashing, Is.False);
+            Assert.That(GetImageSprite("ContentRoot/CircleMaskRoot/OverlayContainer/Overlay_0"), Is.SameAs(headset));
         }
     }
 }

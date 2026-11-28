@@ -55,6 +55,16 @@ MonoBehaviour:
   stripHeight: 154
   horizontalPadding: 4
   slotSpacing: 6
+  verticalStripWidth: 180
+  verticalRowHeight: 70
+  verticalAvatarSize: 60
+  verticalHealthBarHeight: 12
+  verticalSlotSpacing: 6
+  verticalPadding: 4
+  verticalMetricWidth: 68
+  verticalAvatarMetricGap: 8
+  verticalMetricCrownGap: 6
+  verticalCrownSize: {x: 32, y: 25}
   avatarBackdropColor: {r: 0.118, g: 0.149, b: 0.204, a: 0.95}
   localFrameHighlightColor: {r: 1, g: 0.98, b: 0.88, a: 1}
   coinTextColor: {r: 1, g: 0.969, b: 0.878, a: 1}

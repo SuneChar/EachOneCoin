@@ -83,34 +83,55 @@ namespace EachOneCoin.Tests
             Assert.That(icons.Length, Is.EqualTo(5));
             var row = root.transform.Find("Prompt Row");
             Assert.That(row, Is.Not.Null);
-            Assert.That(row.childCount, Is.EqualTo(10));
+            Assert.That(row.childCount, Is.EqualTo(12));
             var refresh = type.GetMethod("Refresh");
             var imageType = Type.GetType("UnityEngine.UI.RawImage, UnityEngine.UI", true);
             object Texture(object image) => imageType.GetProperty("texture").GetValue(image);
             object Field(string name) => type.GetField(name, flags).GetValue(view);
             string Label(string name) => (string)Field(name).GetType().GetProperty("text").GetValue(Field(name));
 
+            Assert.That(Field("minimapIcon"), Is.Not.Null);
+            Assert.That(Field("minimapLabel"), Is.Not.Null);
+            Assert.That(Field("keyboardM"), Is.Not.Null);
+            Assert.That(Field("xboxView"), Is.Not.Null);
+
             refresh.Invoke(view, new object[] { true, false, false, true });
             Assert.That(Label("movementLabel"), Is.EqualTo("选择"));
             Assert.That(Label("actionLabel"), Is.EqualTo("确认"));
             Assert.That(Texture(icons.GetValue(0)), Is.SameAs(Field("mouseMove")));
             Assert.That(((Component)Field("backIcon")).gameObject.activeSelf, Is.True);
+            Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.False);
+            Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.False);
+
             refresh.Invoke(view, new object[] { true, false, true, false });
             Assert.That(Label("movementLabel"), Is.EqualTo("移动"));
             Assert.That(Label("actionLabel"), Is.EqualTo("暂停"));
             Assert.That(Texture(icons.GetValue(0)), Is.SameAs(Field("keyboardW")));
             Assert.That(Enumerable.Range(0, icons.Length).All(i => ((Component)icons.GetValue(i)).gameObject.activeSelf), Is.True);
             Assert.That(((Component)Field("backIcon")).gameObject.activeSelf, Is.False);
+            Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.True);
+            Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.True);
+            Assert.That(Texture(Field("minimapIcon")), Is.SameAs(Field("keyboardM")));
+            Assert.That(Label("minimapLabel"), Is.EqualTo("小地图"));
+
             refresh.Invoke(view, new object[] { true, true, true, true });
             Assert.That(Texture(icons.GetValue(0)), Is.SameAs(Field("xboxStick")));
             Assert.That(Texture(Field("actionIcon")), Is.SameAs(Field("xboxMenu")));
             Assert.That(Enumerable.Range(1, icons.Length - 1).All(i => !((Component)icons.GetValue(i)).gameObject.activeSelf), Is.True);
+            Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.True);
+            Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.True);
+            Assert.That(Texture(Field("minimapIcon")), Is.SameAs(Field("xboxView")));
+            Assert.That(Label("minimapLabel"), Is.EqualTo("小地图"));
+
             refresh.Invoke(view, new object[] { false, false, false, false });
             Assert.That(root.activeSelf, Is.False);
+
             refresh.Invoke(view, new object[] { true, true, false, false });
             Assert.That(root.activeSelf, Is.True);
             Assert.That(Texture(Field("actionIcon")), Is.SameAs(Field("xboxA")));
-            Assert.That(row.childCount, Is.EqualTo(10));
+            Assert.That(((Component)Field("minimapIcon")).gameObject.activeSelf, Is.False);
+            Assert.That(((Component)Field("minimapLabel")).gameObject.activeSelf, Is.False);
+            Assert.That(row.childCount, Is.EqualTo(12));
             Assert.That(root.transform.childCount, Is.EqualTo(1));
         }
 

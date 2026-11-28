@@ -73,5 +73,45 @@ namespace EachOneCoin.Tests
             Assert.That(Call("Add", 44), Is.EqualTo(1));
             Assert.That(Call("TokenAt", 1), Is.Not.EqualTo(token));
         }
+
+        [Test]
+        public void Appearance_PersistsAcrossReserveAndReclaim_AllowsDuplicatesAndNone_AndResetsOnRelease()
+        {
+            Assert.That(Call("AppearanceAt", 0), Is.EqualTo((byte)0));
+            Assert.That(Call("AppearanceAt", 1), Is.EqualTo((byte)1));
+            Assert.That(Call("AppearanceAt", 2), Is.EqualTo((byte)255));
+
+            Assert.That(Call("AddWithAppearance", 22, (byte)4), Is.EqualTo(2));
+            Assert.That(Call("AppearanceAt", 2), Is.EqualTo((byte)4));
+            Assert.That(Call("AddWithAppearance", 33, (byte)4), Is.EqualTo(3));
+            Assert.That(Call("AppearanceAt", 3), Is.EqualTo((byte)4));
+
+            Assert.That(Call("SetAppearance", 11, (byte)3), Is.EqualTo(true));
+            Assert.That(Call("AppearanceAt", 1), Is.EqualTo((byte)3));
+            Assert.That(Call("SetAppearance", 11, (byte)5), Is.EqualTo(false));
+            Assert.That(Call("AppearanceAt", 1), Is.EqualTo((byte)3));
+
+            Assert.That(Call("Reserve", 11, 10d), Is.EqualTo(true));
+            Assert.That(Call("AppearanceAt", 1), Is.EqualTo((byte)3));
+            Assert.That(Call("Reclaim", 44, (string)Call("TokenAt", 1), 12d), Is.EqualTo(1));
+            Assert.That(Call("AppearanceAt", 1), Is.EqualTo((byte)3));
+
+            Call("Release", 1);
+            Assert.That(Call("AppearanceAt", 1), Is.EqualTo((byte)255));
+        }
+
+        [Test]
+        public void AddWithAppearance_SanitizesOutOfRangeAndHonorsDuplicatePolicyWhenDisabled()
+        {
+            Assert.That(Call("AddWithAppearance", 22, (byte)99), Is.EqualTo(2));
+            Assert.That(Call("AppearanceAt", 2), Is.EqualTo((byte)2));
+
+            Call("ConfigureAppearances", 5, false);
+            Assert.That(Call("AddWithAppearance", 33, (byte)0), Is.EqualTo(3));
+            Assert.That(Call("AppearanceAt", 3), Is.EqualTo((byte)3));
+            Assert.That(Call("SetAppearance", 33, (byte)0), Is.EqualTo(false));
+            Assert.That(Call("SetAppearance", 33, (byte)4), Is.EqualTo(true));
+            Assert.That(Call("AppearanceAt", 3), Is.EqualTo((byte)4));
+        }
     }
 }

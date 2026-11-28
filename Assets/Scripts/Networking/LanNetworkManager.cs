@@ -1,3 +1,4 @@
+using EachOneCoin.Gameplay;
 using Mirror;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -10,6 +11,8 @@ namespace EachOneCoin.Networking
         public byte occupiedMask;
         public byte ownSlot;
         public bool fillNpcs;
+        public byte appearance0, appearance1, appearance2, appearance3;
+        public byte AppearanceAt(int slot) => slot == 0 ? appearance0 : slot == 1 ? appearance1 : slot == 2 ? appearance2 : appearance3;
     }
 
     public struct RoomSnapshotRequest : NetworkMessage { }
@@ -20,6 +23,12 @@ namespace EachOneCoin.Networking
         public RoomSnapshot Snapshot { get; private set; }
         public bool HasSnapshot { get; private set; }
         public string Status { get; private set; } = "未连接";
+        public int AppearanceCatalogCount { get; private set; } = RoomState.DefaultAppearanceCount;
+        public byte LocalPreferredAppearanceIndex { get; private set; }
+        private readonly byte[] matchAppearances = { 0, 1, 2, 3 };
+        private readonly byte[] humanRequestedAppearances = new byte[RoomState.Capacity];
+        public byte MatchAppearanceAt(int slot) => slot >= 0 && slot < RoomState.Capacity ? matchAppearances[slot] : (byte)0;
+        public byte ServerAppearance(int slot) => room != null ? room.AppearanceAt(slot) : RoomState.UnspecifiedAppearance;
         private bool leaving;
         private float connectDeadline;
         private float oldConnectionRetryDeadline;
@@ -95,7 +104,27 @@ namespace EachOneCoin.Networking
             StartClient(); StartCoroutine(CheckTimeout());
         }
 
-        public byte AuthenticateConnection(NetworkConnectionToClient conn, bool resume, string token, out byte slot, out string issued, out bool resumed)
+        public void ConfigureAppearanceCatalog(int catalogCount)
+        {
+            if (catalogCount <= 0) return;
+            AppearanceCatalogCount = catalogCount;
+            if (room != null) room.ConfigureAppearances(AppearanceCatalogCount, true);
+        }
+
+        public void SetLocalPreferredAppearance(byte index)
+        {
+            LocalPreferredAppearanceIndex = index < AppearanceCatalogCount ? index : (byte)0;
+            if (NetworkClient.isConnected && !MatchStarted) RequestSelectAppearance(LocalPreferredAppearanceIndex);
+        }
+
+        public void RequestSelectAppearance(byte index)
+        {
+            if (!NetworkClient.isConnected || MatchStarted) return;
+            byte sanitized = index < AppearanceCatalogCount ? index : (byte)0;
+            NetworkClient.Send(new SelectAppearanceRequest { appearanceIndex = sanitized });
+        }
+
+        public byte AuthenticateConnection(NetworkConnectionToClient conn, bool resume, string token, byte requestedAppearance, out byte slot, out string issued, out bool resumed)
         {
             slot = 0; issued = null; resumed = false;
             if (room == null || leaving) return 1;
@@ -111,15 +140,25 @@ namespace EachOneCoin.Networking
             else
             {
                 if (MatchStarted) return 1;
-                id = room.Add(conn.connectionId);
+                id = room.AddWithAppearance(conn.connectionId, requestedAppearance);
                 if (id < 0) return 1;
             }
             slot = (byte)id; issued = room.TokenAt(id); return 0;
         }
 
-        public void OnAuthenticationAccepted(byte slot, string token, bool resumed, byte occupied, bool fillNpcs, float secondsRemaining)
+        public void OnAuthenticationAccepted(byte slot, string token, bool resumed, byte occupied, bool fillNpcs, float secondsRemaining,
+            byte appearance0, byte appearance1, byte appearance2, byte appearance3)
         {
-            Snapshot = new RoomSnapshot { ownSlot = slot, occupiedMask = occupied, fillNpcs = fillNpcs };
+            Snapshot = new RoomSnapshot
+            {
+                ownSlot = slot,
+                occupiedMask = occupied,
+                fillNpcs = fillNpcs,
+                appearance0 = appearance0,
+                appearance1 = appearance1,
+                appearance2 = appearance2,
+                appearance3 = appearance3
+            };
             HasSnapshot = true; ClientResuming = resumed;
             oldConnectionRetryDeadline = 0f;
             clientResumeDeadline = Time.realtimeSinceStartup + (resumed && !float.IsNaN(secondsRemaining) && !float.IsInfinity(secondsRemaining) ? Mathf.Clamp(secondsRemaining, 0f, (float)RoomState.ReconnectSeconds) : 0f);
@@ -228,7 +267,13 @@ namespace EachOneCoin.Networking
         public override void OnStartServer()
         {
             room = new RoomState();
+            room.ConfigureAppearances(AppearanceCatalogCount, true);
             StartCoroutine(ExpireReservations());
+            NetworkServer.RegisterHandler<SelectAppearanceRequest>((conn, msg) =>
+            {
+                if (MatchStarted || room == null || ServerSlot(conn.connectionId) < 0) return;
+                if (room.SetAppearance(conn.connectionId, msg.appearanceIndex)) BroadcastSnapshot();
+            });
             NetworkServer.RegisterHandler<VoluntaryLeaveRequest>((conn, _) =>
             {
                 int slot = ServerSlot(conn.connectionId);
@@ -300,6 +345,11 @@ namespace EachOneCoin.Networking
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller == null || !controller.HasAuthoritativeRules) { RejectLocalRules(); return; }
                 MatchOccupied = message.occupied; MatchFillNpcs = message.fillNpcs; MovementRunning = true;
+                matchAppearances[0] = message.appearance0;
+                matchAppearances[1] = message.appearance1;
+                matchAppearances[2] = message.appearance2;
+                matchAppearances[3] = message.appearance3;
+                controller.SetAuthoritativeAppearances(message.appearance0, message.appearance1, message.appearance2, message.appearance3);
                 controller.Begin(message.occupied, message.fillNpcs);
             });
             NetworkClient.RegisterHandler<MatchStateMessage>(message =>
@@ -579,7 +629,15 @@ namespace EachOneCoin.Networking
                 if (!reconnecting.Contains(conn.connectionId)) return;
                 var controller = FindObjectOfType<NetworkMatchController>();
                 if (controller == null || controller.CurrentMatchStatus == MatchStatus.Finished) { RejectResume(conn); return; }
-                conn.Send(new MovementBegin { occupied = MatchOccupied, fillNpcs = MatchFillNpcs });
+                conn.Send(new MovementBegin
+                {
+                    occupied = MatchOccupied,
+                    fillNpcs = MatchFillNpcs,
+                    appearance0 = matchAppearances[0],
+                    appearance1 = matchAppearances[1],
+                    appearance2 = matchAppearances[2],
+                    appearance3 = matchAppearances[3]
+                });
                 controller.SendGridSnapshot(conn);
                 controller.SendCoinSnapshot(conn);
                 controller.SendCombatState(conn);
@@ -608,14 +666,28 @@ namespace EachOneCoin.Networking
             var controller = FindObjectOfType<NetworkMatchController>();
             if (controller != null)
             {
+                byte visibleMask = MatchFillNpcs ? (byte)15 : mask;
+                int catalogCount = controller.AppearanceCatalogCount;
+                for (int i = 0; i < RoomState.Capacity; i++) humanRequestedAppearances[i] = room.AppearanceAt(i);
+                CosmeticAssignmentPolicy.ResolveMatchAppearances(catalogCount, mask, visibleMask, humanRequestedAppearances, matchAppearances, room.AllowDuplicateAppearances);
+                controller.SetAuthoritativeAppearances(matchAppearances[0], matchAppearances[1], matchAppearances[2], matchAppearances[3]);
                 controller.Begin(mask, MatchFillNpcs);
+                var beginMessage = new MovementBegin
+                {
+                    occupied = mask,
+                    fillNpcs = MatchFillNpcs,
+                    appearance0 = matchAppearances[0],
+                    appearance1 = matchAppearances[1],
+                    appearance2 = matchAppearances[2],
+                    appearance3 = matchAppearances[3]
+                };
                 foreach (var conn in new List<NetworkConnectionToClient>(NetworkServer.connections.Values))
                 {
                     if (!conn.isAuthenticated || !movementReady.Contains(conn.connectionId)) continue;
                     int slot = ServerSlot(conn.connectionId);
                     if (reconnecting.Contains(conn.connectionId) && room.IsReclaimExpired(slot, Time.realtimeSinceStartupAsDouble)) { RejectResume(conn); continue; }
                     controller.SendGridSnapshot(conn); controller.SendCoinSnapshot(conn); controller.SendCombatState(conn); controller.SendMatchState(conn);
-                    conn.Send(new MovementBegin { occupied = mask, fillNpcs = MatchFillNpcs });
+                    conn.Send(beginMessage);
                     controller.SendObstacleState(conn);
                     if (reconnecting.Remove(conn.connectionId)) { room.CommitReclaim(slot); conn.Send(new ResumeComplete()); }
                 }
@@ -703,7 +775,16 @@ namespace EachOneCoin.Networking
             if (slot < 0) return;
             byte mask = 0;
             for (int i = 0; i < RoomState.Capacity; i++) if (room.IsOccupied(i)) mask |= (byte)(1 << i);
-            conn.Send(new RoomSnapshot { occupiedMask = mask, ownSlot = (byte)slot, fillNpcs = room.FillEmptyWithNpcs });
+            conn.Send(new RoomSnapshot
+            {
+                occupiedMask = mask,
+                ownSlot = (byte)slot,
+                fillNpcs = room.FillEmptyWithNpcs,
+                appearance0 = room.AppearanceAt(0),
+                appearance1 = room.AppearanceAt(1),
+                appearance2 = room.AppearanceAt(2),
+                appearance3 = room.AppearanceAt(3)
+            });
         }
     }
 }

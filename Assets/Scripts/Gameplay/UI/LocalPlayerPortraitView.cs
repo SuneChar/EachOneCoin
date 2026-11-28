@@ -34,7 +34,6 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(0f)] private float hitShakeAmplitude = 4.5f;
 
         private readonly List<Image> overlayImagePool = new List<Image>();
-        private readonly List<Sprite> appliedOverlaySprites = new List<Sprite>();
 
         private HudProceduralIcons icons;
         private IAvatarAppearanceProvider appearanceProvider;
@@ -86,6 +85,7 @@ namespace EachOneCoin.Gameplay
                 statusOverlayImage != null && frameImage != null)
             {
                 if (icons == null) icons = new HudProceduralIcons();
+                AvatarPortraitVisualRenderer.AlignOverlayContainer(overlayContainer);
                 initialized = true;
                 SetAppearanceProvider(provider);
                 ApplyStatusAndFlashVisuals();
@@ -143,7 +143,7 @@ namespace EachOneCoin.Gameplay
             var overlayObj = new GameObject("OverlayContainer", typeof(RectTransform));
             overlayContainer = (RectTransform)overlayObj.transform;
             overlayContainer.SetParent(circleMaskRect, false);
-            SetStretch(overlayContainer, portraitAnchorMin, portraitAnchorMax, Vector2.zero, Vector2.zero);
+            AvatarPortraitVisualRenderer.AlignOverlayContainer(overlayContainer);
 
             var statusObj = new GameObject("StatusOverlay", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             var statusRect = (RectTransform)statusObj.transform;
@@ -212,12 +212,18 @@ namespace EachOneCoin.Gameplay
             }
 
             bool slotChanged = !hasParticipant || CurrentSlotId != slotId;
+            bool switchingParticipant = hasParticipant && CurrentSlotId != slotId;
             bool statusChanged = !hasParticipant || CurrentStatus != status;
             bool appearanceChanged = !hasParticipant || HasAppearanceChanged(appearance);
 
             if (!slotChanged && !statusChanged && !appearanceChanged)
             {
                 return;
+            }
+
+            if (switchingParticipant)
+            {
+                hitFlashRemaining = 0f;
             }
 
             hasParticipant = true;
@@ -299,29 +305,7 @@ namespace EachOneCoin.Gameplay
 
         private bool HasAppearanceChanged(AvatarAppearanceData incoming)
         {
-            if (currentAppearance.BasePortrait != incoming.BasePortrait) return true;
-            if (currentAppearance.FrameSprite != incoming.FrameSprite) return true;
-            if (!ColorsEqual(currentAppearance.TintColor, incoming.TintColor)) return true;
-            if (!string.Equals(currentAppearance.CosmeticId, incoming.CosmeticId, StringComparison.Ordinal)) return true;
-            return !AreOverlaysUnchanged(incoming.OverlaySprites);
-        }
-
-        private bool AreOverlaysUnchanged(Sprite[] incoming)
-        {
-            int incomingNonNull = 0;
-            if (incoming != null)
-            {
-                for (int i = 0; i < incoming.Length; i++)
-                {
-                    Sprite sprite = incoming[i];
-                    if (sprite == null) continue;
-                    if (incomingNonNull >= appliedOverlaySprites.Count) return false;
-                    if (appliedOverlaySprites[incomingNonNull] != sprite) return false;
-                    incomingNonNull++;
-                }
-            }
-
-            return incomingNonNull == appliedOverlaySprites.Count;
+            return !AvatarAppearanceData.ContentEquals(currentAppearance, incoming);
         }
 
         private void ApplyAppearance(AvatarAppearanceData appearance)
@@ -331,81 +315,26 @@ namespace EachOneCoin.Gameplay
 
             if (basePortraitImage != null)
             {
-                Sprite portraitSprite = appearance.BasePortrait != null
-                    ? appearance.BasePortrait
-                    : (icons != null ? icons.GetDefaultPortraitSprite() : null);
+                Sprite portraitSprite = AvatarPortraitVisualRenderer.ResolveBasePortrait(appearance, icons);
                 basePortraitImage.sprite = portraitSprite;
                 basePortraitImage.enabled = portraitSprite != null;
             }
 
             if (frameImage != null)
             {
-                Sprite frameSprite = appearance.FrameSprite != null
-                    ? appearance.FrameSprite
-                    : (icons != null ? icons.GetCircleFrameSprite() : null);
+                Sprite frameSprite = AvatarPortraitVisualRenderer.ResolveFrameSprite(appearance, icons);
                 frameImage.sprite = frameSprite;
                 frameImage.enabled = frameSprite != null;
             }
 
-            appliedOverlaySprites.Clear();
-            int activeCount = 0;
-            Sprite[] overlays = appearance.OverlaySprites;
-            if (overlays != null)
-            {
-                for (int i = 0; i < overlays.Length; i++)
-                {
-                    Sprite overlaySprite = overlays[i];
-                    if (overlaySprite == null) continue;
-
-                    Image overlayImg = GetOrCreateOverlayImage(activeCount);
-                    overlayImg.sprite = overlaySprite;
-                    overlayImg.enabled = true;
-                    if (!overlayImg.gameObject.activeSelf)
-                    {
-                        overlayImg.gameObject.SetActive(true);
-                    }
-
-                    appliedOverlaySprites.Add(overlaySprite);
-                    activeCount++;
-                }
-            }
-
-            for (int i = activeCount; i < overlayImagePool.Count; i++)
-            {
-                Image unused = overlayImagePool[i];
-                if (unused == null) continue;
-                unused.sprite = null;
-                unused.enabled = false;
-                if (unused.gameObject.activeSelf)
-                {
-                    unused.gameObject.SetActive(false);
-                }
-            }
-
-            ActiveOverlayCount = activeCount;
-        }
-
-        private Image GetOrCreateOverlayImage(int index)
-        {
-            while (overlayImagePool.Count <= index)
-            {
-                var go = new GameObject(
-                    "Overlay_" + overlayImagePool.Count,
-                    typeof(RectTransform),
-                    typeof(CanvasRenderer),
-                    typeof(Image));
-                var rt = (RectTransform)go.transform;
-                rt.SetParent(overlayContainer, false);
-                SetStretch(rt, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-
-                var img = go.GetComponent<Image>();
-                img.preserveAspect = true;
-                img.raycastTarget = false;
-                img.color = Color.white;
-                overlayImagePool.Add(img);
-            }
-
-            return overlayImagePool[index];
+            Color factionTint = ResolveTintColor(currentAppearance.TintColor);
+            ActiveOverlayCount = AvatarPortraitVisualRenderer.ApplyOverlays(
+                overlayContainer,
+                overlayImagePool,
+                appearance,
+                Color.white,
+                factionTint,
+                true);
         }
 
         private void ApplyStatusAndFlashVisuals()
@@ -470,14 +399,12 @@ namespace EachOneCoin.Gameplay
                 basePortraitImage.color = basePortraitColor;
             }
 
-            for (int i = 0; i < ActiveOverlayCount && i < overlayImagePool.Count; i++)
-            {
-                Image overlayImg = overlayImagePool[i];
-                if (overlayImg != null)
-                {
-                    overlayImg.color = overlayColor;
-                }
-            }
+            AvatarPortraitVisualRenderer.ApplyOverlayColors(
+                overlayImagePool,
+                ActiveOverlayCount,
+                currentAppearance,
+                overlayColor,
+                basePortraitColor);
 
             float flashRatio = 0f;
             if (hitFlashRemaining > 0f)
@@ -572,14 +499,6 @@ namespace EachOneCoin.Gameplay
                 return fallbackTintColor.a > 0.001f ? fallbackTintColor : Color.white;
             }
             return tint;
-        }
-
-        private static bool ColorsEqual(Color a, Color b)
-        {
-            return Mathf.Approximately(a.r, b.r) &&
-                   Mathf.Approximately(a.g, b.g) &&
-                   Mathf.Approximately(a.b, b.b) &&
-                   Mathf.Approximately(a.a, b.a);
         }
 
         private static void SetStretch(RectTransform rt, Vector2 anchorMin, Vector2 anchorMax, Vector2 offsetMin, Vector2 offsetMax)

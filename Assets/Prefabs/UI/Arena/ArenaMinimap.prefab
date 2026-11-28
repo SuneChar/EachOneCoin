@@ -127,6 +127,7 @@ MonoBehaviour:
   playerMarkerTemplate: {fileID: 6821211972023601352, guid: 7a8044d5aa20b504e992fffff44ee598,
     type: 3}
   mapSize: 368
+  compactMapSize: 210
   bottomRightOffset: {x: -12, y: 12}
   showTerritory: 1
   showSpawns: 1

@@ -21,7 +21,12 @@ public class BootMenu : MonoBehaviour
     private bool settingsOpen;
     private bool quitOpen;
     private bool lanRoomOpen;
+    private bool wardrobeOpen;
     [SerializeField] private LanRoomUI lanRoom;
+    [SerializeField] private WardrobeUI wardrobe;
+    [SerializeField] private Button wardrobeButton;
+
+    public bool UsingGamepad => usingGamepad;
 
     private void Awake()
     {
@@ -30,30 +35,39 @@ public class BootMenu : MonoBehaviour
         inputDevice = GetComponent<InputDeviceTracker>();
         usingGamepad = inputDevice.UsingGamepad;
         inputDevice.DeviceChanged += OnDeviceChanged;
-        lanRoom.Initialize(this);
+        if (wardrobe == null || wardrobeButton == null)
+            Debug.LogWarning("[BootMenu] 换装系统组件或入口按钮尚未绑定，请在 Unity 菜单执行 EachOneCoin/Setup/Apply All 4 Tasks Assets (1+4+2+3) 完成资产装配。");
+        if (wardrobeButton != null) wardrobeButton.onClick.AddListener(OpenWardrobe);
+        if (wardrobe != null) wardrobe.Initialize(this, lanRoom);
+        if (lanRoom != null) lanRoom.Initialize(this);
         Refresh();
     }
 
-    private void OnDestroy() { if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged; }
+    private void OnDestroy()
+    {
+        if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged;
+        if (wardrobeButton != null) wardrobeButton.onClick.RemoveListener(OpenWardrobe);
+    }
+
     private void OnDeviceChanged(bool gamepad) { usingGamepad = gamepad; Refresh(); }
     private void Refresh()
     {
-        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen);
+        startPanel.SetActive(!settingsOpen && !quitOpen && !lanRoomOpen && !wardrobeOpen);
         settingsPanel.SetActive(settingsOpen);
         quitConfirmPanel.SetActive(quitOpen);
         if (EventSystem.current != null)
         {
             EventSystem.current.sendNavigationEvents = usingGamepad && Application.isFocused;
             EventSystem.current.SetSelectedGameObject(null);
-            var active = lanRoomOpen ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
+            var active = (lanRoomOpen || wardrobeOpen) ? null : quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel;
             GamepadNavigation.Configure(active);
             GamepadNavigation.EnsureFocus(active, usingGamepad);
         }
-        if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, false, settingsOpen || quitOpen);
+        if (promptImages != null) promptImages.Refresh(showPrompts, usingGamepad, false, settingsOpen || quitOpen || wardrobeOpen);
     }
     private void LateUpdate()
     {
-        if (lanRoomOpen) return;
+        if (lanRoomOpen || wardrobeOpen) return;
         GamepadNavigation.EnsureFocus(quitOpen ? quitConfirmPanel : settingsOpen ? settingsPanel : startPanel, usingGamepad);
     }
     private void Update()
@@ -61,16 +75,29 @@ public class BootMenu : MonoBehaviour
         if (!Application.isFocused) return;
         if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.JoystickButton7) || Input.GetKeyDown(KeyCode.JoystickButton1))
         {
-            if (lanRoomOpen) lanRoom.Close();
+            if (wardrobeOpen) { if (wardrobe != null) wardrobe.Close(); }
+            else if (lanRoomOpen) { if (lanRoom != null) lanRoom.Close(); }
             else if (quitOpen) CancelQuit();
             else if (settingsOpen) CloseSettings();
         }
     }
     public void SetLanRoomOpen(bool open) { lanRoomOpen = open; Refresh(); }
+    public void OpenWardrobe()
+    {
+        if (settingsOpen || quitOpen || lanRoomOpen || wardrobe == null) return;
+        wardrobe.Open(false);
+    }
+    public void SetWardrobeOpen(bool open)
+    {
+        wardrobeOpen = open;
+        Refresh();
+        if (!open && !lanRoomOpen && !settingsOpen && !quitOpen && usingGamepad && wardrobeButton != null && EventSystem.current != null)
+            EventSystem.current.SetSelectedGameObject(wardrobeButton.gameObject);
+    }
     public void StartGame() { SceneManager.LoadScene("ArenaScene"); }
     public void OpenSettings()
     {
-        if (quitOpen) return;
+        if (quitOpen || wardrobeOpen || lanRoomOpen) return;
         settingsOpen = true;
         volumeSlider.SetValueWithoutNotify(gameAudio.Volume);
         UpdateVolumeLabel(gameAudio.Volume);
@@ -86,7 +113,7 @@ public class BootMenu : MonoBehaviour
         PlayerPrefs.Save();
         Refresh();
     }
-    public void OpenQuitConfirmation() { if (!settingsOpen) { quitOpen = true; Refresh(); } }
+    public void OpenQuitConfirmation() { if (!settingsOpen && !wardrobeOpen && !lanRoomOpen) { quitOpen = true; Refresh(); } }
     public void CancelQuit()
     {
         quitOpen = false;

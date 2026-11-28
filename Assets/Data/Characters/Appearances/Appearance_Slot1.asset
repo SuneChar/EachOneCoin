@@ -14,3 +14,13 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   appearanceId: slot_1
   accessorySlotName: Slot 1
+  displayName: "\u906E\u9633\u5E3D"
+  previewIcon: {fileID: 21300000, guid: a3db2bf2d529d5f468025eaa39719cf3, type: 3}
+  portraitBaseOverride: {fileID: 0}
+  portraitFrameOverride: {fileID: 0}
+  portraitOverlayLayers:
+  - Sprite: {fileID: 21300000, guid: a3db2bf2d529d5f468025eaa39719cf3, type: 3}
+    NormalizedCenter: {x: 0.537, y: 0.704}
+    NormalizedSize: {x: 1.071, y: 0.51}
+    RotationZ: 0
+    UseFactionTint: 0

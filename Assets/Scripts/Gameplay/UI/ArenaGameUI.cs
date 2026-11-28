@@ -11,6 +11,7 @@ namespace EachOneCoin.Gameplay
     public sealed class ArenaGameUI : MonoBehaviour
     {
         private static readonly string[] FallbackMineNames = { "南侧", "北侧", "西侧", "东侧" };
+        private const float MinimapStripGap = 8f;
 
         [SerializeField] private MatchCoordinator match;
         [SerializeField] private GameAudio gameAudio;
@@ -35,8 +36,11 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Range(0f, 1f)] private float hitFrameOpacity = 0.65f;
         [SerializeField, Min(1f)] private float hitFrameThickness = 24f;
         [SerializeField] private Image[] hitFrame = new Image[4];
+        [SerializeField] private bool enableGamepadMinimapToggle = true;
         private readonly ParticipantHudSnapshot[] snapshotBuffer = new ParticipantHudSnapshot[4];
         private IAvatarAppearanceProvider avatarProvider = new DefaultAvatarAppearanceProvider();
+        private MatchAvatarAppearanceProvider ownedMatchAvatarProvider;
+        private bool externalAvatarProviderAssigned;
         private Func<int, string> participantNameResolver;
         private Func<int, Color> participantColorResolver;
         private Func<int, string> mineNameResolver;
@@ -51,6 +55,8 @@ namespace EachOneCoin.Gameplay
         private readonly bool[] lastParticipating = new bool[4];
         private readonly ParticipantStatus[] lastStatus = new ParticipantStatus[4];
         private int lastLocalSlot = -1;
+        private int lastObservedHealthSlot = -1;
+        private int lastPortraitSlot = -1;
         private int lastNetworkSyncedHealth = -1;
         private int lastNetworkSyncedMaxHealth = -1;
         private bool firstRefresh = true;
@@ -64,6 +70,7 @@ namespace EachOneCoin.Gameplay
         private bool legacyStaminaHidden;
         private bool legacyHudTextsHidden;
         private bool minimapInitialized;
+        private MinimapSizeMode minimapSizeMode = MinimapSizeMode.Expanded;
         private bool localPortraitInitialized;
         private bool participantStripInitialized;
         private bool localCoinCounterInitialized;
@@ -100,16 +107,111 @@ namespace EachOneCoin.Gameplay
             }
         }
         public bool NetworkMenuOpen => networkMenuOpen || settingsOpen;
+        public MinimapSizeMode CurrentMinimapSizeMode => minimapSizeMode;
+
+        public void SetMinimapSizeMode(MinimapSizeMode mode)
+        {
+            minimapSizeMode = mode;
+            SyncMinimapAndParticipantStripLayout();
+        }
+
+        public bool ToggleMinimapSize()
+        {
+            if (IsMinimapToggleBlocked())
+            {
+                return false;
+            }
+
+            if (minimapView == null && participantStripView == null)
+            {
+                return false;
+            }
+
+            MinimapSizeMode nextMode = minimapSizeMode == MinimapSizeMode.Expanded
+                ? MinimapSizeMode.Compact
+                : MinimapSizeMode.Expanded;
+            SetMinimapSizeMode(nextMode);
+            return true;
+        }
+
+        private bool IsMinimapToggleBlocked()
+        {
+            if (resultShown || settingsOpen || networkMenuOpen)
+            {
+                return true;
+            }
+
+            return match != null && match.IsPaused;
+        }
+
+        private void HandleMinimapToggleInput()
+        {
+            if (!Application.isFocused || IsMinimapToggleBlocked())
+            {
+                return;
+            }
+
+            bool pressed = Input.GetKeyDown(KeyCode.M)
+                || (enableGamepadMinimapToggle && Input.GetKeyDown(KeyCode.JoystickButton6));
+            if (pressed)
+            {
+                ToggleMinimapSize();
+            }
+        }
+
+        private void SyncMinimapAndParticipantStripLayout()
+        {
+            if (minimapView != null)
+            {
+                minimapView.SetSizeMode(minimapSizeMode);
+            }
+
+            if (participantStripView != null)
+            {
+                float currentMapSize = minimapView != null
+                    ? minimapView.MapSize
+                    : (minimapSizeMode == MinimapSizeMode.Compact ? 210f : 368f);
+                float expandedMapSize = minimapView != null ? minimapView.ExpandedMapSize : 368f;
+                Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
+                Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + currentMapSize + MinimapStripGap);
+                ParticipantHudLayoutMode stripMode = minimapSizeMode == MinimapSizeMode.Compact
+                    ? ParticipantHudLayoutMode.VerticalRightAligned
+                    : ParticipantHudLayoutMode.Horizontal;
+                participantStripView.SetLayoutMode(stripMode, expandedMapSize, stripOffset);
+            }
+        }
 
         public void SetAvatarAppearanceProvider(IAvatarAppearanceProvider provider)
         {
+            externalAvatarProviderAssigned = provider != null;
             IAvatarAppearanceProvider next = provider ?? new DefaultAvatarAppearanceProvider();
+            if (ownedMatchAvatarProvider != null && !ReferenceEquals(ownedMatchAvatarProvider, next))
+            {
+                ownedMatchAvatarProvider.Dispose();
+                ownedMatchAvatarProvider = null;
+            }
+            BindAvatarAppearanceProvider(next);
+        }
+
+        private void BindAvatarAppearanceProvider(IAvatarAppearanceProvider next)
+        {
             if (ReferenceEquals(avatarProvider, next)) return;
             if (avatarProvider != null) avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
             avatarProvider = next;
             if (isActiveAndEnabled && avatarProvider != null) avatarProvider.AppearanceChanged += OnAvatarAppearanceChanged;
             if (localPortraitView != null) localPortraitView.SetAppearanceProvider(avatarProvider);
             avatarAppearanceDirty = true;
+        }
+
+        private void EnsureMatchAvatarProvider()
+        {
+            if (externalAvatarProviderAssigned || ownedMatchAvatarProvider != null || match == null)
+            {
+                return;
+            }
+
+            ownedMatchAvatarProvider = new MatchAvatarAppearanceProvider(match);
+            BindAvatarAppearanceProvider(ownedMatchAvatarProvider);
         }
 
         private void Awake()
@@ -168,6 +270,11 @@ namespace EachOneCoin.Gameplay
         {
             if (inputDevice != null) inputDevice.DeviceChanged -= OnDeviceChanged;
             if (avatarProvider != null) avatarProvider.AppearanceChanged -= OnAvatarAppearanceChanged;
+            if (ownedMatchAvatarProvider != null)
+            {
+                ownedMatchAvatarProvider.Dispose();
+                ownedMatchAvatarProvider = null;
+            }
             if (statusBannerIcons != null)
             {
                 statusBannerIcons.Dispose();
@@ -291,6 +398,7 @@ namespace EachOneCoin.Gameplay
             }
             var model = match.Model;
             EnsureHudViews(false);
+            HandleMinimapToggleInput();
             if (minimapView != null && (!match.IsPaused || firstRefresh))
             {
                 byte visibleMask = 0;
@@ -411,11 +519,50 @@ namespace EachOneCoin.Gameplay
                 }
 
                 lastLocalSlot = 0;
+                lastPortraitSlot = 0;
                 avatarAppearanceDirty = false;
             }
 
             UpdateMineScheduleAndWarning(0, firstRefresh);
             firstRefresh = false;
+        }
+
+        private static int ResolveObservedHudSlot(int localSlot, bool isSpectating, int spectateSlot)
+        {
+            if (isSpectating && spectateSlot >= 0 && spectateSlot < 4)
+            {
+                return spectateSlot;
+            }
+
+            return localSlot;
+        }
+
+        private void SyncObservedNetworkHealth(
+            int observedSlot,
+            int observedHealth,
+            int observedMaxHealth,
+            ParticipantStatus observedStatus,
+            bool isServer,
+            bool clientResuming)
+        {
+            bool waitingFirstReplica = !isServer && !networkHealthSynced && observedMaxHealth == 0 && observedStatus == ParticipantStatus.Active;
+            if (waitingFirstReplica)
+            {
+                return;
+            }
+
+            bool isInitialSync = !networkHealthSynced;
+            bool slotSwitched = lastObservedHealthSlot != observedSlot;
+            bool healthChanged = isInitialSync || slotSwitched || lastNetworkSyncedHealth != observedHealth || lastNetworkSyncedMaxHealth != observedMaxHealth;
+            lastObservedHealthSlot = observedSlot;
+            lastNetworkSyncedHealth = observedHealth;
+            lastNetworkSyncedMaxHealth = observedMaxHealth;
+            networkHealthSynced = true;
+            if (healthChanged && healthHeartsView != null)
+            {
+                bool animate = !isInitialSync && !slotSwitched && !clientResuming;
+                healthHeartsView.SetHealth(observedHealth, observedMaxHealth, animate);
+            }
         }
 
         private void UpdateNetworkUI()
@@ -432,6 +579,9 @@ namespace EachOneCoin.Gameplay
 
             int slot = network.LocalSlot;
             EnsureHudViews(true);
+            HandleMinimapToggleInput();
+
+            int focusSlot = ResolveObservedHudSlot(slot, state.IsSpectating, state.SpectateSlot);
 
             int time = Mathf.CeilToInt(state.RemainingTime);
             if (time != lastTime)
@@ -442,8 +592,6 @@ namespace EachOneCoin.Gameplay
             if (clockAndMineView != null) clockAndMineView.SetTime(time);
 
             int localCoins = state.ScoreAt(slot);
-            int localHealth = state.HealthAt(slot);
-            int localMaxHealth = state.MaxHealthAt(slot);
             ParticipantStatus localStatus = state.StatusAt(slot);
             if (!firstRefresh && !Mirror.NetworkServer.active && !network.ClientResuming && localCoins > lastCoins[slot] && gameAudio != null)
                 gameAudio.PlayCoin();
@@ -451,17 +599,17 @@ namespace EachOneCoin.Gameplay
             if (localCoinCounterView != null)
                 localCoinCounterView.SetCoins(localCoins, match.Model.CoinsToWin, !firstRefresh && !network.ClientResuming);
 
-            bool waitingFirstReplica = !Mirror.NetworkServer.active && !networkHealthSynced && localMaxHealth == 0 && localStatus == ParticipantStatus.Active;
-            if (!waitingFirstReplica)
-            {
-                bool isInitialSync = !networkHealthSynced;
-                bool healthChanged = isInitialSync || lastNetworkSyncedHealth != localHealth || lastNetworkSyncedMaxHealth != localMaxHealth;
-                lastNetworkSyncedHealth = localHealth;
-                lastNetworkSyncedMaxHealth = localMaxHealth;
-                networkHealthSynced = true;
-                if (healthChanged && healthHeartsView != null)
-                    healthHeartsView.SetHealth(localHealth, localMaxHealth, !isInitialSync && !network.ClientResuming);
-            }
+            int observedHealth = state.HealthAt(focusSlot);
+            int observedMaxHealth = state.MaxHealthAt(focusSlot);
+            ParticipantStatus observedStatus = state.StatusAt(focusSlot);
+            bool waitingFirstReplica = !Mirror.NetworkServer.active && !networkHealthSynced && observedMaxHealth == 0 && observedStatus == ParticipantStatus.Active;
+            SyncObservedNetworkHealth(
+                focusSlot,
+                observedHealth,
+                observedMaxHealth,
+                observedStatus,
+                Mirror.NetworkServer.active,
+                network.ClientResuming);
 
             if (minimapView != null)
             {
@@ -469,7 +617,6 @@ namespace EachOneCoin.Gameplay
                 for (int i = 0; i < 4; i++)
                     if (state.IsSlotActive(i) && state.StatusAt(i) == ParticipantStatus.Active)
                         visibleMask |= (byte)(1 << i);
-                int focusSlot = state.IsSpectating && state.SpectateSlot >= 0 ? state.SpectateSlot : slot;
                 minimapView.Refresh(focusSlot, visibleMask, Time.unscaledTime);
             }
 
@@ -498,7 +645,7 @@ namespace EachOneCoin.Gameplay
             }
 
             int initialMaxHealth = match.InitialHealth;
-            bool participantsChanged = firstRefresh || avatarAppearanceDirty || lastLocalSlot != slot;
+            bool participantsChanged = firstRefresh || avatarAppearanceDirty || lastLocalSlot != slot || lastPortraitSlot != focusSlot;
             for (int i = 0; i < snapshotBuffer.Length; i++)
             {
                 bool participating = state.IsParticipant(i);
@@ -555,9 +702,10 @@ namespace EachOneCoin.Gameplay
 
                 if (participantStripView != null) participantStripView.Refresh(snapshotBuffer);
                 if (localPortraitView != null)
-                    localPortraitView.SetParticipant(slot, snapshotBuffer[slot].Appearance, snapshotBuffer[slot].Status);
+                    localPortraitView.SetParticipant(focusSlot, snapshotBuffer[focusSlot].Appearance, snapshotBuffer[focusSlot].Status);
 
                 lastLocalSlot = slot;
+                lastPortraitSlot = focusSlot;
                 avatarAppearanceDirty = false;
             }
 
@@ -818,6 +966,7 @@ namespace EachOneCoin.Gameplay
             EnsureHealthHearts(initialHealth);
             EnsureArcStaminaBar();
             EnsureMinimap();
+            EnsureMatchAvatarProvider();
             EnsureLocalPortrait();
             EnsureParticipantStrip();
             EnsureLocalCoinCounter();
@@ -978,6 +1127,7 @@ namespace EachOneCoin.Gameplay
             if (minimapView != null && match != null && match.Model != null)
             {
                 minimapView.Initialize(match);
+                minimapView.SetSizeMode(minimapSizeMode);
                 minimapInitialized = true;
             }
         }
@@ -1003,9 +1153,9 @@ namespace EachOneCoin.Gameplay
         private void EnsureParticipantStrip()
         {
             if (participantStripInitialized && participantStripView != null) return;
-            float mapSize = minimapView != null ? minimapView.MapSize : 368f;
+            float mapSize = minimapView != null ? minimapView.ExpandedMapSize : 368f;
             Vector2 mapOffset = minimapView != null ? minimapView.BottomRightOffset : new Vector2(-12f, 12f);
-            Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + mapSize + 8f);
+            Vector2 stripOffset = new Vector2(mapOffset.x, mapOffset.y + mapSize + MinimapStripGap);
             if (participantStripView == null && hudPanel != null)
             {
                 var container = new GameObject("ParticipantHudStrip", typeof(RectTransform));
@@ -1017,6 +1167,7 @@ namespace EachOneCoin.Gameplay
             {
                 participantStripView.Initialize(4, mapSize, stripOffset, NameplateFont);
                 participantStripInitialized = true;
+                SyncMinimapAndParticipantStripLayout();
             }
         }
 

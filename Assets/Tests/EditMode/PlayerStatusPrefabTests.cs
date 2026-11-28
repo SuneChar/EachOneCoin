@@ -74,5 +74,60 @@ namespace EachOneCoin.Tests
             Assert.That(instance.transform.childCount, Is.EqualTo(4));
             Assert.That(view.GetType().GetProperty("Capacity").GetValue(view), Is.EqualTo(4));
         }
+
+        [Test]
+        public void Portrait_Prefab_AlignsOverlayContainerAndRendersNormalizedLayersAndNone()
+        {
+            var view = CreateView("LocalPlayerPortrait", "LocalPlayerPortraitView");
+            var type = view.GetType();
+            type.GetMethod("Initialize").Invoke(view, new object[] { null, null });
+
+            var overlayContainer = (RectTransform)instance.transform.Find("ContentRoot/CircleMaskRoot/OverlayContainer");
+            Assert.That(overlayContainer, Is.Not.Null);
+            Assert.That(overlayContainer.anchorMin, Is.EqualTo(new Vector2(0.04f, 0f)));
+            Assert.That(overlayContainer.anchorMax, Is.EqualTo(new Vector2(0.96f, 0.96f)));
+
+            var tex = new Texture2D(4, 4, TextureFormat.RGBA32, false);
+            var sprite = Sprite.Create(tex, new Rect(0f, 0f, 4f, 4f), new Vector2(0.5f, 0.5f), 100f);
+            try
+            {
+                var appearanceType = Type.GetType("EachOneCoin.Gameplay.AvatarAppearanceData, Assembly-CSharp", true);
+                var layerType = Type.GetType("EachOneCoin.Gameplay.PortraitOverlayLayer, Assembly-CSharp", true);
+                var setParticipant = type.GetMethod("SetParticipant", new[] { typeof(int), appearanceType, typeof(ParticipantStatus) });
+
+                object layer = Activator.CreateInstance(layerType);
+                layerType.GetField("Sprite").SetValue(layer, sprite);
+                layerType.GetField("NormalizedCenter").SetValue(layer, new Vector2(0.55f, 0.85f));
+                layerType.GetField("NormalizedSize").SetValue(layer, new Vector2(1.2f, 0.8f));
+                Array layers = Array.CreateInstance(layerType, 1);
+                layers.SetValue(layer, 0);
+
+                object layered = Activator.CreateInstance(appearanceType);
+                appearanceType.GetField("TintColor").SetValue(layered, Color.red);
+                appearanceType.GetField("CosmeticId").SetValue(layered, "slot_0");
+                appearanceType.GetField("OverlayLayers").SetValue(layered, layers);
+
+                setParticipant.Invoke(view, new object[] { 0, layered, ParticipantStatus.Active });
+                Assert.That(type.GetProperty("ActiveOverlayCount").GetValue(view), Is.EqualTo(1));
+                var overlay0 = (RectTransform)overlayContainer.Find("Overlay_0");
+                Assert.That(overlay0, Is.Not.Null);
+                Assert.That(overlay0.anchorMin.x, Is.EqualTo(0.55f - 0.6f).Within(0.001f));
+                Assert.That(overlay0.anchorMax.y, Is.EqualTo(0.85f + 0.4f).Within(0.001f));
+
+                object none = Activator.CreateInstance(appearanceType);
+                appearanceType.GetField("TintColor").SetValue(none, Color.red);
+                appearanceType.GetField("CosmeticId").SetValue(none, "none");
+                appearanceType.GetField("OverlayLayers").SetValue(none, Array.CreateInstance(layerType, 0));
+
+                setParticipant.Invoke(view, new object[] { 0, none, ParticipantStatus.Active });
+                Assert.That(type.GetProperty("ActiveOverlayCount").GetValue(view), Is.EqualTo(0));
+                Assert.That(overlay0.gameObject.activeSelf, Is.False);
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(sprite);
+                UnityEngine.Object.DestroyImmediate(tex);
+            }
+        }
     }
 }

@@ -8,13 +8,20 @@ using UnityEngine.UI;
 
 namespace EachOneCoin.Gameplay
 {
+    public enum ParticipantHudLayoutMode
+    {
+        Horizontal = 0,
+        VerticalRightAligned = 1
+    }
+
     public sealed class ParticipantHudStripView : MonoBehaviour
     {
         private const int DefaultCapacity = 4;
         private const int CachedCoinStringCount = 100;
         private const int CachedRankStringCount = 16;
         private const float ReferenceStripHeight = 154f;
-        private const float HealthBarFrameThickness = 1.5f;
+        private const float ReferenceHealthBarHeight = 12f;
+        private const float HealthBarFrameThickness = 2f;
         private const float HealthBarSegmentGap = 2f;
         private const float HealthBarOuterRimOffsetRatio = 0.004f;
 
@@ -30,6 +37,18 @@ namespace EachOneCoin.Gameplay
         [SerializeField, Min(80f)] private float stripHeight = 154f;
         [SerializeField, Min(0f)] private float horizontalPadding = 4f;
         [SerializeField, Min(0f)] private float slotSpacing = 6f;
+
+        [Header("Vertical Compact Layout")]
+        [SerializeField, Min(120f)] private float verticalStripWidth = 180f;
+        [SerializeField, Min(48f)] private float verticalRowHeight = 70f;
+        [SerializeField, Min(32f)] private float verticalAvatarSize = 60f;
+        [SerializeField, Min(6f)] private float verticalHealthBarHeight = 12f;
+        [SerializeField, Min(0f)] private float verticalSlotSpacing = 6f;
+        [SerializeField, Min(0f)] private float verticalPadding = 4f;
+        [SerializeField, Min(48f)] private float verticalMetricWidth = 68f;
+        [SerializeField, Min(0f)] private float verticalAvatarMetricGap = 8f;
+        [SerializeField, Min(0f)] private float verticalMetricCrownGap = 6f;
+        [SerializeField] private Vector2 verticalCrownSize = new Vector2(32f, 25f);
 
         [Header("Colors")]
         [SerializeField] private Color avatarBackdropColor = new Color(0.118f, 0.149f, 0.204f, 0.95f);
@@ -61,8 +80,9 @@ namespace EachOneCoin.Gameplay
 
             public RectTransform CrownRect;
             public Image CrownImage;
-            public float CrownBaseY;
+            public Vector2 CrownBasePosition;
 
+            public RectTransform TopMetricRect;
             public RectTransform CoinGroup;
             public Image CoinIconImage;
             public TMP_Text CoinText;
@@ -83,6 +103,12 @@ namespace EachOneCoin.Gameplay
             public readonly List<Image> HealthSegmentImages = new List<Image>();
             public readonly List<HeartVisualState> HealthSegmentStates = new List<HeartVisualState>();
 
+            public Vector2 HorizontalCrownBasePosition;
+            public Vector2 HorizontalCrownSize;
+            public Vector2 HorizontalMetricAnchoredPos;
+            public Vector2 HorizontalMetricSizeDelta;
+            public Vector2 HorizontalAvatarAnchoredPos;
+
             public bool HasAppliedState;
             public bool IsVisible;
             public bool IsLocal;
@@ -98,6 +124,8 @@ namespace EachOneCoin.Gameplay
             public Sprite LastBasePortrait;
             public Color LastTintColor;
             public Sprite LastFrameSprite;
+            public AvatarAppearanceData LastAppearance;
+            public bool HasAppliedAppearance;
             public string CosmeticId;
             public int ActiveOverlayCount;
             public int ActiveHeartCount;
@@ -106,6 +134,9 @@ namespace EachOneCoin.Gameplay
         }
 
         private RectTransform rootRect;
+        private Canvas cachedRootCanvas;
+        private float lastCanvasScaleFactor = -1f;
+        private Vector2 lastCanvasPixelSize = new Vector2(-1f, -1f);
         private HudProceduralIcons icons;
         private TMP_FontAsset cachedFont;
         private ParticipantSlot[] slots;
@@ -113,13 +144,63 @@ namespace EachOneCoin.Gameplay
         private float cachedSlotWidth;
         private float cachedAvatarSize;
         private bool initialized;
+        private bool hasRefreshed;
+        private int lastVisibleMask = -1;
         private float crownAnimTime;
 
         public Vector2 BottomRightOffset => bottomRightOffset;
         public float StripWidth => stripWidth;
         public float StripHeight => stripHeight;
+        public float VerticalStripWidth => verticalStripWidth;
+        public float CurrentStripWidth => LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned ? verticalStripWidth : stripWidth;
+        public float CurrentStripHeight => LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned ? ComputeVerticalStripHeight() : stripHeight;
+        public ParticipantHudLayoutMode LayoutMode { get; private set; } = ParticipantHudLayoutMode.Horizontal;
         public int Capacity => slots != null ? slots.Length : 0;
         public byte LastLeaderMask { get; private set; }
+
+        public void SetLayoutMode(ParticipantHudLayoutMode mode)
+        {
+            if (LayoutMode == mode)
+            {
+                return;
+            }
+
+            LayoutMode = mode;
+            if (!initialized)
+            {
+                return;
+            }
+
+            ConfigureRootRect();
+            LayoutSlots();
+        }
+
+        public void SetLayoutMode(ParticipantHudLayoutMode mode, float horizontalWidth, Vector2 anchorOffset)
+        {
+            bool modeChanged = LayoutMode != mode;
+            bool widthChanged = false;
+            if (mode == ParticipantHudLayoutMode.Horizontal && horizontalWidth > 0f)
+            {
+                float clampedWidth = Mathf.Max(64f, horizontalWidth);
+                widthChanged = Mathf.Abs(clampedWidth - stripWidth) > 0.01f;
+                stripWidth = clampedWidth;
+            }
+
+            bool offsetChanged = (anchorOffset - bottomRightOffset).sqrMagnitude > 0.0001f;
+            bottomRightOffset = anchorOffset;
+            LayoutMode = mode;
+
+            if (!initialized)
+            {
+                return;
+            }
+
+            if (modeChanged || widthChanged || offsetChanged)
+            {
+                ConfigureRootRect();
+                LayoutSlots();
+            }
+        }
 
         public void Initialize(int capacity, float width, Vector2 bottomRightOffset, TMP_FontAsset font = null)
         {
@@ -246,6 +327,7 @@ namespace EachOneCoin.Gameplay
                 {
                     HideSlot(slots[i]);
                 }
+                SyncVerticalLayoutIfVisibilityChanged();
                 return;
             }
 
@@ -288,6 +370,8 @@ namespace EachOneCoin.Gameplay
                     HideSlot(slots[i]);
                 }
             }
+
+            SyncVerticalLayoutIfVisibilityChanged();
         }
 
         public void Tick(float deltaTime)
@@ -296,6 +380,8 @@ namespace EachOneCoin.Gameplay
             {
                 return;
             }
+
+            SyncHealthBarsIfCanvasMetricsChanged();
 
             float speed = Mathf.Max(0.5f, crownBobSpeed);
             float period = (Mathf.PI * 2f) / speed;
@@ -315,7 +401,9 @@ namespace EachOneCoin.Gameplay
 
                 float phase = crownAnimTime * speed + i * 0.65f;
                 float wave = Mathf.Sin(phase);
-                slot.CrownRect.anchoredPosition = new Vector2(0f, slot.CrownBaseY + wave * crownBobAmplitude);
+                slot.CrownRect.anchoredPosition = new Vector2(
+                    slot.CrownBasePosition.x,
+                    slot.CrownBasePosition.y + wave * crownBobAmplitude);
                 float scale = 1f + wave * crownPulseScale;
                 slot.CrownRect.localScale = new Vector3(scale, scale, 1f);
             }
@@ -413,6 +501,19 @@ namespace EachOneCoin.Gameplay
             return slots[index].ActiveOverlayCount;
         }
 
+        private void OnRectTransformDimensionsChange()
+        {
+            SyncHealthBarsIfCanvasMetricsChanged();
+        }
+
+        private void OnTransformParentChanged()
+        {
+            cachedRootCanvas = null;
+            lastCanvasScaleFactor = -1f;
+            lastCanvasPixelSize = new Vector2(-1f, -1f);
+            SyncHealthBarsIfCanvasMetricsChanged();
+        }
+
         private void OnDestroy()
         {
             if (icons != null)
@@ -439,7 +540,82 @@ namespace EachOneCoin.Gameplay
             rootRect.anchorMax = new Vector2(1f, 0f);
             rootRect.pivot = new Vector2(1f, 0f);
             rootRect.anchoredPosition = bottomRightOffset;
-            rootRect.sizeDelta = new Vector2(stripWidth, stripHeight);
+            rootRect.sizeDelta = LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned
+                ? new Vector2(verticalStripWidth, ComputeVerticalStripHeight())
+                : new Vector2(stripWidth, stripHeight);
+        }
+
+        private int CountVisibleSlots()
+        {
+            if (slots == null)
+            {
+                return 0;
+            }
+
+            int count = 0;
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i] != null && slots[i].IsVisible)
+                {
+                    count++;
+                }
+            }
+
+            return count;
+        }
+
+        private int ComputeVisibleSlotMask()
+        {
+            if (slots == null)
+            {
+                return 0;
+            }
+
+            int mask = 0;
+            int limit = slots.Length < 31 ? slots.Length : 31;
+            for (int i = 0; i < limit; i++)
+            {
+                if (slots[i] != null && slots[i].IsVisible)
+                {
+                    mask |= (1 << i);
+                }
+            }
+
+            return mask;
+        }
+
+        private float ComputeVerticalStripHeight()
+        {
+            int visibleCount = CountVisibleSlots();
+            int rowCount = visibleCount > 0
+                ? visibleCount
+                : (hasRefreshed ? 0 : (slots != null ? slots.Length : DefaultCapacity));
+
+            if (rowCount <= 0)
+            {
+                return 0f;
+            }
+
+            return verticalPadding * 2f
+                + rowCount * verticalRowHeight
+                + Mathf.Max(0, rowCount - 1) * verticalSlotSpacing;
+        }
+
+        private void SyncVerticalLayoutIfVisibilityChanged()
+        {
+            hasRefreshed = true;
+            int currentVisibleMask = ComputeVisibleSlotMask();
+            if (currentVisibleMask == lastVisibleMask)
+            {
+                return;
+            }
+
+            lastVisibleMask = currentVisibleMask;
+            if (LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned)
+            {
+                ConfigureRootRect();
+                LayoutVerticalSlots();
+            }
         }
 
         private float ComputeSlotWidth(int capacity)
@@ -460,8 +636,135 @@ namespace EachOneCoin.Gameplay
         {
             float scaleY = stripHeight / ReferenceStripHeight;
             float barWidth = Mathf.Max(16f, Mathf.Min(slotWidth - 8f, avatarSize * 0.81f));
-            float barHeight = Mathf.Max(6f, 11f * scaleY);
+            float barHeight = Mathf.Max(6f, ReferenceHealthBarHeight * scaleY);
             return new Vector2(barWidth, barHeight);
+        }
+
+        private Vector2 ComputeVerticalHealthBarSize(float avatarSize)
+        {
+            float barWidth = Mathf.Max(16f, avatarSize * 0.81f);
+            float barHeight = Mathf.Max(6f, verticalHealthBarHeight);
+            return new Vector2(barWidth, barHeight);
+        }
+
+        private float ResolveCanvasScaleFactor(out Canvas rootCanvas)
+        {
+            if (cachedRootCanvas == null)
+            {
+                Canvas parentCanvas = GetComponentInParent<Canvas>();
+                cachedRootCanvas = parentCanvas != null ? parentCanvas.rootCanvas : null;
+            }
+
+            rootCanvas = cachedRootCanvas;
+            if (rootCanvas != null && rootCanvas.scaleFactor > 0.0001f)
+            {
+                return rootCanvas.scaleFactor;
+            }
+
+            return 1f;
+        }
+
+        private void RecordCanvasMetrics(float scaleFactor, Canvas rootCanvas)
+        {
+            lastCanvasScaleFactor = scaleFactor;
+            lastCanvasPixelSize = rootCanvas != null ? rootCanvas.pixelRect.size : Vector2.zero;
+        }
+
+        private void SyncHealthBarsIfCanvasMetricsChanged()
+        {
+            if (!initialized || slots == null || slots.Length == 0)
+            {
+                return;
+            }
+
+            float scaleFactor = ResolveCanvasScaleFactor(out Canvas rootCanvas);
+            Vector2 pixelSize = rootCanvas != null ? rootCanvas.pixelRect.size : Vector2.zero;
+            bool scaleChanged = Mathf.Abs(scaleFactor - lastCanvasScaleFactor) > 0.0005f;
+            bool sizeChanged = (pixelSize - lastCanvasPixelSize).sqrMagnitude > 0.25f;
+            if (!scaleChanged && !sizeChanged)
+            {
+                return;
+            }
+
+            RecordCanvasMetrics(scaleFactor, rootCanvas);
+
+            Vector2 desiredBarSize;
+            float desiredOffsetY;
+            if (LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned)
+            {
+                float rowHeight = Mathf.Max(48f, verticalRowHeight);
+                float avatarSize = Mathf.Clamp(verticalAvatarSize, 24f, rowHeight - 6f);
+                desiredBarSize = ComputeVerticalHealthBarSize(avatarSize);
+                desiredOffsetY = avatarSize * HealthBarOuterRimOffsetRatio;
+            }
+            else
+            {
+                float slotWidth = ComputeSlotWidth(slots.Length);
+                float avatarSize = ComputeAvatarSize(slotWidth);
+                desiredBarSize = ComputeHealthBarSize(slotWidth, avatarSize);
+                desiredOffsetY = avatarSize * HealthBarOuterRimOffsetRatio;
+            }
+
+            for (int i = 0; i < slots.Length; i++)
+            {
+                ParticipantSlot slot = slots[i];
+                if (slot == null || slot.HealthBarRect == null)
+                {
+                    continue;
+                }
+
+                ApplyPixelSnappedHealthBar(slot, desiredBarSize, desiredOffsetY, scaleFactor, rootCanvas);
+            }
+        }
+
+        private void ApplyPixelSnappedHealthBar(
+            ParticipantSlot slot,
+            Vector2 desiredBarSize,
+            float desiredOffsetY,
+            float scaleFactor,
+            Canvas rootCanvas)
+        {
+            RectTransform barRect = slot.HealthBarRect;
+            if (barRect == null)
+            {
+                return;
+            }
+
+            float safeScale = scaleFactor > 0.0001f ? scaleFactor : 1f;
+            int minSegments = slot.ActiveHeartCount > 0 ? slot.ActiveHeartCount : 3;
+            int borderPx = Mathf.Max(1, Mathf.RoundToInt(HealthBarFrameThickness * safeScale));
+            int gapPx = minSegments > 1 ? Mathf.Max(1, Mathf.RoundToInt(HealthBarSegmentGap * safeScale)) : 0;
+            int minWidthPx = borderPx * 2 + gapPx * Mathf.Max(0, minSegments - 1) + minSegments;
+            int barWidthPx = Mathf.Max(minWidthPx, Mathf.RoundToInt(desiredBarSize.x * safeScale));
+            int barHeightPx = Mathf.Max(borderPx * 2 + 2, Mathf.RoundToInt(desiredBarSize.y * safeScale));
+
+            float snappedWidth = barWidthPx / safeScale;
+            float snappedHeight = barHeightPx / safeScale;
+
+            barRect.anchorMin = new Vector2(0.5f, 0f);
+            barRect.anchorMax = new Vector2(0.5f, 0f);
+            barRect.pivot = new Vector2(0.5f, 0.5f);
+            barRect.sizeDelta = new Vector2(snappedWidth, snappedHeight);
+            barRect.anchoredPosition = new Vector2(0f, desiredOffsetY);
+
+            if (rootCanvas != null && rootCanvas.transform is RectTransform canvasRect)
+            {
+                Vector3 worldBottomLeft = barRect.TransformPoint(new Vector3(-snappedWidth * 0.5f, -snappedHeight * 0.5f, 0f));
+                Vector3 canvasBottomLeft = canvasRect.InverseTransformPoint(worldBottomLeft);
+                Rect cRect = canvasRect.rect;
+                float screenLeftPx = (canvasBottomLeft.x - cRect.xMin) * safeScale;
+                float screenBottomPx = (canvasBottomLeft.y - cRect.yMin) * safeScale;
+                float snappedLeftPx = Mathf.Round(screenLeftPx);
+                float snappedBottomPx = Mathf.Round(screenBottomPx);
+                float deltaCanvasX = (snappedLeftPx - screenLeftPx) / safeScale;
+                float deltaCanvasY = (snappedBottomPx - screenBottomPx) / safeScale;
+                barRect.anchoredPosition = new Vector2(deltaCanvasX, desiredOffsetY + deltaCanvasY);
+            }
+
+            if (slot.ActiveHeartCount > 0)
+            {
+                LayoutHealthSegments(slot, slot.ActiveHeartCount);
+            }
         }
 
         private void LayoutSlots()
@@ -471,14 +774,27 @@ namespace EachOneCoin.Gameplay
                 return;
             }
 
+            if (LayoutMode == ParticipantHudLayoutMode.VerticalRightAligned)
+            {
+                LayoutVerticalSlots();
+            }
+            else
+            {
+                LayoutHorizontalSlots();
+            }
+        }
+
+        private void LayoutHorizontalSlots()
+        {
             float newSlotWidth = ComputeSlotWidth(slots.Length);
             float newAvatarSize = ComputeAvatarSize(newSlotWidth);
-            bool sizeChanged = Mathf.Abs(newSlotWidth - cachedSlotWidth) > 0.01f
-                || Mathf.Abs(newAvatarSize - cachedAvatarSize) > 0.01f;
             cachedSlotWidth = newSlotWidth;
             cachedAvatarSize = newAvatarSize;
 
             Vector2 barSize = ComputeHealthBarSize(newSlotWidth, newAvatarSize);
+            float barOffsetY = newAvatarSize * HealthBarOuterRimOffsetRatio;
+            float scaleFactor = ResolveCanvasScaleFactor(out Canvas rootCanvas);
+            RecordCanvasMetrics(scaleFactor, rootCanvas);
 
             for (int i = 0; i < slots.Length; i++)
             {
@@ -495,21 +811,118 @@ namespace EachOneCoin.Gameplay
                 slot.Root.anchoredPosition = new Vector2(x, 0f);
                 slot.Root.sizeDelta = new Vector2(newSlotWidth, 0f);
 
+                if (slot.CrownRect != null)
+                {
+                    slot.CrownRect.anchorMin = new Vector2(0.5f, 1f);
+                    slot.CrownRect.anchorMax = new Vector2(0.5f, 1f);
+                    slot.CrownRect.pivot = new Vector2(0.5f, 0.5f);
+                    slot.CrownBasePosition = slot.HorizontalCrownBasePosition;
+                    slot.CrownRect.anchoredPosition = slot.CrownBasePosition;
+                    slot.CrownRect.sizeDelta = slot.HorizontalCrownSize;
+                }
+
+                if (slot.TopMetricRect != null)
+                {
+                    slot.TopMetricRect.anchorMin = new Vector2(0f, 1f);
+                    slot.TopMetricRect.anchorMax = new Vector2(1f, 1f);
+                    slot.TopMetricRect.pivot = new Vector2(0.5f, 1f);
+                    slot.TopMetricRect.anchoredPosition = slot.HorizontalMetricAnchoredPos;
+                    slot.TopMetricRect.sizeDelta = slot.HorizontalMetricSizeDelta;
+                }
+
                 if (slot.AvatarRoot != null)
                 {
+                    slot.AvatarRoot.anchorMin = new Vector2(0.5f, 1f);
+                    slot.AvatarRoot.anchorMax = new Vector2(0.5f, 1f);
+                    slot.AvatarRoot.pivot = new Vector2(0.5f, 0.5f);
+                    slot.AvatarRoot.anchoredPosition = slot.HorizontalAvatarAnchoredPos;
                     slot.AvatarRoot.sizeDelta = new Vector2(newAvatarSize, newAvatarSize);
                 }
 
                 if (slot.HealthBarRect != null)
                 {
-                    slot.HealthBarRect.pivot = new Vector2(0.5f, 0.5f);
-                    slot.HealthBarRect.anchoredPosition = new Vector2(0f, newAvatarSize * HealthBarOuterRimOffsetRatio);
-                    slot.HealthBarRect.sizeDelta = barSize;
+                    ApplyPixelSnappedHealthBar(slot, barSize, barOffsetY, scaleFactor, rootCanvas);
+                }
+            }
+        }
+
+        private void LayoutVerticalSlots()
+        {
+            float rowHeight = Mathf.Max(48f, verticalRowHeight);
+            float avatarSize = Mathf.Clamp(verticalAvatarSize, 24f, rowHeight - 6f);
+            float avatarOffsetY = Mathf.Clamp((rowHeight - avatarSize) * 0.3f, 0f, 6f);
+            Vector2 barSize = ComputeVerticalHealthBarSize(avatarSize);
+            float barOffsetY = avatarSize * HealthBarOuterRimOffsetRatio;
+            float scaleFactor = ResolveCanvasScaleFactor(out Canvas rootCanvas);
+            RecordCanvasMetrics(scaleFactor, rootCanvas);
+
+            float avatarLeftX = -avatarSize;
+            float metricWidth = Mathf.Max(48f, verticalMetricWidth);
+            float metricRightX = avatarLeftX - Mathf.Max(0f, verticalAvatarMetricGap);
+            float metricCenterX = metricRightX - metricWidth * 0.5f;
+            float metricLeftX = metricRightX - metricWidth;
+
+            Vector2 crownSize = new Vector2(
+                Mathf.Max(16f, verticalCrownSize.x),
+                Mathf.Max(14f, verticalCrownSize.y));
+            float crownRightX = metricLeftX - Mathf.Max(0f, verticalMetricCrownGap);
+            float crownCenterX = crownRightX - crownSize.x * 0.5f;
+
+            int visibleCount = CountVisibleSlots();
+            bool packVisibleOnly = visibleCount > 0;
+            int visibleRowIndex = 0;
+
+            for (int i = 0; i < slots.Length; i++)
+            {
+                ParticipantSlot slot = slots[i];
+                if (slot == null || slot.Root == null)
+                {
+                    continue;
                 }
 
-                if (sizeChanged && slot.ActiveHeartCount > 0)
+                int rowIndex = packVisibleOnly
+                    ? (slot.IsVisible ? visibleRowIndex++ : i)
+                    : i;
+                float rowTopY = -(verticalPadding + rowIndex * (rowHeight + verticalSlotSpacing));
+
+                slot.Root.anchorMin = new Vector2(1f, 1f);
+                slot.Root.anchorMax = new Vector2(1f, 1f);
+                slot.Root.pivot = new Vector2(1f, 1f);
+                slot.Root.anchoredPosition = new Vector2(0f, rowTopY);
+                slot.Root.sizeDelta = new Vector2(verticalStripWidth, rowHeight);
+
+                if (slot.AvatarRoot != null)
                 {
-                    LayoutHealthSegments(slot, slot.ActiveHeartCount);
+                    slot.AvatarRoot.anchorMin = new Vector2(1f, 0.5f);
+                    slot.AvatarRoot.anchorMax = new Vector2(1f, 0.5f);
+                    slot.AvatarRoot.pivot = new Vector2(0.5f, 0.5f);
+                    slot.AvatarRoot.anchoredPosition = new Vector2(-avatarSize * 0.5f, avatarOffsetY);
+                    slot.AvatarRoot.sizeDelta = new Vector2(avatarSize, avatarSize);
+                }
+
+                if (slot.HealthBarRect != null)
+                {
+                    ApplyPixelSnappedHealthBar(slot, barSize, barOffsetY, scaleFactor, rootCanvas);
+                }
+
+                if (slot.TopMetricRect != null)
+                {
+                    float metricHeight = Mathf.Max(20f, slot.HorizontalMetricSizeDelta.y);
+                    slot.TopMetricRect.anchorMin = new Vector2(1f, 0.5f);
+                    slot.TopMetricRect.anchorMax = new Vector2(1f, 0.5f);
+                    slot.TopMetricRect.pivot = new Vector2(0.5f, 0.5f);
+                    slot.TopMetricRect.anchoredPosition = new Vector2(metricCenterX, 0f);
+                    slot.TopMetricRect.sizeDelta = new Vector2(metricWidth, metricHeight);
+                }
+
+                if (slot.CrownRect != null)
+                {
+                    slot.CrownRect.anchorMin = new Vector2(1f, 0.5f);
+                    slot.CrownRect.anchorMax = new Vector2(1f, 0.5f);
+                    slot.CrownRect.pivot = new Vector2(0.5f, 0.5f);
+                    slot.CrownBasePosition = new Vector2(crownCenterX, 0f);
+                    slot.CrownRect.anchoredPosition = slot.CrownBasePosition;
+                    slot.CrownRect.sizeDelta = crownSize;
                 }
             }
         }
@@ -539,9 +952,11 @@ namespace EachOneCoin.Gameplay
             slot.CrownRect.anchorMin = new Vector2(0.5f, 1f);
             slot.CrownRect.anchorMax = new Vector2(0.5f, 1f);
             slot.CrownRect.pivot = new Vector2(0.5f, 0.5f);
-            slot.CrownBaseY = -15f * scaleY;
-            slot.CrownRect.anchoredPosition = new Vector2(0f, slot.CrownBaseY);
-            slot.CrownRect.sizeDelta = new Vector2(36f * scaleY, 28f * scaleY);
+            slot.HorizontalCrownBasePosition = new Vector2(0f, -15f * scaleY);
+            slot.HorizontalCrownSize = new Vector2(36f * scaleY, 28f * scaleY);
+            slot.CrownBasePosition = slot.HorizontalCrownBasePosition;
+            slot.CrownRect.anchoredPosition = slot.CrownBasePosition;
+            slot.CrownRect.sizeDelta = slot.HorizontalCrownSize;
             slot.CrownImage.gameObject.SetActive(false);
 
             // Layer 2: Coin count (not won) OR Medal + rank number (won)
@@ -553,6 +968,9 @@ namespace EachOneCoin.Gameplay
             metricRect.pivot = new Vector2(0.5f, 1f);
             metricRect.anchoredPosition = new Vector2(0f, -31f * scaleY);
             metricRect.sizeDelta = new Vector2(0f, 28f * scaleY);
+            slot.TopMetricRect = metricRect;
+            slot.HorizontalMetricAnchoredPos = metricRect.anchoredPosition;
+            slot.HorizontalMetricSizeDelta = metricRect.sizeDelta;
 
             // Layer 2a: Coin Group
             var coinGroupObj = new GameObject("CoinGroup", typeof(RectTransform));
@@ -626,7 +1044,8 @@ namespace EachOneCoin.Gameplay
             slot.AvatarRoot.anchorMin = new Vector2(0.5f, 1f);
             slot.AvatarRoot.anchorMax = new Vector2(0.5f, 1f);
             slot.AvatarRoot.pivot = new Vector2(0.5f, 0.5f);
-            slot.AvatarRoot.anchoredPosition = new Vector2(0f, -100f * scaleY);
+            slot.HorizontalAvatarAnchoredPos = new Vector2(0f, -100f * scaleY);
+            slot.AvatarRoot.anchoredPosition = slot.HorizontalAvatarAnchoredPos;
             slot.AvatarRoot.sizeDelta = new Vector2(avatarSize, avatarSize);
 
             var maskObj = new GameObject("AvatarMask", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image), typeof(Mask));
@@ -647,7 +1066,7 @@ namespace EachOneCoin.Gameplay
             var overlayObj = new GameObject("OverlayContainer", typeof(RectTransform));
             slot.OverlayContainer = (RectTransform)overlayObj.transform;
             slot.OverlayContainer.SetParent(maskRect, false);
-            SetStretch(slot.OverlayContainer, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
+            AvatarPortraitVisualRenderer.AlignOverlayContainer(slot.OverlayContainer);
 
             slot.StatusOverlayImage = CreateImage(maskRect, "StatusOverlay", circleMaskSprite, respawningOverlayColor);
             SetStretch(slot.StatusOverlayImage.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
@@ -682,13 +1101,19 @@ namespace EachOneCoin.Gameplay
                     rect.sizeDelta *= scaleY;
                 }
             }
+            RectTransform topMetricRect = template.coinGroup != null
+                ? template.coinGroup.parent as RectTransform
+                : (template.medalGroup != null ? template.medalGroup.parent as RectTransform : null);
+            Vector2 crownBasePos = template.crownImage.rectTransform.anchoredPosition;
+            Vector2 crownSize = template.crownImage.rectTransform.sizeDelta;
             var slot = new ParticipantSlot
             {
                 Root = (RectTransform)template.transform,
                 CanvasGroup = template.canvasGroup,
                 CrownImage = template.crownImage,
                 CrownRect = template.crownImage.rectTransform,
-                CrownBaseY = template.crownImage.rectTransform.anchoredPosition.y,
+                CrownBasePosition = crownBasePos,
+                TopMetricRect = topMetricRect,
                 CoinGroup = template.coinGroup,
                 CoinIconImage = template.coinIconImage,
                 CoinText = template.coinText,
@@ -701,12 +1126,18 @@ namespace EachOneCoin.Gameplay
                 OverlayContainer = template.overlayContainer,
                 StatusOverlayImage = template.statusOverlayImage,
                 FrameImage = template.frameImage,
-                HealthBarRect = template.healthBarRect
+                HealthBarRect = template.healthBarRect,
+                HorizontalCrownBasePosition = crownBasePos,
+                HorizontalCrownSize = crownSize,
+                HorizontalMetricAnchoredPos = topMetricRect != null ? topMetricRect.anchoredPosition : new Vector2(0f, -31f * scaleY),
+                HorizontalMetricSizeDelta = topMetricRect != null ? topMetricRect.sizeDelta : new Vector2(0f, 28f * scaleY),
+                HorizontalAvatarAnchoredPos = template.avatarRoot != null ? template.avatarRoot.anchoredPosition : new Vector2(0f, -100f * scaleY)
             };
             slot.MaskImage.sprite = icons.GetCircleMaskSprite();
             slot.StatusOverlayImage.sprite = icons.GetCircleMaskSprite();
             slot.FrameImage.sprite = icons.GetCircleFrameSprite();
             slot.BasePortraitImage.sprite = icons.GetDefaultPortraitSprite();
+            AvatarPortraitVisualRenderer.AlignOverlayContainer(slot.OverlayContainer);
             slot.CoinIconImage.sprite = icons.GetCoinSprite();
             slot.CrownImage.sprite = icons.GetCrownSprite();
             slot.MedalIconImage.sprite = icons.GetMedalSprite(1);
@@ -744,7 +1175,7 @@ namespace EachOneCoin.Gameplay
                 if (showCrown)
                 {
                     slot.CrownImage.sprite = icons.GetCrownSprite();
-                    slot.CrownRect.anchoredPosition = new Vector2(0f, slot.CrownBaseY);
+                    slot.CrownRect.anchoredPosition = slot.CrownBasePosition;
                     slot.CrownRect.localScale = Vector3.one;
                 }
             }
@@ -813,13 +1244,12 @@ namespace EachOneCoin.Gameplay
             AvatarAppearanceData appearance = snapshot.Appearance;
             slot.CosmeticId = appearance.CosmeticId;
 
-            Sprite resolvedPortrait = appearance.BasePortrait != null
-                ? appearance.BasePortrait
-                : icons.GetDefaultPortraitSprite();
+            Sprite resolvedPortrait = AvatarPortraitVisualRenderer.ResolveBasePortrait(appearance, icons);
 
             Color rawTint = appearance.TintColor.a > 0.001f
                 ? appearance.TintColor
                 : (snapshot.Color.a > 0.001f ? snapshot.Color : Color.white);
+            Color statusTintedColor = ResolveStatusTintedColor(rawTint, snapshot.Status);
 
             bool portraitChanged = force || slot.LastBasePortrait != resolvedPortrait;
             bool tintChanged = force || !ColorsApproximatelyEqual(slot.LastTintColor, rawTint);
@@ -833,12 +1263,10 @@ namespace EachOneCoin.Gameplay
             if (portraitChanged || tintChanged || statusChanged)
             {
                 slot.LastTintColor = rawTint;
-                slot.BasePortraitImage.color = ResolveStatusTintedColor(rawTint, snapshot.Status);
+                slot.BasePortraitImage.color = statusTintedColor;
             }
 
-            Sprite resolvedFrame = appearance.FrameSprite != null
-                ? appearance.FrameSprite
-                : icons.GetCircleFrameSprite();
+            Sprite resolvedFrame = AvatarPortraitVisualRenderer.ResolveFrameSprite(appearance, icons);
 
             if (force || slot.LastFrameSprite != resolvedFrame)
             {
@@ -852,48 +1280,32 @@ namespace EachOneCoin.Gameplay
                 slot.FrameImage.color = ResolveFrameColor(accent, snapshot.Status, snapshot.IsLocal);
             }
 
-            // Pooled cosmetic overlay sprites (zero per-frame rebuild)
+            bool overlaysChanged = force
+                || !slot.HasAppliedAppearance
+                || !AvatarPortraitVisualRenderer.AreOverlaysEqual(slot.LastAppearance, appearance);
             Color overlayColor = ResolveOverlayColor(snapshot.Status);
-            Sprite[] overlays = appearance.OverlaySprites;
-            int activeCount = 0;
 
-            if (overlays != null && overlays.Length > 0)
+            if (overlaysChanged)
             {
-                for (int i = 0; i < overlays.Length; i++)
-                {
-                    Sprite overlaySprite = overlays[i];
-                    if (overlaySprite == null)
-                    {
-                        continue;
-                    }
-
-                    Image overlayImg = GetOrCreateOverlayImage(slot, activeCount);
-                    if (!overlayImg.enabled)
-                    {
-                        overlayImg.enabled = true;
-                    }
-                    if (overlayImg.sprite != overlaySprite)
-                    {
-                        overlayImg.sprite = overlaySprite;
-                    }
-                    if (!ColorsApproximatelyEqual(overlayImg.color, overlayColor))
-                    {
-                        overlayImg.color = overlayColor;
-                    }
-                    activeCount++;
-                }
+                slot.ActiveOverlayCount = AvatarPortraitVisualRenderer.ApplyOverlays(
+                    slot.OverlayContainer,
+                    slot.OverlayImages,
+                    appearance,
+                    overlayColor,
+                    statusTintedColor,
+                    false);
+                slot.LastAppearance = appearance;
+                slot.HasAppliedAppearance = true;
             }
-
-            for (int i = activeCount; i < slot.OverlayImages.Count; i++)
+            else if (statusChanged || tintChanged)
             {
-                Image unused = slot.OverlayImages[i];
-                if (unused.enabled)
-                {
-                    unused.enabled = false;
-                }
+                AvatarPortraitVisualRenderer.ApplyOverlayColors(
+                    slot.OverlayImages,
+                    slot.ActiveOverlayCount,
+                    appearance,
+                    overlayColor,
+                    statusTintedColor);
             }
-
-            slot.ActiveOverlayCount = activeCount;
         }
 
         private void ApplyHealthSegments(
@@ -1021,22 +1433,9 @@ namespace EachOneCoin.Gameplay
             slot.DisplayedCoinText = string.Empty;
             slot.DisplayedMedalRankText = string.Empty;
             slot.CosmeticId = null;
+            slot.HasAppliedAppearance = false;
             slot.ActiveOverlayCount = 0;
             slot.ActiveHeartCount = 0;
-        }
-
-        private Image GetOrCreateOverlayImage(ParticipantSlot slot, int index)
-        {
-            while (slot.OverlayImages.Count <= index)
-            {
-                int newIdx = slot.OverlayImages.Count;
-                Image img = CreateImage(slot.OverlayContainer, "Overlay_" + newIdx, null, Color.white);
-                SetStretch(img.rectTransform, Vector2.zero, Vector2.one, Vector2.zero, Vector2.zero);
-                img.enabled = false;
-                slot.OverlayImages.Add(img);
-            }
-
-            return slot.OverlayImages[index];
         }
 
         private void EnsureHealthSegmentPool(ParticipantSlot slot, int requiredCount)
@@ -1046,9 +1445,9 @@ namespace EachOneCoin.Gameplay
                 int newIdx = slot.HealthSegmentImages.Count;
                 Image segmentImg = CreateSolidImage(slot.HealthBarRect, "HealthSegment_" + newIdx, healthFullColor);
                 RectTransform rect = segmentImg.rectTransform;
-                rect.anchorMin = new Vector2(0f, 0.5f);
-                rect.anchorMax = new Vector2(0f, 0.5f);
-                rect.pivot = new Vector2(0f, 0.5f);
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.zero;
+                rect.pivot = Vector2.zero;
                 segmentImg.enabled = false;
                 slot.HealthSegmentImages.Add(segmentImg);
                 slot.HealthSegmentStates.Add(HeartVisualState.Full);
@@ -1062,18 +1461,33 @@ namespace EachOneCoin.Gameplay
                 return;
             }
 
+            float scaleFactor = ResolveCanvasScaleFactor(out _);
+            float safeScale = scaleFactor > 0.0001f ? scaleFactor : 1f;
             Vector2 barSize = slot.HealthBarRect.sizeDelta;
-            float border = HealthBarFrameThickness;
-            float innerWidth = Mathf.Max(4f, barSize.x - border * 2f);
-            float innerHeight = Mathf.Max(2f, barSize.y - border * 2f);
-            float gap = count > 1 ? Mathf.Min(HealthBarSegmentGap, innerWidth / (count * 3f)) : 0f;
-            float segmentWidth = Mathf.Max(1f, (innerWidth - gap * Mathf.Max(0, count - 1)) / count);
+
+            int borderPx = Mathf.Max(1, Mathf.RoundToInt(HealthBarFrameThickness * safeScale));
+            int barWidthPx = Mathf.Max(borderPx * 2 + count, Mathf.RoundToInt(barSize.x * safeScale));
+            int barHeightPx = Mathf.Max(borderPx * 2 + 2, Mathf.RoundToInt(barSize.y * safeScale));
+            int maxGapPx = count > 1 ? Mathf.Max(0, (barWidthPx - borderPx * 2 - count) / (count - 1)) : 0;
+            int gapPx = count > 1 ? Mathf.Min(Mathf.Max(1, Mathf.RoundToInt(HealthBarSegmentGap * safeScale)), maxGapPx) : 0;
+            int usableWidthPx = Mathf.Max(count, barWidthPx - borderPx * 2 - gapPx * Mathf.Max(0, count - 1));
+            int innerHeightPx = Mathf.Max(2, barHeightPx - borderPx * 2);
+
+            float yStart = borderPx / safeScale;
+            float segHeight = innerHeightPx / safeScale;
 
             for (int i = 0; i < count; i++)
             {
+                int xStartPx = borderPx + i * gapPx + (i * usableWidthPx) / count;
+                int xEndPx = borderPx + i * gapPx + ((i + 1) * usableWidthPx) / count;
+                int segWidthPx = Mathf.Max(1, xEndPx - xStartPx);
+
                 RectTransform rect = slot.HealthSegmentImages[i].rectTransform;
-                rect.sizeDelta = new Vector2(segmentWidth, innerHeight);
-                rect.anchoredPosition = new Vector2(border + i * (segmentWidth + gap), 0f);
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.zero;
+                rect.pivot = Vector2.zero;
+                rect.anchoredPosition = new Vector2(xStartPx / safeScale, yStart);
+                rect.sizeDelta = new Vector2(segWidthPx / safeScale, segHeight);
             }
         }
 
@@ -1141,6 +1555,8 @@ namespace EachOneCoin.Gameplay
             slots = null;
             slotPopulated = null;
             initialized = false;
+            hasRefreshed = false;
+            lastVisibleMask = -1;
         }
 
         private Image CreateSolidImage(RectTransform parent, string objectName, Color color)

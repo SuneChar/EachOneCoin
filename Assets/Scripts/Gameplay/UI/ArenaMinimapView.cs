@@ -3,6 +3,12 @@ using UnityEngine;
 
 namespace EachOneCoin.Gameplay
 {
+    public enum MinimapSizeMode
+    {
+        Expanded = 0,
+        Compact = 1
+    }
+
     // Minimal, borderless pure-2D functional minimap driven directly by GridModel, CoinSpawner,
     // obstacles, and character transforms (zero extra Camera / RenderTexture overhead).
     public sealed class ArenaMinimapView : MonoBehaviour
@@ -12,6 +18,7 @@ namespace EachOneCoin.Gameplay
         private const int MaxCoinMarkers = 32;
         private const int MaxWarningMarkers = 8;
         private const int GridSize = ArenaGridView.Size;
+        private const float ReferenceExpandedMapSize = 368f;
 
         [Header("Prefab References (optional)")]
         [SerializeField] private UnityEngine.UI.RawImage gridRawImage;
@@ -20,6 +27,7 @@ namespace EachOneCoin.Gameplay
 
         [Header("Layout (No Frame)")]
         [SerializeField, Min(64f)] private float mapSize = 368f;
+        [SerializeField, Min(64f)] private float compactMapSize = 210f;
         [SerializeField] private Vector2 bottomRightOffset = new Vector2(-12f, 12f);
 
         [Header("Functional Layers")]
@@ -96,7 +104,22 @@ namespace EachOneCoin.Gameplay
 
         private TimedSpikeTrap[] spikeTraps;
         private LinearPatrolObstacle[] patrolObstacles;
+        private readonly Vector2[] cachedSpawnNormalized = new Vector2[MaxPlayers];
+        private int cachedSpawnCount;
+        private readonly Vector2[] cachedMineNormalized = new Vector2[MaxMines];
+        private int cachedMineCount;
+        private Vector2[] cachedSpikeNormalized;
+        private readonly Vector2[] cachedCoinNormalized = new Vector2[MaxCoinMarkers];
+        private readonly Vector2[] cachedWarningNormalized = new Vector2[MaxWarningMarkers];
+        private readonly Vector3[] cachedPlayerWorldPos = new Vector3[MaxPlayers];
+        private readonly Vector3[] cachedPlayerFacing = new Vector3[MaxPlayers];
+        private readonly bool[] cachedPlayerVisible = new bool[MaxPlayers];
+        private readonly bool[] cachedPlayerFocused = new bool[MaxPlayers];
+        private readonly bool[] cachedPlayerHasState = new bool[MaxPlayers];
+        private int cachedWarningMineMask;
+        private float cachedPulseTime;
 
+        private MinimapSizeMode sizeMode = MinimapSizeMode.Expanded;
         private bool initialized;
         private uint lastGridRevision = uint.MaxValue;
         private bool lastRenderedTerritory;
@@ -104,11 +127,31 @@ namespace EachOneCoin.Gameplay
         private int lastFocusedSlot = -1;
 
         public Vector2 BottomRightOffset => bottomRightOffset;
-        public float MapSize => mapSize;
+        public MinimapSizeMode SizeMode => sizeMode;
+        public float ExpandedMapSize => Mathf.Max(64f, mapSize);
+        public float CompactMapSize => Mathf.Clamp(compactMapSize, 64f, ExpandedMapSize);
+        public float MapSize => sizeMode == MinimapSizeMode.Compact ? CompactMapSize : ExpandedMapSize;
+        public event System.Action<MinimapSizeMode, float> SizeModeChanged;
         public int TextureRefreshCount { get; private set; }
         public int FocusedPlayerSlot => lastFocusedSlot;
         public int ActiveCoinMarkerCount { get; private set; }
         public int ActiveWarningMarkerCount { get; private set; }
+
+        private float CurrentMinScale => Mathf.Clamp(MapSize / ReferenceExpandedMapSize, 0.45f, 1f);
+
+        public void SetSizeMode(MinimapSizeMode mode)
+        {
+            if (sizeMode == mode) return;
+            sizeMode = mode;
+            if (initialized) ApplyCurrentSizeLayout();
+            SizeModeChanged?.Invoke(sizeMode, MapSize);
+        }
+
+        public MinimapSizeMode ToggleSizeMode()
+        {
+            SetSizeMode(sizeMode == MinimapSizeMode.Expanded ? MinimapSizeMode.Compact : MinimapSizeMode.Expanded);
+            return sizeMode;
+        }
 
         public static Vector2 WorldToNormalized(Vector3 worldPos)
         {
@@ -204,6 +247,12 @@ namespace EachOneCoin.Gameplay
         {
             if (!initialized) return;
 
+            cachedWarningMineMask = warningMineMask;
+            cachedPulseTime = pulseTime;
+            float currentMapSize = MapSize;
+            float cellPx = currentMapSize / GridSize;
+            float minScale = CurrentMinScale;
+
             float minePulse = 0.5f + 0.5f * Mathf.Sin(pulseTime * 12f);
             if (mineMarkers != null)
             {
@@ -223,7 +272,6 @@ namespace EachOneCoin.Gameplay
                     minePulseRings[i].enabled = isWarn;
                     if (isWarn)
                     {
-                        float cellPx = mapSize / GridSize;
                         float ringDiameter = cellPx * (1.35f + 0.65f * minePulse);
                         minePulseRings[i].rectTransform.sizeDelta = new Vector2(ringDiameter, ringDiameter);
                         Color rc = mineWarningColor;
@@ -243,7 +291,9 @@ namespace EachOneCoin.Gameplay
                     bool active = i < count;
                     coinMarkers[i].enabled = active;
                     if (!active) continue;
-                    SetNormalizedPosition(coinMarkers[i].rectTransform, CellToNormalized(coins[i]));
+                    Vector2 norm = CellToNormalized(coins[i]);
+                    cachedCoinNormalized[i] = norm;
+                    SetNormalizedPosition(coinMarkers[i].rectTransform, norm);
                 }
             }
             ActiveCoinMarkerCount = activeCoins;
@@ -254,8 +304,7 @@ namespace EachOneCoin.Gameplay
                 int count = showCoins && warnings != null ? Mathf.Min(warnings.Count, warningMarkers.Length) : 0;
                 activeWarnings = count;
                 float warnPulse = 0.5f + 0.5f * Mathf.Sin(pulseTime * 16f);
-                float cellPx = mapSize / GridSize;
-                float warnDiameter = Mathf.Max(6f, cellPx * (0.62f + 0.24f * warnPulse));
+                float warnDiameter = Mathf.Max(6f * minScale, cellPx * (0.62f + 0.24f * warnPulse));
                 Color warnCol = mineWarningColor;
                 warnCol.a = 0.55f + 0.45f * warnPulse;
 
@@ -265,7 +314,9 @@ namespace EachOneCoin.Gameplay
                     warningMarkers[i].enabled = active;
                     if (!active) continue;
                     var rt = warningMarkers[i].rectTransform;
-                    SetNormalizedPosition(rt, CellToNormalized(warnings[i]));
+                    Vector2 norm = CellToNormalized(warnings[i]);
+                    cachedWarningNormalized[i] = norm;
+                    SetNormalizedPosition(rt, norm);
                     rt.sizeDelta = new Vector2(warnDiameter, warnDiameter);
                     warningMarkers[i].color = warnCol;
                 }
@@ -305,8 +356,10 @@ namespace EachOneCoin.Gameplay
 
             mapRect = transform as RectTransform;
             if (mapRect == null) mapRect = gameObject.AddComponent<RectTransform>();
+            float currentMapSize = MapSize;
+            float minScale = CurrentMinScale;
             mapRect.anchoredPosition = bottomRightOffset;
-            mapRect.sizeDelta = new Vector2(mapSize, mapSize);
+            mapRect.sizeDelta = new Vector2(currentMapSize, currentMapSize);
 
             BuildProceduralSprites();
 
@@ -332,7 +385,7 @@ namespace EachOneCoin.Gameplay
             gridRawImage.texture = gridTexture;
             gridRawImage.raycastTarget = false;
 
-            float cellPx = mapSize / GridSize;
+            float cellPx = currentMapSize / GridSize;
 
             // Layer 1: Spawn cell white outlines
             spawnMarkers = new UnityEngine.UI.Image[MaxPlayers];
@@ -345,18 +398,22 @@ namespace EachOneCoin.Gameplay
             // Layer 2: Dynamic obstacle markers (spikes & patrols)
             int spikeCount = spikeTraps != null ? spikeTraps.Length : 0;
             spikeMarkers = new UnityEngine.UI.Image[spikeCount];
+            cachedSpikeNormalized = spikeCount > 0 ? new Vector2[spikeCount] : System.Array.Empty<Vector2>();
             for (int i = 0; i < spikeCount; i++)
             {
-                spikeMarkers[i] = CreateMarkerImage("Spike_" + i, crossSprite, Mathf.Max(6f, cellPx * 0.72f), spikeInactiveColor);
+                spikeMarkers[i] = CreateMarkerImage("Spike_" + i, crossSprite, Mathf.Max(6f * minScale, cellPx * 0.72f), spikeInactiveColor);
                 if (spikeTraps[i] != null)
-                    SetNormalizedPosition(spikeMarkers[i].rectTransform, WorldToNormalized(spikeTraps[i].transform.position));
+                {
+                    cachedSpikeNormalized[i] = WorldToNormalized(spikeTraps[i].transform.position);
+                    SetNormalizedPosition(spikeMarkers[i].rectTransform, cachedSpikeNormalized[i]);
+                }
             }
 
             int patrolCount = patrolObstacles != null ? patrolObstacles.Length : 0;
             patrolMarkers = new UnityEngine.UI.Image[patrolCount];
             for (int i = 0; i < patrolCount; i++)
             {
-                patrolMarkers[i] = CreateMarkerImage("Patrol_" + i, solidSprite, Mathf.Max(6f, cellPx * 0.72f), patrolObstacleColor);
+                patrolMarkers[i] = CreateMarkerImage("Patrol_" + i, solidSprite, Mathf.Max(6f * minScale, cellPx * 0.72f), patrolObstacleColor);
             }
 
             // Layer 3: Fixed gold mines + warning pulse rings
@@ -366,7 +423,7 @@ namespace EachOneCoin.Gameplay
             {
                 minePulseRings[i] = CreateMarkerImage("MinePulse_" + i, ringSprite, cellPx * 1.5f, mineWarningColor);
                 minePulseRings[i].enabled = false;
-                mineMarkers[i] = CreateMarkerImage("Mine_" + i, diamondSprite, Mathf.Max(7f, cellPx * 0.90f), mineIdleColor);
+                mineMarkers[i] = CreateMarkerImage("Mine_" + i, diamondSprite, Mathf.Max(7f * minScale, cellPx * 0.90f), mineIdleColor);
                 mineMarkers[i].gameObject.SetActive(false);
             }
 
@@ -374,14 +431,14 @@ namespace EachOneCoin.Gameplay
             coinMarkers = new UnityEngine.UI.Image[MaxCoinMarkers];
             for (int i = 0; i < MaxCoinMarkers; i++)
             {
-                coinMarkers[i] = CreateMarkerImage("Coin_" + i, circleSprite, Mathf.Max(5f, cellPx * 0.58f), coinColor);
+                coinMarkers[i] = CreateMarkerImage("Coin_" + i, circleSprite, Mathf.Max(5f * minScale, cellPx * 0.58f), coinColor);
                 coinMarkers[i].enabled = false;
             }
 
             warningMarkers = new UnityEngine.UI.Image[MaxWarningMarkers];
             for (int i = 0; i < MaxWarningMarkers; i++)
             {
-                warningMarkers[i] = CreateMarkerImage("Warning_" + i, ringSprite, Mathf.Max(6f, cellPx * 0.72f), mineWarningColor);
+                warningMarkers[i] = CreateMarkerImage("Warning_" + i, ringSprite, Mathf.Max(6f * minScale, cellPx * 0.72f), mineWarningColor);
                 warningMarkers[i].enabled = false;
             }
 
@@ -400,20 +457,29 @@ namespace EachOneCoin.Gameplay
 
         private void PositionStaticMarkers(IReadOnlyList<GridPosition> spawns, IReadOnlyList<GridPosition> mines)
         {
+            cachedSpawnCount = 0;
             if (spawnMarkers != null)
             {
                 int count = spawns != null ? Mathf.Min(spawns.Count, spawnMarkers.Length) : 0;
+                cachedSpawnCount = count;
                 for (int i = 0; i < spawnMarkers.Length; i++)
                 {
                     bool active = i < count;
                     spawnMarkers[i].gameObject.SetActive(active);
-                    if (active) SetNormalizedPosition(spawnMarkers[i].rectTransform, CellToNormalized(spawns[i]));
+                    if (active)
+                    {
+                        Vector2 norm = CellToNormalized(spawns[i]);
+                        cachedSpawnNormalized[i] = norm;
+                        SetNormalizedPosition(spawnMarkers[i].rectTransform, norm);
+                    }
                 }
             }
 
+            cachedMineCount = 0;
             if (mineMarkers != null)
             {
                 int count = mines != null ? Mathf.Min(mines.Count, mineMarkers.Length) : 0;
+                cachedMineCount = count;
                 for (int i = 0; i < mineMarkers.Length; i++)
                 {
                     bool active = i < count;
@@ -422,6 +488,7 @@ namespace EachOneCoin.Gameplay
                     if (active)
                     {
                         Vector2 pos = CellToNormalized(mines[i]);
+                        cachedMineNormalized[i] = pos;
                         SetNormalizedPosition(mineMarkers[i].rectTransform, pos);
                         SetNormalizedPosition(minePulseRings[i].rectTransform, pos);
                     }
@@ -562,6 +629,12 @@ namespace EachOneCoin.Gameplay
 
         private void ApplyPlayerMarker(int index, bool visible, Vector3 worldPos, Vector3 facingDirection, bool focused)
         {
+            cachedPlayerHasState[index] = true;
+            cachedPlayerVisible[index] = visible;
+            cachedPlayerWorldPos[index] = worldPos;
+            cachedPlayerFacing[index] = facingDirection;
+            cachedPlayerFocused[index] = focused;
+
             PlayerMarker marker = playerMarkers[index];
             if (marker.Root.gameObject.activeSelf != visible)
                 marker.Root.gameObject.SetActive(visible);
@@ -569,9 +642,11 @@ namespace EachOneCoin.Gameplay
 
             SetNormalizedPosition(marker.Root, WorldToNormalized(worldPos));
 
-            float cellPx = mapSize / GridSize;
-            float dotSize = focused ? Mathf.Max(8f, cellPx * 0.84f) : Mathf.Max(6.5f, cellPx * 0.68f);
-            float ringSize = focused ? dotSize + 4.5f : dotSize + 2.8f;
+            float currentMapSize = MapSize;
+            float cellPx = currentMapSize / GridSize;
+            float minScale = CurrentMinScale;
+            float dotSize = focused ? Mathf.Max(8f * minScale, cellPx * 0.84f) : Mathf.Max(6.5f * minScale, cellPx * 0.68f);
+            float ringSize = focused ? dotSize + 4.5f * minScale : dotSize + 2.8f * minScale;
 
             marker.Dot.rectTransform.sizeDelta = new Vector2(dotSize, dotSize);
             marker.Dot.color = playerColors[index];
@@ -587,9 +662,125 @@ namespace EachOneCoin.Gameplay
                 else dir.Normalize();
 
                 float angleDeg = Mathf.Atan2(dir.y, dir.x) * Mathf.Rad2Deg;
-                float arrowDist = ringSize * 0.5f + 2.5f;
+                float arrowDist = ringSize * 0.5f + 2.5f * minScale;
                 marker.FacingArrow.rectTransform.anchoredPosition = dir * arrowDist;
                 marker.FacingArrow.rectTransform.localRotation = Quaternion.Euler(0f, 0f, angleDeg);
+            }
+        }
+
+        private void ApplyCurrentSizeLayout()
+        {
+            float currentMapSize = MapSize;
+            float cellPx = currentMapSize / GridSize;
+            float minScale = CurrentMinScale;
+
+            if (mapRect != null)
+            {
+                mapRect.sizeDelta = new Vector2(currentMapSize, currentMapSize);
+            }
+
+            if (spawnMarkers != null)
+            {
+                Vector2 spawnSize = new Vector2(cellPx, cellPx);
+                for (int i = 0; i < spawnMarkers.Length; i++)
+                {
+                    spawnMarkers[i].rectTransform.sizeDelta = spawnSize;
+                    if (i < cachedSpawnCount)
+                    {
+                        SetNormalizedPosition(spawnMarkers[i].rectTransform, cachedSpawnNormalized[i]);
+                    }
+                }
+            }
+
+            float obstaclePx = Mathf.Max(6f * minScale, cellPx * 0.72f);
+            Vector2 obstacleSize = new Vector2(obstaclePx, obstaclePx);
+            if (spikeMarkers != null)
+            {
+                for (int i = 0; i < spikeMarkers.Length; i++)
+                {
+                    spikeMarkers[i].rectTransform.sizeDelta = obstacleSize;
+                    if (cachedSpikeNormalized != null && i < cachedSpikeNormalized.Length)
+                    {
+                        SetNormalizedPosition(spikeMarkers[i].rectTransform, cachedSpikeNormalized[i]);
+                    }
+                }
+            }
+
+            if (patrolMarkers != null)
+            {
+                for (int i = 0; i < patrolMarkers.Length; i++)
+                {
+                    patrolMarkers[i].rectTransform.sizeDelta = obstacleSize;
+                    if (patrolObstacles != null && i < patrolObstacles.Length && patrolObstacles[i] != null)
+                    {
+                        SetNormalizedPosition(patrolMarkers[i].rectTransform, WorldToNormalized(patrolObstacles[i].transform.position));
+                    }
+                }
+            }
+
+            float minePx = Mathf.Max(7f * minScale, cellPx * 0.90f);
+            Vector2 mineSize = new Vector2(minePx, minePx);
+            float minePulse = 0.5f + 0.5f * Mathf.Sin(cachedPulseTime * 12f);
+            float activePulseRingPx = cellPx * (1.35f + 0.65f * minePulse);
+            if (mineMarkers != null)
+            {
+                for (int i = 0; i < mineMarkers.Length; i++)
+                {
+                    mineMarkers[i].rectTransform.sizeDelta = mineSize;
+                    bool isWarn = (cachedWarningMineMask & (1 << i)) != 0;
+                    float ringPx = isWarn ? activePulseRingPx : cellPx * 1.5f;
+                    minePulseRings[i].rectTransform.sizeDelta = new Vector2(ringPx, ringPx);
+                    if (i < cachedMineCount)
+                    {
+                        SetNormalizedPosition(mineMarkers[i].rectTransform, cachedMineNormalized[i]);
+                        SetNormalizedPosition(minePulseRings[i].rectTransform, cachedMineNormalized[i]);
+                    }
+                }
+            }
+
+            float coinPx = Mathf.Max(5f * minScale, cellPx * 0.58f);
+            Vector2 coinSize = new Vector2(coinPx, coinPx);
+            if (coinMarkers != null)
+            {
+                for (int i = 0; i < coinMarkers.Length; i++)
+                {
+                    coinMarkers[i].rectTransform.sizeDelta = coinSize;
+                    if (i < ActiveCoinMarkerCount)
+                    {
+                        SetNormalizedPosition(coinMarkers[i].rectTransform, cachedCoinNormalized[i]);
+                    }
+                }
+            }
+
+            float warnPulse = 0.5f + 0.5f * Mathf.Sin(cachedPulseTime * 16f);
+            float warnPx = Mathf.Max(6f * minScale, cellPx * (0.62f + 0.24f * warnPulse));
+            Vector2 warnSize = new Vector2(warnPx, warnPx);
+            if (warningMarkers != null)
+            {
+                for (int i = 0; i < warningMarkers.Length; i++)
+                {
+                    warningMarkers[i].rectTransform.sizeDelta = warnSize;
+                    if (i < ActiveWarningMarkerCount)
+                    {
+                        SetNormalizedPosition(warningMarkers[i].rectTransform, cachedWarningNormalized[i]);
+                    }
+                }
+            }
+
+            if (playerMarkers != null)
+            {
+                float arrowSize = Mathf.Max(6f * minScale, cellPx * 0.55f);
+                Vector2 rootSize = new Vector2(cellPx, cellPx);
+                Vector2 arrowRectSize = new Vector2(arrowSize, arrowSize);
+                for (int i = 0; i < playerMarkers.Length; i++)
+                {
+                    playerMarkers[i].Root.sizeDelta = rootSize;
+                    playerMarkers[i].FacingArrow.rectTransform.sizeDelta = arrowRectSize;
+                    if (cachedPlayerHasState[i])
+                    {
+                        ApplyPlayerMarker(i, cachedPlayerVisible[i], cachedPlayerWorldPos[i], cachedPlayerFacing[i], cachedPlayerFocused[i]);
+                    }
+                }
             }
         }
 
@@ -603,7 +794,8 @@ namespace EachOneCoin.Gameplay
 
         private void SetNormalizedPosition(RectTransform rt, Vector2 normalized)
         {
-            rt.anchoredPosition = new Vector2(normalized.x * mapSize, normalized.y * mapSize);
+            float currentMapSize = MapSize;
+            rt.anchoredPosition = new Vector2(normalized.x * currentMapSize, normalized.y * currentMapSize);
         }
 
         private UnityEngine.UI.Image CreateMarkerImage(string objectName, Sprite sprite, float size, Color color)
@@ -629,6 +821,7 @@ namespace EachOneCoin.Gameplay
 
         private PlayerMarker CreatePlayerMarker(int index, float cellPx)
         {
+            float minScale = CurrentMinScale;
             if (playerMarkerTemplate != null && playerMarkerTemplate.HasRequiredLayers)
             {
                 var template = Instantiate(playerMarkerTemplate, mapRect);
@@ -645,7 +838,7 @@ namespace EachOneCoin.Gameplay
                 template.arrow.color = Color.white;
                 template.ring.rectTransform.sizeDelta = new Vector2(cellPx, cellPx);
                 template.dot.rectTransform.sizeDelta = new Vector2(cellPx * 0.72f, cellPx * 0.72f);
-                float arrowSize = Mathf.Max(6f, cellPx * 0.55f);
+                float arrowSize = Mathf.Max(6f * minScale, cellPx * 0.55f);
                 template.arrow.rectTransform.sizeDelta = new Vector2(arrowSize, arrowSize);
                 template.arrow.enabled = false;
                 template.gameObject.SetActive(false);
@@ -662,7 +855,7 @@ namespace EachOneCoin.Gameplay
 
             var ring = CreateChildIcon(root, "Ring", circleSprite, cellPx, Color.white);
             var dot = CreateChildIcon(root, "Dot", circleSprite, cellPx * 0.72f, playerColors[index]);
-            var arrow = CreateChildIcon(root, "Arrow", triangleSprite, Mathf.Max(6f, cellPx * 0.55f), Color.white);
+            var arrow = CreateChildIcon(root, "Arrow", triangleSprite, Mathf.Max(6f * minScale, cellPx * 0.55f), Color.white);
             arrow.enabled = false;
 
             rootObj.SetActive(false);

@@ -17,13 +17,17 @@ public class ControlPromptImages : MonoBehaviour
     [SerializeField] private Texture2D xboxA;
     [SerializeField] private Texture2D xboxB;
     [SerializeField] private Texture2D xboxMenu;
+    [SerializeField] private Texture2D keyboardM;
+    [SerializeField] private Texture2D xboxView;
 
     [SerializeField] private RawImage[] movementIcons;
     [SerializeField] private RawImage actionIcon;
     [SerializeField] private RawImage backIcon;
+    [SerializeField] private RawImage minimapIcon;
     [SerializeField] private TMP_Text movementLabel;
     [SerializeField] private TMP_Text actionLabel;
     [SerializeField] private TMP_Text backLabel;
+    [SerializeField] private TMP_Text minimapLabel;
 
     public void Refresh(bool visible, bool gamepad, bool playing, bool canGoBack)
     {
@@ -40,6 +44,16 @@ public class ControlPromptImages : MonoBehaviour
         movementLabel.text = playing ? "移动" : "选择";
         actionIcon.texture = gamepad ? (playing ? xboxMenu : xboxA) : (playing ? keyboardEscape : mouseLeft);
         actionLabel.text = playing ? "暂停" : "确认";
+        if (minimapIcon != null)
+        {
+            minimapIcon.gameObject.SetActive(playing);
+            if (playing) minimapIcon.texture = gamepad ? xboxView : keyboardM;
+        }
+        if (minimapLabel != null)
+        {
+            minimapLabel.gameObject.SetActive(playing);
+            if (playing) minimapLabel.text = "小地图";
+        }
         backIcon.gameObject.SetActive(canGoBack);
         backLabel.gameObject.SetActive(canGoBack);
         backIcon.texture = gamepad ? xboxB : keyboardEscape;

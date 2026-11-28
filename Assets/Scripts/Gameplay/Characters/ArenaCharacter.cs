@@ -37,6 +37,9 @@ namespace EachOneCoin.Gameplay
         private AttackVisual attackVisual;
         [SerializeField] private CharacterNameplate nameplate;
         public int Id { get; private set; }
+        public CharacterAppearanceProfile CurrentAppearanceProfile { get; private set; }
+        public int CurrentAppearanceIndex { get; private set; } = -1;
+        public int FallbackAppearanceCount => appearanceProfiles != null ? appearanceProfiles.Length : 0;
         public Vector3 MovementVelocity => movementVelocity;
         public Vector3 FacingDirection { get; private set; } = Vector3.forward;
         public void StopNetworkInput() { movementVelocity = Vector3.zero; }
@@ -64,18 +67,7 @@ namespace EachOneCoin.Gameplay
             if (visual != null)
             {
                 visualScale = visual.localScale;
-                var accessories = visual.Find("Accessories");
-                if (accessories != null)
-                {
-                    string selectedSlot = ResolveAccessorySlotName(accessories, id);
-                    foreach (Transform slot in accessories)
-                    {
-                        if (slot.name.StartsWith("Slot ", System.StringComparison.Ordinal))
-                            slot.gameObject.SetActive(slot.name == selectedSlot);
-                    }
-                    var reference = accessories.Find("Reference Capsule");
-                    if (reference != null) reference.gameObject.SetActive(false);
-                }
+                ApplyAppearance(id);
             }
             sprites = GetComponentsInChildren<SpriteRenderer>(true);
             spriteColors = new Color[sprites.Length];
@@ -96,6 +88,68 @@ namespace EachOneCoin.Gameplay
             }
         }
 
+        public CharacterAppearanceProfile GetFallbackProfile(int index)
+        {
+            if (appearanceProfiles == null || index < 0 || index >= appearanceProfiles.Length) return null;
+            return appearanceProfiles[index];
+        }
+
+        public void ApplyAppearance(int appearanceIndex)
+        {
+            ApplyAppearance(GetFallbackProfile(appearanceIndex), appearanceIndex);
+        }
+
+        public void ApplyAppearance(CharacterAppearanceProfile profile, int fallbackIndex)
+        {
+            CurrentAppearanceProfile = profile;
+            CurrentAppearanceIndex = fallbackIndex;
+
+            Transform rootVisual = visual != null ? visual : transform.Find("Root");
+            if (rootVisual == null) return;
+            Transform accessories = rootVisual.Find("Accessories");
+            if (accessories == null) return;
+
+            string selectedSlot = ResolveProfileAccessorySlotName(accessories, profile, fallbackIndex);
+            foreach (Transform slot in accessories)
+            {
+                if (slot.name.StartsWith("Slot ", System.StringComparison.Ordinal))
+                {
+                    bool active = !string.IsNullOrEmpty(selectedSlot) && slot.name == selectedSlot;
+                    slot.gameObject.SetActive(active);
+                }
+            }
+
+            Transform reference = accessories.Find("Reference Capsule");
+            if (reference != null) reference.gameObject.SetActive(false);
+
+            if (!visuallyActive)
+            {
+                foreach (var sprite in accessories.GetComponentsInChildren<SpriteRenderer>(true))
+                {
+                    sprite.enabled = false;
+                }
+            }
+        }
+
+        private string ResolveProfileAccessorySlotName(Transform accessories, CharacterAppearanceProfile profile, int fallbackIndex)
+        {
+            if (profile != null)
+            {
+                string configured = profile.AccessorySlotName;
+                if (string.IsNullOrWhiteSpace(configured)) return string.Empty;
+                if (configured.StartsWith("Slot ", System.StringComparison.Ordinal))
+                {
+                    Transform target = accessories.Find(configured);
+                    if (target != null && target.parent == accessories) return configured;
+                }
+            }
+
+            string fallback = "Slot " + fallbackIndex;
+            Transform fallbackTarget = accessories.Find(fallback);
+            if (fallbackTarget != null && fallbackTarget.parent == accessories) return fallback;
+            return "Slot " + Id;
+        }
+
         private string ResolveAccessorySlotName(Transform accessories, int id)
         {
             string fallback = "Slot " + id;
@@ -103,7 +157,9 @@ namespace EachOneCoin.Gameplay
                 return fallback;
 
             string configured = appearanceProfiles[id].AccessorySlotName;
-            if (string.IsNullOrWhiteSpace(configured) || !configured.StartsWith("Slot ", System.StringComparison.Ordinal))
+            if (string.IsNullOrWhiteSpace(configured))
+                return string.Empty;
+            if (!configured.StartsWith("Slot ", System.StringComparison.Ordinal))
                 return fallback;
             var target = accessories.Find(configured);
             return target != null && target.parent == accessories ? configured : fallback;
@@ -140,6 +196,16 @@ namespace EachOneCoin.Gameplay
         public void SetDisplayName(string value)
         {
             if (nameplate != null) nameplate.SetName(value);
+        }
+
+        public void SetOverheadHealthBarVisible(bool visible)
+        {
+            if (nameplate != null) nameplate.SetHealthBarVisible(visible);
+        }
+
+        public void SetOverheadHealth(int health, int maxHealth, int initialMaxHealth, bool force = false)
+        {
+            if (nameplate != null) nameplate.SetHealth(health, maxHealth, initialMaxHealth, force);
         }
 
         public void SetAttackAim(bool visible, Vector3 direction, float range, float angle)
