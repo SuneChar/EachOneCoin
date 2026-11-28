@@ -441,6 +441,14 @@ namespace EachOneCoin.Gameplay
                 spikes.AddRange(roots[r].GetComponentsInChildren<TimedSpikeTrap>(true));
                 patrols.AddRange(roots[r].GetComponentsInChildren<LinearPatrolObstacle>(true));
 
+                var walls = roots[r].GetComponentsInChildren<ArenaWall>(true);
+                for (int i = 0; i < walls.Length; i++)
+                {
+                    GridPosition cell = coordinator.Grid.WorldToCell(walls[i].transform.position);
+                    if (cell.X >= 0 && cell.X < GridSize && cell.Y >= 0 && cell.Y < GridSize)
+                        staticObstacleMask[cell.X, cell.Y] = true;
+                }
+
                 var lethalObstacles = roots[r].GetComponentsInChildren<LethalObstacle>(true);
                 for (int i = 0; i < lethalObstacles.Length; i++)
                 {

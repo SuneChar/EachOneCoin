@@ -6,6 +6,7 @@ namespace EachOneCoin.Gameplay
     public sealed class MatchCoordinator : MonoBehaviour
     {
         [SerializeField] private ArenaGridView grid;
+        [SerializeField] private ArenaMapDefinition mapDefinition;
         [SerializeField] private ArenaCharacter playerTemplate;
         [SerializeField] private Transform[] spawnPoints;
         [SerializeField] private CoinSpawner coins;
@@ -161,9 +162,37 @@ namespace EachOneCoin.Gameplay
             Replay.ReplaySelection.Pending = null;
             IsReplay = replay != null;
             IsNetworkMovementTest = !IsReplay && network != null && Mirror.NetworkClient.active && network.HasSnapshot;
+            if (mapDefinition != null && (!ArenaMapValidator.TryValidate(mapDefinition, out var mapError) || mapDefinition.Width != ArenaGridView.Size || mapDefinition.Height != ArenaGridView.Size))
+            {
+                Debug.LogError("竞技场地图无效或尺寸尚不受支持：" + mapError, mapDefinition);
+                enabled = false;
+                return;
+            }
+            if (mapDefinition != null)
+            {
+                foreach (var cell in mapDefinition.Cells)
+                    if (cell.terrain != ArenaTerrain.Ground || cell.height != 0)
+                    {
+                        Debug.LogError("当前竞技场尚不支持地图地形或高度，无法开始对局。", mapDefinition);
+                        enabled = false;
+                        return;
+                    }
+                try
+                {
+                    ArenaMapBuilder.BuildTiles(mapDefinition, gameObject.scene);
+                    ArenaMapBuilder.BuildObstacles(mapDefinition, gameObject.scene);
+                }
+                catch (System.Exception exception)
+                {
+                    Debug.LogException(exception, mapDefinition);
+                    enabled = false;
+                    return;
+                }
+            }
             grid.Initialize();
             Spawns = new GridPosition[4];
-            for (int i = 0; i < Spawns.Length; i++) Spawns[i] = grid.WorldToCell(spawnPoints[i].position);
+            for (int i = 0; i < Spawns.Length; i++)
+                Spawns[i] = mapDefinition != null ? new GridPosition(mapDefinition.Spawns[i].x, mapDefinition.Spawns[i].y) : grid.WorldToCell(spawnPoints[i].position);
             session = GameArchitecture.Interface.GetModel<MatchSessionModel>();
             matchSystem = GameArchitecture.Interface.GetSystem<MatchSystem>();
             NetworkRulesValid = ResolveMatchRules(IsNetworkMovementTest, Mirror.NetworkServer.active, out int coinsToWin, out float durationSeconds);
@@ -196,7 +225,7 @@ namespace EachOneCoin.Gameplay
                 Characters[i].Teleport(grid.CellToWorld(Spawns[i]));
             }
             grid.Refresh(Model.Grid);
-            coins.Initialize(this); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
+            coins.Initialize(this, mapDefinition != null ? mapDefinition.Mines : null); grid.Refresh(Model.Grid); combat.Initialize(this); npcs.Initialize(this);
             for (int i = 0; i < nearVictoryAnnounced.Length; i++) nearVictoryAnnounced[i] = false;
             for (int i = 0; i < participantNames.Length; i++) participantNames[i] = null;
             for (int i = 0; i < nameplateLabels.Length; i++) nameplateLabels[i] = null;
@@ -476,7 +505,7 @@ namespace EachOneCoin.Gameplay
             int count = Physics.OverlapSphereNonAlloc(grid.CellToWorld(cell) + Vector3.up * 0.5f, 0.42f, overlap, ~0, QueryTriggerInteraction.Collide);
             for (int i = 0; i < count; i++)
             {
-                if (IsHazard(overlap[i])) return true;
+                if (IsHazard(overlap[i]) || (overlap[i] != null && overlap[i].GetComponentInParent<ArenaWall>() != null)) return true;
             }
             return false;
         }

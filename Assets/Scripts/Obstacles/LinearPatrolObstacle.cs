@@ -29,6 +29,11 @@ public class LinearPatrolObstacle : ObstacleBehaviour
         if (hasReplicaPosition) body.position = Vector3.Lerp(body.position, replicaPosition, 1f - Mathf.Exp(-12f * Time.deltaTime));
     }
 
+    public void ConfigureSpeedBeforeActivation(float value)
+    {
+        speed = Mathf.Max(0f, value);
+    }
+
     private void Awake()
     {
         body = GetComponent<Rigidbody>();

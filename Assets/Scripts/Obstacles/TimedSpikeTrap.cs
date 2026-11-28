@@ -46,6 +46,8 @@ public class TimedSpikeTrap : ObstacleBehaviour
     public bool IsVisible => IsActive;
     public float RemainingFraction => Mathf.Clamp01(remaining / Duration);
 
+    public void ConfigureInitialVisibilityBeforeStart(bool value) => initiallyVisible = value;
+
     private void Start()
     {
         isVisible = initiallyVisible;

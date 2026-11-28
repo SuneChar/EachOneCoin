@@ -3217,6 +3217,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   grid: {fileID: 2084722300}
+  mapDefinition: {fileID: 11400000, guid: e59ef5e201c857d458ae32148b2a145b, type: 2}
   playerTemplate: {fileID: 1094004398}
   spawnPoints:
   - {fileID: 1772634213}

@@ -48,7 +48,6 @@ namespace EachOneCoin.Tests
         }
 
         [TestCase("MovingObstacle")]
-        [TestCase("StaticObstacle")]
         public void ObstaclePrefab_PreservesLethalTriggerReference(string name)
         {
             var prefab = Prefab("Obstacles/" + name);
@@ -59,6 +58,20 @@ namespace EachOneCoin.Tests
             Assert.That(contact, Is.Not.Null);
             Assert.That(contact.transform.IsChildOf(prefab.transform), Is.True);
             Assert.That(contact.GetComponent<Collider>().isTrigger, Is.True);
+        }
+
+        [Test]
+        public void StaticObstacle_IsSolidNonDamagingWall()
+        {
+            var prefab = Prefab("Obstacles/StaticObstacle");
+            var wall = Type.GetType("EachOneCoin.Gameplay.ArenaWall, Assembly-CSharp", true);
+            var hazard = Type.GetType("LethalObstacle, Assembly-CSharp", true);
+            var contact = Type.GetType("LethalContact, Assembly-CSharp", true);
+            Assert.That(prefab.GetComponent(wall), Is.Not.Null);
+            Assert.That(prefab.GetComponent<BoxCollider>().isTrigger, Is.False);
+            Assert.That(prefab.GetComponent(hazard), Is.Null);
+            Assert.That(prefab.GetComponentInChildren(contact, true), Is.Null);
+            Assert.That(prefab.transform.Find("Brick Wall Visual"), Is.Not.Null);
         }
 
         [Test]
